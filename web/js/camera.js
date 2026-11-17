@@ -40,7 +40,7 @@ export class Camera {
   }
 
   frame(mode) {
-    this.desiredDistance = mode === 'brain' ? 2.2 : 2.4;
+    this.desiredDistance = mode === 'brain' ? 2.05 : 2.4;
     this.idle = 0;
   }
 

@@ -1,15 +1,16 @@
 // Universe -> brain mapping.
 //
-// Each folder becomes a region on one of two hemispheres; nodes are projected
-// onto a folded ellipsoid surface so the vault reads as a brain. Very large
-// folders (the journal ring) become a memory belt orbiting the brain.
+// Each folder becomes a region on one of two hemispheres; notes are spread
+// through the lobe's volume rather than pinned to its surface, so the links
+// between them read as fibre tracts. Very large folders (the journal) become a
+// diffuse core inside both hemispheres: chronology, without the wire halo the
+// old orbiting belt produced.
 
 import { clamp } from './math.js';
 
-const LOBE_CENTER_X = 0.44;
-const RADII = [0.32, 0.5, 0.56];
-const BELT_RADIUS = 0.74;
-const BELT_TILT = 0.12;
+const LOBE_CENTER_X = 0.26;
+const RADII = [0.27, 0.44, 0.6];
+const CORE_TILT = 0.12;
 
 /// Returns `{ positions, anchors }`; anchors are per-folder surface points so
 /// the UI can label each region of the brain.
@@ -36,8 +37,8 @@ export function buildBrainPositions(nodes, folderNames) {
 
   const total = Math.max(1, folderNames.length);
   const brain = new Float32Array(nodes.length * 3);
-  const sinTilt = Math.sin(BELT_TILT);
-  const cosTilt = Math.cos(BELT_TILT);
+  const sinTilt = Math.sin(CORE_TILT);
+  const cosTilt = Math.cos(CORE_TILT);
 
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index];
@@ -45,14 +46,18 @@ export function buildBrainPositions(nodes, folderNames) {
     const count = counts.get(node.folder) || 0;
 
     if (count > 48) {
-      // Memory belt: keeps chronology readable after the fold.
+      // Diffuse core: a seeded spiral through the middle of both hemispheres.
+      // It is inside the shell, so the chapter links cross the lobes instead of
+      // drawing a ring around them.
       const angle = Math.atan2(node.z, node.x);
-      const x = Math.cos(angle) * BELT_RADIUS;
-      const z = Math.sin(angle) * BELT_RADIUS;
-      const y = -0.04 + Math.sin(angle * 3 + 0.6) * 0.03;
+      const depth = 0.14 + 0.26 * pseudoRandom(index);
+      const x = Math.cos(angle) * depth;
+      const z = Math.sin(angle) * depth * 1.45;
+      const y = (pseudoRandom(index + 811) * 2 - 1) * 0.32;
       brain[index * 3] = x;
       brain[index * 3 + 1] = y * cosTilt - z * sinTilt;
       brain[index * 3 + 2] = z * cosTilt + y * sinTilt;
+      if (!anchors.has(node.folder)) anchors.set(node.folder, [0, 0.56, 0]);
       continue;
     }
 
@@ -83,29 +88,41 @@ export function buildBrainPositions(nodes, folderNames) {
     ry /= length;
     rz /= length;
 
-    const target = [
-      anchor[0] + rx * 0.16,
-      anchor[1] + ry * 0.16,
-      anchor[2] + rz * 0.16,
-    ];
-    let dx = (target[0] - center[0]) / RADII[0];
-    let dy = (target[1] - center[1]) / RADII[1];
-    let dz = (target[2] - center[2]) / RADII[2];
+    // Scatter inside the lobe: a thick volume of tissue, not a hollow shell.
+    const spread = 0.16;
+    let dx = (anchor[0] + rx * spread - center[0]) / RADII[0];
+    let dy = (anchor[1] + ry * spread - center[1]) / RADII[1];
+    let dz = (anchor[2] + rz * spread - center[2]) / RADII[2];
     const units = Math.hypot(dx, dy, dz) || 1;
     dx /= units;
     dy /= units;
     dz /= units;
 
-    // Gyri: small folds so the surface is not a perfect ellipsoid.
+    // Gyri: small folds so the outer notes are not a perfect ellipsoid.
     const fold = 1 + 0.05 * Math.sin(dx * 11 + dz * 7) + 0.03 * Math.sin(dy * 13 + dx * 4);
-    // Thick shell, not a hollow surface: the lobes need volume to read as a
-    // brain rather than two wire hoops.
-    const seeded = 0.72 + 0.28 * pseudoRandom(index);
+    const seeded = 0.62 + 0.38 * pseudoRandom(index);
 
     brain[index * 3] = center[0] + dx * RADII[0] * fold * seeded;
-    brain[index * 3 + 1] = clamp(center[1] + dy * RADII[1] * fold * seeded, -0.46, 0.6);
+    brain[index * 3 + 1] = clamp(center[1] + dy * RADII[1] * fold * seeded, -0.44, 0.54);
     brain[index * 3 + 2] = center[2] + dz * RADII[2] * fold * seeded;
   }
+
+  // White matter: a folder of its own never got a core point, so give it an
+  // anchor the labels can follow instead of silently dropping it.
+  for (const name of folderNames) {
+    if (!anchors.has(name)) anchors.set(name, [0, 0.56, 0]);
+  }
+
+  // The cortical mesh is narrower than a smooth ellipsoid (temporal lobes,
+  // frontal pole), so a few surface notes would float just outside it. Pull
+  // the whole cloud in slightly: fibres stay visibly inside the shell.
+  for (let index = 0; index < brain.length; index += 1) {
+    brain[index] *= 0.86;
+    // The mesh has no tissue under the temporal lobes: keep nodes above the
+    // brainstem so nothing floats in the black below the brain.
+    if (index % 3 === 1) brain[index] = clamp(brain[index], -0.32, 0.42);
+  }
+
   return { positions: brain, anchors };
 }
 
