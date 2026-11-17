@@ -3,6 +3,7 @@
 // Node positions live in an RGBA32F texture (xyz + birth time) so morphing
 // between the universe and the brain only costs one texture upload per frame.
 
+import { BRAIN_MESH } from './brain-mesh.js';
 import { createProgram, createTarget, destroyTarget, initGL } from './gl.js';
 import { buildAppearValues, buildBrainPositions } from './morph.js';
 import { clamp, project, smoothstep } from './math.js';
@@ -15,12 +16,14 @@ import {
   HALO_FS,
   HALO_VS,
   NEBULA_FS,
+  SHELL_FS,
+  SHELL_VS,
   STAR_FS,
   STAR_VS,
   THRESHOLD_FS,
 } from './shaders.js';
 
-const SEGMENTS = 6;
+const SEGMENTS = 10;
 const TEX_WIDTH = 1024;
 export const PALETTE = [
   [0.38, 0.86, 1.0],
@@ -33,6 +36,13 @@ export const PALETTE = [
   [0.92, 0.52, 1.0],
 ];
 const NEBULA_SIZE = 1024;
+
+function decodeBase64(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
 
 const locations = new WeakMap();
 function loc(gl, program, name) {
@@ -59,6 +69,7 @@ export class Renderer {
       stars: createProgram(gl, STAR_VS, STAR_FS, 'stars'),
       edges: createProgram(gl, EDGE_VS, EDGE_FS, 'arcs'),
       halo: createProgram(gl, HALO_VS, HALO_FS, 'galaxy haze'),
+      shell: createProgram(gl, SHELL_VS, SHELL_FS, 'brain shell'),
       nebula: createProgram(gl, FULLSCREEN_VS, NEBULA_FS, 'nebula'),
       threshold: createProgram(gl, FULLSCREEN_VS, THRESHOLD_FS, 'threshold'),
       blur: createProgram(gl, FULLSCREEN_VS, BLUR_FS, 'bloom blur'),
@@ -68,6 +79,7 @@ export class Renderer {
     this.emptyVao = gl.createVertexArray();
     this.quadCorners = this.createBuffer(new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
     this.edgeCorners = this.createBuffer(new Float32Array([0, -1, 0, 1, 1, -1, 1, 1]));
+    this.buildShell();
 
     this.count = 0;
     this.nodes = [];
@@ -105,6 +117,50 @@ export class Renderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, handle);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
     return handle;
+  }
+
+  /// The real cortical surface: a simplified human brain mesh (NIH 3D,
+  /// CC BY 4.0) drawn as a translucent, lightly lit shell. One mesh, built
+  /// once; only its opacity follows the brain morph.
+  buildShell() {
+    const gl = this.gl;
+    const positions = new Float32Array(decodeBase64(BRAIN_MESH.positions).buffer);
+    const normals = new Float32Array(decodeBase64(BRAIN_MESH.normals).buffer);
+    const indices = new Uint16Array(decodeBase64(BRAIN_MESH.indices).buffer);
+
+    // Centre on the bounding box, not the vertex mean: the brainstem pulls the
+    // mean down and forward, which would leave the lobes off-centre.
+    const low = [Infinity, Infinity, Infinity];
+    const high = [-Infinity, -Infinity, -Infinity];
+    for (let index = 0; index < positions.length; index += 3) {
+      for (let axis = 0; axis < 3; axis += 1) {
+        low[axis] = Math.min(low[axis], positions[index + axis]);
+        high[axis] = Math.max(high[axis], positions[index + axis]);
+      }
+    }
+    for (let index = 0; index < positions.length; index += 3) {
+      for (let axis = 0; axis < 3; axis += 1) {
+        positions[index + axis] -= (low[axis] + high[axis]) * 0.5;
+      }
+    }
+
+    this.shellCount = indices.length;
+    this.shellPositions = this.createBuffer(positions);
+    this.shellNormals = this.createBuffer(normals);
+    this.shellIndices = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.shellIndices);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+    this.shellVao = gl.createVertexArray();
+    gl.bindVertexArray(this.shellVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.shellPositions);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.shellNormals);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.shellIndices);
+    gl.bindVertexArray(null);
   }
 
   resize() {
@@ -494,6 +550,21 @@ export class Renderer {
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.hazeCount);
     }
 
+    if (this.morph > 0.01 && this.shellVao) {
+      const program = this.programs.shell;
+      gl.useProgram(program);
+      gl.uniformMatrix4fv(loc(gl, program, 'uViewProj'), false, camera.viewProjection);
+      gl.uniform3fv(loc(gl, program, 'uEye'), camera.eye);
+      gl.uniform1f(loc(gl, program, 'uOpacity'), this.morph);
+      // Front faces only: with additive blending, drawing both sides of a
+      // 20k-triangle surface turns the interior into milk.
+      gl.enable(gl.CULL_FACE);
+      gl.cullFace(gl.BACK);
+      gl.bindVertexArray(this.shellVao);
+      gl.drawElements(gl.TRIANGLES, this.shellCount, gl.UNSIGNED_SHORT, 0);
+      gl.disable(gl.CULL_FACE);
+    }
+
     if (this.edgeInstances > 0) {
       const program = this.programs.edges;
       gl.useProgram(program);
@@ -506,6 +577,7 @@ export class Renderer {
       gl.uniform1f(loc(gl, program, 'uTime'), time);
       gl.uniform1f(loc(gl, program, 'uReveal'), this.reveal);
       gl.uniform1f(loc(gl, program, 'uThickness'), 1.0);
+      gl.uniform1f(loc(gl, program, 'uMorph'), this.morph);
       gl.bindVertexArray(this.edgeVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.edgeInstances);
     }
@@ -521,7 +593,7 @@ export class Renderer {
       gl.uniform2f(loc(gl, program, 'uViewport'), this.cssWidth, this.cssHeight);
       gl.uniform1f(loc(gl, program, 'uTime'), time);
       gl.uniform1f(loc(gl, program, 'uReveal'), this.reveal);
-      gl.uniform1f(loc(gl, program, 'uSizeScale'), 20.0);
+      gl.uniform1f(loc(gl, program, 'uSizeScale'), 20.0 * (1 - 0.35 * Math.max(0, this.morph)));
       gl.bindVertexArray(this.nodeVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.count);
     }
@@ -572,6 +644,7 @@ export class Renderer {
     );
     gl.uniform2f(loc(gl, composite, 'uResolution'), this.cssWidth, this.cssHeight);
     gl.uniform1f(loc(gl, composite, 'uTime'), time);
+    gl.uniform1f(loc(gl, composite, 'uBrain'), Math.max(0, this.morph));
     this.drawFullscreen();
     gl.bindVertexArray(null);
 
