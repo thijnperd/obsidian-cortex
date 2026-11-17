@@ -19,6 +19,15 @@ pub struct VaultEntry {
     /// Milliseconds since the epoch, used only for ordering.
     #[serde(default)]
     pub opened_ms: u64,
+    /// Whether AI clients may operate this vault over MCP. Off is a deliberate
+    /// choice the user can make in vault settings; files written before the
+    /// switch existed keep working, hence the default.
+    #[serde(default = "agents_default")]
+    pub agents: bool,
+}
+
+fn agents_default() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -60,13 +69,19 @@ impl Registry {
         crate::replace_file(&temp, path)
     }
 
-    /// Adds or refreshes a vault and makes it the active one.
+    /// Adds or refreshes a vault and makes it the active one. The agent switch
+    /// survives: reopening a vault must not quietly turn access back on.
     pub fn add(&mut self, path: &Path) -> VaultEntry {
         let canonical = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let agents = self
+            .get(&canonical)
+            .map(|entry| entry.agents)
+            .unwrap_or(true);
         let entry = VaultEntry {
             name: name_for(&canonical),
             path: canonical.clone(),
             opened_ms: now_ms(),
+            agents,
         };
         self.vaults.retain(|existing| existing.path != canonical);
         self.vaults.insert(0, entry.clone());
@@ -92,6 +107,26 @@ impl Registry {
 
     pub fn get(&self, path: &Path) -> Option<&VaultEntry> {
         self.vaults.iter().find(|entry| entry.path == path)
+    }
+
+    /// The agent switch for a vault, or `None` when the folder is not one of
+    /// ours (in which case the caller decides; MCP allows it, because pointing
+    /// a client at a folder by hand is itself the opt-in).
+    pub fn agents(&self, path: &Path) -> Option<bool> {
+        let canonical = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        self.get(&canonical).map(|entry| entry.agents)
+    }
+
+    /// Flips the agent switch. Returns false when the vault is unknown.
+    pub fn set_agents(&mut self, path: &Path, enabled: bool) -> bool {
+        let canonical = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        match self.vaults.iter_mut().find(|entry| entry.path == canonical) {
+            Some(entry) => {
+                entry.agents = enabled;
+                true
+            }
+            None => false,
+        }
     }
 }
 
@@ -198,6 +233,33 @@ mod tests {
         let loaded = Registry::load_from(&file);
         assert_eq!(loaded.vaults.len(), 1);
         assert_eq!(loaded.vaults[0].path, registry.vaults[0].path);
+    }
+
+    #[test]
+    fn agent_access_is_on_by_default_and_survives_reopening() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut registry = Registry::default();
+        let entry = registry.add(dir.path());
+        assert!(entry.agents);
+        assert_eq!(registry.agents(dir.path()), Some(true));
+
+        assert!(registry.set_agents(dir.path(), false));
+        registry.add(dir.path());
+        assert_eq!(registry.agents(dir.path()), Some(false));
+
+        let file = dir.path().join("vaults.json");
+        registry.save_to(&file).unwrap();
+        assert_eq!(Registry::load_from(&file).agents(dir.path()), Some(false));
+    }
+
+    #[test]
+    fn unknown_vaults_have_no_agent_switch() {
+        let known = tempfile::tempdir().unwrap();
+        let unknown = tempfile::tempdir().unwrap();
+        let mut registry = Registry::default();
+        registry.add(known.path());
+        assert_eq!(registry.agents(unknown.path()), None);
+        assert!(!registry.set_agents(unknown.path(), false));
     }
 
     #[test]

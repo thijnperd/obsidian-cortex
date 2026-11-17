@@ -186,14 +186,24 @@ fn pretty(value: &Value) -> String {
 
 /* ---------- the session ---------- */
 
+/// Asked on every request. In production it reads the registry off disk, so the
+/// switch in the app also stops a session that is already connected; tests
+/// inject a fixed answer.
+type AccessCheck = Box<dyn Fn(&Path) -> bool + Send + Sync>;
+
 struct Agent {
     root: PathBuf,
     vault: Option<Vault>,
     journal: Option<PathBuf>,
+    allowed: AccessCheck,
 }
 
 impl Agent {
     fn open(root: Option<PathBuf>) -> Result<Agent, String> {
+        Agent::open_with(root, Box::new(|root| agent_access(root, &Registry::load())))
+    }
+
+    fn open_with(root: Option<PathBuf>, allowed: AccessCheck) -> Result<Agent, String> {
         let root = match root {
             Some(path) => canonical_dir(&path)?,
             None => {
@@ -209,10 +219,18 @@ impl Agent {
                 }
             }
         };
+        if !allowed(&root) {
+            return Err(format!(
+                "agent access is off for {} — turn it on in Cortex \u{2192} Vault settings, or run: cortex agents \"{}\" --on",
+                root.display(),
+                root.display()
+            ));
+        }
         Ok(Agent {
             root,
             vault: None,
             journal: journal_path(),
+            allowed,
         })
     }
 
@@ -278,6 +296,14 @@ impl Agent {
     }
 
     fn call(&mut self, name: &str, args: &Map<String, Value>) -> ToolResult {
+        // Checked on every request, not only at startup: turning the switch off
+        // in the app must stop the session that is already connected.
+        if !(self.allowed)(&self.root) {
+            return Err(Failure::new(
+                "agents_off",
+                "agent access was turned off for this vault in Cortex; nothing was changed",
+            ));
+        }
         match name {
             "cortex_guide" => Ok(json!({"guide": AGENT_GUIDE})),
             "cortex_list_vaults" => self.list_vaults(),
@@ -841,6 +867,16 @@ impl Agent {
     }
 }
 
+/// Whether a vault may be operated by an agent.
+///
+/// Deny by default: a folder Cortex has never been told about has no switch, and
+/// no switch means no access. Otherwise passing a path on the command line would
+/// be a way around the toggle in the app. Opening the folder in Cortex, or
+/// `cortex agents <folder> --on`, creates the switch.
+fn agent_access(root: &Path, registry: &Registry) -> bool {
+    registry.agents(root).unwrap_or(false)
+}
+
 /* ---------- entry points ---------- */
 
 /// Serve MCP on stdin/stdout until the client closes the pipe.
@@ -931,7 +967,35 @@ mod tests {
     }
 
     fn agent(dir: &Path) -> Agent {
-        Agent::open(Some(dir.to_path_buf())).expect("open")
+        Agent::open_with(Some(dir.to_path_buf()), Box::new(|_| true)).expect("open")
+    }
+
+    #[test]
+    fn a_disabled_vault_never_opens() {
+        let dir = vault();
+        let refused = Agent::open_with(Some(dir.path().to_path_buf()), Box::new(|_| false));
+        let message = refused.err().expect("must refuse");
+        assert!(message.contains("agent access is off"), "{message}");
+    }
+
+    #[test]
+    fn turning_access_off_stops_a_connected_session() {
+        let dir = vault();
+        let gate = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let seen = gate.clone();
+        let check: AccessCheck = Box::new(move |_| seen.load(std::sync::atomic::Ordering::SeqCst));
+        let mut session = Agent::open_with(Some(dir.path().to_path_buf()), check).expect("open");
+        assert!(!failed(&call(&mut session, "cortex_stats", json!({}))));
+
+        gate.store(false, std::sync::atomic::Ordering::SeqCst);
+        let response = call(&mut session, "cortex_stats", json!({}));
+        assert!(failed(&response));
+        let body = text(&response);
+        assert_eq!(body["error"], "agents_off");
+        assert!(body["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("turned off"));
     }
 
     fn call(agent: &mut Agent, tool: &str, args: Value) -> Value {
@@ -974,6 +1038,26 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("House format"));
+    }
+
+    #[test]
+    fn a_vault_needs_an_explicit_yes() {
+        let dir = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let mut registry = Registry::default();
+
+        // Never registered: no switch, no access.
+        assert!(!agent_access(other.path(), &registry));
+
+        registry.add(dir.path());
+        assert!(agent_access(dir.path(), &registry));
+
+        assert!(registry.set_agents(dir.path(), false));
+        assert!(!agent_access(dir.path(), &registry));
+
+        // Reopening the vault in the app must not quietly re-enable it.
+        registry.add(dir.path());
+        assert!(!agent_access(dir.path(), &registry));
     }
 
     #[test]

@@ -963,3 +963,22 @@ body.mode-atlas .note-title { letter-spacing: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 }
+
+/* A vault row opens the vault; the small button shows it in the OS. */
+.vault-row { display: flex; align-items: stretch; gap: 2px; }
+.vault-row .vault-item { flex: 1; min-width: 0; }
+.vault-reveal {
+  flex: none;
+  width: 28px;
+  border: 0;
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms var(--ease), background 120ms var(--ease);
+}
+.vault-reveal:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.vault-reveal:disabled { opacity: 0.3; cursor: default; }
+.settings-actions { display: flex; gap: var(--s2); margin-top: var(--s3); }

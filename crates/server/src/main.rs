@@ -1,5 +1,6 @@
 mod app;
 mod assets;
+mod desktop;
 mod mcp;
 
 use std::fs;
@@ -49,6 +50,20 @@ enum Command {
         /// Open the UI in the default browser once the server is listening.
         #[arg(long)]
         open: bool,
+        /// Open a chromeless app window (Chrome, Edge or Brave) instead of a tab.
+        #[arg(long)]
+        app: bool,
+    },
+    /// Show or change whether AI clients may operate a vault over MCP.
+    Agents {
+        /// Vault to look at. Omit it to use the vault you opened last.
+        vault: Option<PathBuf>,
+        /// Allow agent access.
+        #[arg(long, conflicts_with = "off")]
+        on: bool,
+        /// Refuse agent access.
+        #[arg(long)]
+        off: bool,
     },
     /// Generate the bundled demo vault (concepts + two years of journal).
     SeedDemo {
@@ -91,6 +106,7 @@ async fn main() -> Result<()> {
                 allow_any_origin: false,
                 allow_framing: false,
                 open_browser: true,
+                app_window: true,
                 bind: "127.0.0.1".to_string(),
                 port: 3000,
             })
@@ -105,6 +121,7 @@ async fn main() -> Result<()> {
             allow_any_origin,
             allow_framing,
             open,
+            app,
         }) => {
             let roots = match vault {
                 Some(path) => {
@@ -120,7 +137,8 @@ async fn main() -> Result<()> {
                 read_only,
                 allow_any_origin,
                 allow_framing,
-                open_browser: open,
+                open_browser: open || app,
+                app_window: app,
                 bind,
                 port,
             })
@@ -137,6 +155,7 @@ async fn main() -> Result<()> {
         }
         Some(Command::Export { vault, out, title }) => export(&vault, &out, title),
         Some(Command::Index { vault }) => index(&vault),
+        Some(Command::Agents { vault, on, off }) => agent_switch(vault, on, off),
         Some(Command::Mcp { vault }) => {
             let code = mcp::serve(vault);
             std::process::exit(code);
@@ -146,6 +165,45 @@ async fn main() -> Result<()> {
             Ok(())
         }
     }
+}
+
+/// The MCP switch is stored per vault in the registry, next to the vault list,
+/// so the app and the command line agree without either one running.
+fn agent_switch(vault: Option<PathBuf>, on: bool, off: bool) -> Result<()> {
+    let mut registry = registry::Registry::load();
+    let root = match vault {
+        Some(path) => fs::canonicalize(&path)
+            .with_context(|| format!("vault not found: {}", path.display()))?,
+        None => registry
+            .active
+            .clone()
+            .or_else(|| registry.recent().first().map(|entry| entry.path.clone()))
+            .context("no vault is open; name a folder")?,
+    };
+
+    if on || off {
+        if !registry.set_agents(&root, on) {
+            registry.add(&root);
+            registry.set_agents(&root, on);
+        }
+        registry.save().context("could not save the vault list")?;
+    }
+
+    let enabled = registry.agents(&root).unwrap_or(false);
+    println!(
+        "{}: agent access is {}",
+        registry::name_for(&root),
+        if enabled { "on" } else { "off" }
+    );
+    println!(
+        "  {}",
+        if enabled {
+            "cortex mcp lets a client read and write this vault"
+        } else {
+            "cortex mcp refuses to start until this is turned back on"
+        }
+    );
+    Ok(())
 }
 
 fn export(vault_path: &Path, out: &Path, title: Option<String>) -> Result<()> {

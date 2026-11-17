@@ -102,6 +102,26 @@ export async function synthesize(payload, vault) {
   return readJson(response);
 }
 
+/** Asks the server to show the vault folder, or one note, in the file manager. */
+export async function revealInFolder(payload, vault) {
+  const response = await fetch(withVault('./api/reveal', vault), {
+    method: 'POST',
+    headers: WRITE_HEADERS,
+    body: JSON.stringify(payload),
+  });
+  return readJson(response);
+}
+
+/** The MCP switch for one vault, stored beside the vault list on the server. */
+export async function setAgentAccess(id, enabled) {
+  const response = await fetch('./api/vaults/agents', {
+    method: 'POST',
+    headers: WRITE_HEADERS,
+    body: JSON.stringify({ id, enabled }),
+  });
+  return readJson(response);
+}
+
 /**
  * Long poll: resolves when the vault version differs from `version`, or after
  * the server's 25 s timeout. Rejects with AbortError when the caller cancels.

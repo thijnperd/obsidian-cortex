@@ -14,6 +14,7 @@ cargo run -q -p cortex -- seed-demo demo # deterministic 174-note vault
 cargo run -q -p cortex -- serve demo --open
 cargo run -q -p cortex -- export demo --out dist
 cargo run -q -p cortex -- mcp demo       # MCP server on stdio
+cargo run -q -p cortex -- agents --off   # the per-vault MCP switch
 node --check web/js/*.js                 # no build step for the UI
 ```
 
@@ -43,6 +44,13 @@ node --check web/js/*.js                 # no build step for the UI
   properties (`body.mode-atlas`), it does not restyle components.
 - **Never weaken a guard to make a test pass** — path checks, origin checks and
   the write header all have tests.
+- **Revealing a file is a write-class action.** `/api/reveal` takes a note id and
+  resolves it with `store::note_path`; never pass a raw path to a process.
+- **Agent access is deny-by-default.** A vault with no `agents` entry in the
+  registry has no access; do not "fix" that by defaulting to allowed.
+- **Every note must survive the reveal animation.** `appear` values feed
+  `smoothstep(appear, appear + 0.05, reveal)`; a value at or above 1 hides the
+  note in every 3D view.
 
 ## Vault agents (different from you)
 

@@ -109,6 +109,16 @@ The folder list toggles visibility; hidden folders dim instead of disappearing,
 so the context stays visible. Clicking a `[[link]]`, a backlink or an unlinked
 mention opens that note in place, and the arrows walk back through the chain.
 
+## Vault settings
+
+The gear in the toolbar holds the per-vault decisions:
+
+- **Opens in** — which view this vault should start in.
+- **Show in folder** — hands the folder to Explorer, Finder or your file
+  manager. The same button (⤢) sits beside every vault in the sidebar.
+- **Map** — roads and trade routes on the atlas.
+- **Agent access** — whether AI clients may read and write this vault.
+
 ## Agents (MCP)
 
 Cortex ships a Model Context Protocol server, so the AI client you already use
@@ -147,6 +157,13 @@ appended to `agent-writes.jsonl` in the config directory. The instructions an
 agent actually receives are in `docs/agent-guide.md`; the reasoning is in
 [ADR 0003](docs/adr/0003-agent-access.md).
 
+Access is a per-vault switch. It is on for a vault you have opened in Cortex and
+off for a folder Cortex has never seen, so naming a path on the command line is
+not a way around it. Turn it off in vault settings, or with
+`cortex agents ~/Notes --off`; `cortex mcp` then refuses to start, and a client
+that is already connected is stopped on its next call. Turning it back on needs
+one of those two, not a restart.
+
 ## Run it on your own vault
 
 ```bash
@@ -156,6 +173,7 @@ cargo run -p cortex -- serve ~/Notes --title "My vault"
 | Flag | Meaning |
 | --- | --- |
 | `--open` | open the UI in your browser once the server is up |
+| `--app` | open a chromeless app window (Chrome, Edge, Brave) instead of a tab |
 | `--read-only` | serve without write endpoints (switching folders still works) |
 | `--bind 0.0.0.0` | expose on the LAN (loopback is the default) |
 | `--allow-any-origin` | relax the same-origin check (LAN preview) |
@@ -184,8 +202,11 @@ freshly built binary:
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
 One self-contained binary per platform: no runtime, no installer, the whole UI
-embedded. Unpack the folder, then either run `cortex` and pick your Obsidian
-vault from the launch screen, or point it straight at one:
+embedded. Run `cortex` and pick your Obsidian vault from the launch screen — it
+opens in a chromeless window (Chrome, Edge or Brave, with a profile of its own)
+rather than a browser tab, so it behaves like an app without shipping a second
+runtime. Without one of those browsers you get a normal tab; `serve --app` asks
+for the window explicitly. Or point it straight at a folder:
 
 ```bash
 cortex serve ~/Documents/MyVault --open
