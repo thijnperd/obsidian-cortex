@@ -1,0 +1,52 @@
+<evaluation>
+  <!--
+    Read-only evals for the `cortex mcp` server. Every answer was verified by
+    running the tools against the demo vault (`cortex seed-demo demo`), which is
+    deterministic, so these stay stable.
+    Run by hand before a release; a passing model needs no write tools at all.
+  -->
+  <qa_pair>
+    <question>How many notes are in this vault?</question>
+    <answer>174</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many links between notes does the vault contain? Give the number only.</question>
+    <answer>338</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which folder holds the most notes, and how many does it hold? Answer as "Folder, N".</question>
+    <answer>Journal, 122</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many notes are in the Maps folder?</question>
+    <answer>8</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many notes in this vault have no incoming or outgoing links?</question>
+    <answer>0</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What date is declared in the frontmatter of the note "Deep Work"?</question>
+    <answer>2024-11-27</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which tags does the note "Deep Work" declare? Alphabetical, comma separated.</question>
+    <answer>craft, focus</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many notes link to "Deep Work"? Give the number only.</question>
+    <answer>16</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many notes does "Deep Work" link out to?</question>
+    <answer>4</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which folder contains the note about Zettelkasten?</question>
+    <answer>Ideas</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many notes mention "Deep Work" by name without linking to it?</question>
+    <answer>14</answer>
+  </qa_pair>
+</evaluation>

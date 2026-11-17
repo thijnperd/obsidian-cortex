@@ -109,6 +109,44 @@ The folder list toggles visibility; hidden folders dim instead of disappearing,
 so the context stays visible. Clicking a `[[link]]`, a backlink or an unlinked
 mention opens that note in place, and the arrows walk back through the chain.
 
+## Agents (MCP)
+
+Cortex ships a Model Context Protocol server, so the AI client you already use
+can read the vault, create notes and rewrite sections — through the same guards
+the app enforces.
+
+```bash
+cortex mcp ~/Notes    # stdio MCP server bound to one vault
+cortex mcp-config     # print the snippet your client needs
+```
+
+Paste the printed JSON into Claude Desktop's `claude_desktop_config.json`,
+Cursor's `.cursor/mcp.json`, or Zed's `context_servers`, then restart the
+client. Without an argument `cortex mcp` binds to the vault you opened last.
+
+| Tool | What it does |
+| --- | --- |
+| `cortex_guide` | House format and the rules; an agent should read it first |
+| `cortex_stats` | Note and link counts, folders, orphans, unresolved links |
+| `cortex_search` | Full-text search with snippets |
+| `cortex_read_note` | Body, tags, headings, and the hash a write needs |
+| `cortex_create_note` | New note in a folder, slugged from the title |
+| `cortex_write_note` | Replace a whole body (`expect` required) |
+| `cortex_replace_section` | Replace one section, keep the rest |
+| `cortex_append` | Add a block at the end |
+| `cortex_move_note` | Rename or refile a note |
+| `cortex_links` | Backlinks, outgoing links, unlinked mentions |
+| `cortex_orphans` | Notes with no links in either direction |
+| `cortex_list_vaults`, `cortex_use_vault` | Same process, another folder |
+
+Every write must present the hash from `cortex_read_note`. If the file changed
+in between, the write fails with a conflict and the current hash instead of
+clobbering the note you have open in Obsidian. There is no delete tool,
+`.obsidian/` and paths outside the vault are refused, and each write is
+appended to `agent-writes.jsonl` in the config directory. The instructions an
+agent actually receives are in `docs/agent-guide.md`; the reasoning is in
+[ADR 0003](docs/adr/0003-agent-access.md).
+
 ## Run it on your own vault
 
 ```bash
