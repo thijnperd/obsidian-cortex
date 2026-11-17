@@ -1,4 +1,4 @@
-//! Seeded demo vault: ~50 concept notes plus a two-year journal.
+//! Seeded demo vault: ~80 concept notes plus a two-year journal.
 //!
 //! The generator is deterministic: same day, same vault, same universe. It is
 //! only ever additive and refuses to touch a non-empty folder unless the
@@ -412,6 +412,336 @@ const CONCEPTS: &[Seed] = &[
             "The files are the app; everything else is a view."],
         links: &["Plain Text", "Local First", "Digital Gardens"],
     },
+    Seed {
+        title: "Sleep as Editing",
+        folder: "Ideas",
+        tags: &["psychology", "memory"],
+        lede: "The night shift does the filing you skipped: sleep consolidates and prunes what the day left open.",
+        points: &[
+            "A late night buys hours at the cost of the editing that would have made them durable.",
+            "The problem you cannot solve at 1am is often solved by 7am without a single new idea.",
+        ],
+        links: &["Working Memory", "Spaced Repetition", "Deep Work"],
+    },
+    Seed {
+        title: "The Two-Hour Rule",
+        folder: "Ideas",
+        tags: &["focus", "craft"],
+        lede: "Most genuinely hard work fits in two focused hours; the rest of the day is maintenance, meetings and taste.",
+        points: &[
+            "The rule is a ceiling on the false promise of a long day, not a target for an easy one.",
+            "Protecting those two hours matters more than filling the other six.",
+        ],
+        links: &["Deep Work", "Attention Economy", "Constraints"],
+    },
+    Seed {
+        title: "Boredom Is an Input",
+        folder: "Ideas",
+        tags: &["psychology", "attention"],
+        lede: "Boredom is the signal that a task has stopped needing you, and the space where the next idea arrives.",
+        points: &[
+            "Removing every gap removes the incubation the gaps were for.",
+            "The phone does not cure boredom; it spends the attention that boredom was freeing.",
+        ],
+        links: &["Dopamine Loops", "Slow Media", "Creativity"],
+    },
+    Seed {
+        title: "Envy as a Compass",
+        folder: "Ideas",
+        tags: &["psychology", "craft"],
+        lede: "Envy is accurate about what you want and dishonest about what it would cost.",
+        points: &[
+            "Use it as a question, not a verdict: what exactly do they have that I am not building?",
+            "Admiration points outward; envy points at the gap between taste and output.",
+        ],
+        links: &["Taste", "Expertise", "Writing to Think"],
+    },
+    Seed {
+        title: "Default Bias",
+        folder: "Ideas",
+        tags: &["systems", "psychology"],
+        lede: "Whatever happens without a decision becomes the decision.",
+        points: &[
+            "Defaults are the cheapest policy a system can install, and the hardest to notice.",
+            "Audit the things you do because they were already selected.",
+        ],
+        links: &["Habit Gravity", "Constraints", "Systems Thinking"],
+    },
+    Seed {
+        title: "The Readiness Trap",
+        folder: "Ideas",
+        tags: &["focus", "psychology"],
+        lede: "Waiting to feel ready is a way of scheduling the work for someone you are not yet.",
+        points: &[
+            "Competence arrives during the attempt, not before it.",
+            "The first version is a tool for becoming the person who can make the second.",
+        ],
+        links: &["Perfect Conditions Fallacy", "Drafting", "Play"],
+    },
+    Seed {
+        title: "Perfect Conditions Fallacy",
+        folder: "Ideas",
+        tags: &["psychology", "craft"],
+        lede: "The perfect setup is a story about why the work has not started.",
+        points: &[
+            "A tool that removes one obstacle will reveal the next one, because the obstacle was never the point.",
+            "Start where you are; the conditions improve as a side effect of the work.",
+        ],
+        links: &["The Readiness Trap", "Drafting", "Habit Gravity"],
+    },
+    Seed {
+        title: "Identity Before Habit",
+        folder: "Ideas",
+        tags: &["psychology", "systems"],
+        lede: "Behaviour that agrees with who you think you are survives a bad week; behaviour that contradicts it does not.",
+        points: &[
+            "Change the sentence you tell yourself first, and the actions have somewhere to attach.",
+            "Small proof beats a new plan.",
+        ],
+        links: &["Habit Gravity", "Constraints", "Deep Work"],
+    },
+    Seed {
+        title: "Memory Consolidation",
+        folder: "Research",
+        tags: &["learning", "memory"],
+        lede: "Memories are not stored once; they are rebuilt, and sleep is the workshop.",
+        points: &[
+            "The same material replayed with a different cue becomes a different, more useful memory.",
+            "Spacing works partly because each recall forces a fresh reconstruction.",
+        ],
+        links: &["Sleep as Editing", "Spaced Repetition", "Working Memory"],
+    },
+    Seed {
+        title: "Interleaving",
+        folder: "Research",
+        tags: &["learning"],
+        lede: "Practising related skills in mixed order feels worse and tests better.",
+        points: &[
+            "Blocked practice builds fluency inside one pattern; interleaving builds the choice between patterns.",
+            "The discomfort is the discrimination being trained.",
+        ],
+        links: &["Deliberate Practice", "Spaced Repetition", "Chunking"],
+    },
+    Seed {
+        title: "Testing Effect",
+        folder: "Research",
+        tags: &["learning"],
+        lede: "Retrieval is not a measurement of learning; it is a cause of it.",
+        points: &[
+            "A test taken too early is still worth more than rereading the same page.",
+            "Feedback after the attempt is what turns a guess into a memory.",
+        ],
+        links: &["Spaced Repetition", "Feedback Loops", "Expertise"],
+    },
+    Seed {
+        title: "Cognitive Offloading",
+        folder: "Research",
+        tags: &["psychology", "knowledge"],
+        lede: "Moving a fact out of your head and into the world is not cheating the mind; it is using it correctly.",
+        points: &[
+            "The question is whether the external trace is reliable and easy to find.",
+            "Offload the state, keep the judgment.",
+        ],
+        links: &["Working Memory", "Second Brain", "Spatial Memory"],
+    },
+    Seed {
+        title: "Attention Residue",
+        folder: "Research",
+        tags: &["attention", "psychology"],
+        lede: "Part of the mind stays on the last task long after the switch, and that part is not available for the next one.",
+        points: &[
+            "The residue is why a five-minute check costs more than five minutes.",
+            "A closing ritual is cheaper than trying to remember to stop.",
+        ],
+        links: &["Interruption Debt", "The Cost of Context Switching", "Deep Work"],
+    },
+    Seed {
+        title: "Zeigarnik Effect",
+        folder: "Research",
+        tags: &["psychology", "systems"],
+        lede: "Unfinished tasks keep returning to mind; finished ones let go.",
+        points: &[
+            "Writing the next step down can satisfy the loop without finishing the task.",
+            "The effect is a feature of memory, not a flaw of character.",
+        ],
+        links: &["Interruption Debt", "Working Memory", "Task Capture"],
+    },
+    Seed {
+        title: "Task Capture",
+        folder: "Research",
+        tags: &["systems", "knowledge"],
+        lede: "A task is only off your mind when it is written somewhere you trust.",
+        points: &[
+            "An inbox you do not review is a second job.",
+            "Capture is cheap; the trust that makes it work is built by review.",
+        ],
+        links: &["Second Brain", "Zeigarnik Effect", "Cognitive Offloading"],
+    },
+    Seed {
+        title: "Diminishing Returns",
+        folder: "Research",
+        tags: &["systems", "learning"],
+        lede: "Every method has a point where more of it stops helping, and the interesting question is where.",
+        points: &[
+            "The last ten percent of practice often costs more than the first sixty.",
+            "Knowing the curve lets you spend the next hour elsewhere.",
+        ],
+        links: &["Ten Thousand Hours", "Constraints", "Leverage Points"],
+    },
+    Seed {
+        title: "Voice",
+        folder: "Craft",
+        tags: &["writing", "craft"],
+        lede: "Voice is the shape your sentences take when you are not trying to sound like anyone.",
+        points: &[
+            "It is built by reading widely and then writing without the sources in front of you.",
+            "Consistency matters more than beauty: a recognizable sentence beats a perfect one.",
+        ],
+        links: &["Writing to Think", "Editing", "Taste"],
+    },
+    Seed {
+        title: "Structure Before Prose",
+        folder: "Craft",
+        tags: &["writing"],
+        lede: "Work out what the reader needs in what order before you make any of it pretty.",
+        points: &[
+            "An outline is a promise about sequence, not a list of topics.",
+            "If the structure is wrong, better sentences only make the wrongness clearer.",
+        ],
+        links: &["Drafting", "Editing", "Outline as Instrument"],
+    },
+    Seed {
+        title: "Outline as Instrument",
+        folder: "Craft",
+        tags: &["writing"],
+        lede: "An outline is not a cage; it is the instrument you use to test whether the argument has a shape.",
+        points: &[
+            "Move the headings around before you move the paragraphs.",
+            "The outline you cannot write is the part you have not thought through.",
+        ],
+        links: &["Drafting", "Structure Before Prose", "Constraints"],
+    },
+    Seed {
+        title: "Revision Is Discovery",
+        folder: "Craft",
+        tags: &["writing", "craft"],
+        lede: "You do not revise what you meant; you find out what you meant by revising.",
+        points: &[
+            "The second draft is where the argument becomes visible to its own author.",
+            "Cutting is not loss when the thing removed was hiding the thing kept.",
+        ],
+        links: &["Editing", "Writing to Think", "Drafting"],
+    },
+    Seed {
+        title: "Reading Aloud",
+        folder: "Craft",
+        tags: &["writing"],
+        lede: "The ear catches the sentence the eye has learned to forgive.",
+        points: &[
+            "Read it aloud and the place you stumble is the place the reader will.",
+            "Rhythm is part of meaning; a sentence that trips carries the wrong idea.",
+        ],
+        links: &["Editing", "Voice", "Reading in Layers"],
+    },
+    Seed {
+        title: "The One-Sentence Summary",
+        folder: "Craft",
+        tags: &["writing", "knowledge"],
+        lede: "If you cannot say it in one sentence, you have a topic rather than a note.",
+        points: &[
+            "The sentence is the claim; everything else is support or decoration.",
+            "Write the summary first and the outline becomes obvious.",
+        ],
+        links: &["Note Titles as Claims", "Editing", "Atomic Notes"],
+    },
+    Seed {
+        title: "Latency Budgets",
+        folder: "Systems",
+        tags: &["software", "systems"],
+        lede: "A speed target is a design constraint, not a wish; it decides what the architecture is allowed to do.",
+        points: &[
+            "Every network hop and every disk flush spends from the same budget.",
+            "Measure the budget where the user feels it, not where the code looks fast.",
+        ],
+        links: &["Feedback Loops", "Local First", "Sync"],
+    },
+    Seed {
+        title: "Idempotence",
+        folder: "Systems",
+        tags: &["software"],
+        lede: "An operation you can safely repeat is an operation you can safely retry.",
+        points: &[
+            "Retries turn a rare failure into a routine one, which is why the operation has to tolerate them.",
+            "The cheapest distributed-systems repair is usually a request that does not care how many times it arrives.",
+        ],
+        links: &["Sync", "Conflict", "Versioning"],
+    },
+    Seed {
+        title: "Backpressure",
+        folder: "Systems",
+        tags: &["software", "systems"],
+        lede: "A system that cannot slow its input will eventually be slowed by its failure.",
+        points: &[
+            "Queues hide overload until the queue is the problem.",
+            "Saying no early is kinder than timing out late.",
+        ],
+        links: &["Systems Thinking", "Feedback Loops", "Latency Budgets"],
+    },
+    Seed {
+        title: "Observability",
+        folder: "Systems",
+        tags: &["software", "systems"],
+        lede: "You cannot debug what you did not keep, and logs are cheaper than guesses.",
+        points: &[
+            "The useful question is not 'is it up' but 'what is it doing, and for whom'.",
+            "Instrument the boundary: inputs, outputs, latency and error counts.",
+        ],
+        links: &["Feedback Loops", "Backpressure", "Graph Views"],
+    },
+    Seed {
+        title: "The Smallest Viable Schema",
+        folder: "Systems",
+        tags: &["software", "knowledge"],
+        lede: "Every field you add is a promise to keep it filled forever.",
+        points: &[
+            "A schema earns its complexity by removing more ambiguity than it creates.",
+            "Frontmatter should hold what you query, not everything you know.",
+        ],
+        links: &["Plain Text", "Local First", "Portability"],
+    },
+    Seed {
+        title: "Data Gravity",
+        folder: "Systems",
+        tags: &["software", "systems"],
+        lede: "Data pulls the tools toward it; the format that stays put wins.",
+        points: &[
+            "Migration cost is the moat every file format actually has.",
+            "Owning the files is a way of choosing where the gravity points.",
+        ],
+        links: &["Local First", "Portability", "Sync"],
+    },
+    Seed {
+        title: "Filesystem as API",
+        folder: "Systems",
+        tags: &["software"],
+        lede: "A folder is an interface everyone already has a client for.",
+        points: &[
+            "Reading and writing files is a contract older than any SDK.",
+            "The constraints of the filesystem are a feature: paths, names, and nothing hidden.",
+        ],
+        links: &["Plain Text", "Local First", "Versioning"],
+    },
+    Seed {
+        title: "Graceful Degradation",
+        folder: "Systems",
+        tags: &["software", "systems"],
+        lede: "The mark of durable software is what still works when the network, the server or the sync is gone.",
+        points: &[
+            "Design the failure mode before the success mode, because the failure mode is what users keep.",
+            "Offline is not a feature to add later; it is a decision about where the truth lives.",
+        ],
+        links: &["Local First", "Systems Thinking", "Portability"],
+    },
     // Two worked examples of the structure notes Cortex can generate.
     Seed {
         title: "Research — Attention and Depth",
@@ -438,7 +768,7 @@ const MAPS: &[Seed] = &[
         title: "Start Here",
         folder: "Maps",
         tags: &["map"],
-        lede: "This vault is a demo of Cortex: about fifty linked notes and two years of journal, all plain Markdown.",
+        lede: "This vault is a demo of Cortex: more than eighty linked notes and two years of journal, all plain Markdown.",
         points: &["Press ⌘K to search, click a star to read, drag to orbit.",
             "Everything here was generated by the Rust binary and then read back like any other vault."],
         links: &["The Atlas", "Graph Views", "Second Brain"],
@@ -694,8 +1024,9 @@ pub fn seed(root: &Path, force: bool) -> std::io::Result<usize> {
         store::write_note(root, &id, &body).map_err(|err| Error::other(err.to_string()))?;
         written += 1;
         entry += 1;
-        // Every six days keeps the ring readable while still covering 24 months.
-        day += 6;
+        // Every three days keeps the journal dense enough to fill a brain
+        // without letting it swallow the concept notes.
+        day += 3;
     }
 
     Ok(written)
@@ -743,16 +1074,16 @@ mod tests {
     fn generates_a_connected_vault() {
         let dir = tempfile::tempdir().unwrap();
         let count = seed(dir.path(), false).unwrap();
-        assert!(count > 150, "expected a rich demo, got {count}");
+        assert!(count > 300, "expected a rich demo, got {count}");
         assert!(dir.path().join(MARKER).exists());
 
         let vault = crate::Vault::load(dir.path(), "Demo", Default::default()).unwrap();
-        assert!(vault.notes.len() > 150);
-        assert!(vault.edges.len() > 250);
+        assert!(vault.notes.len() > 300);
+        assert!(vault.edges.len() > 500);
         assert!(vault.unresolved.is_empty(), "demo links must all resolve");
         let journal = vault.notes.iter().filter(|n| n.folder == "Journal").count();
         assert!(
-            journal > 100,
+            journal > 200,
             "journal should span the timeline, got {journal}"
         );
         assert!(vault.notes.iter().all(|n| !n.title.is_empty()));
