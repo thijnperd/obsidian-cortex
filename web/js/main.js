@@ -1,0 +1,1446 @@
+// Cortex UI controller.
+
+import { Camera } from './camera.js';
+import { Renderer, PALETTE } from './renderer.js';
+import { clamp, easeInOut, project } from './math.js';
+import { renderMarkdown } from './markdown.js';
+import * as api from './api.js';
+import * as ui from './ui.js';
+import { Atlas } from './atlas.js';
+
+const state = {
+  graph: null,
+  meta: null,
+  live: false,
+  vaultId: null,
+  vaults: [],
+  readOnly: false,
+  renderer: null,
+  atlas: null,
+  camera: new Camera(),
+  mode: 'universe',
+  brain: 0,
+  brainTarget: 0,
+  reveal: 1,
+  hover: null,
+  selected: null,
+  selection: new Set(),
+  compose: null,
+  hidden: new Set(),
+  lookup: new Map(),
+  incoming: new Map(),
+  detail: null,
+  editing: false,
+  draft: '',
+  cache: new Map(),
+  labels: [],
+  folderLabels: [],
+  palette: { open: false, hits: [], active: 0, timer: null, query: '' },
+  replay: { min: 0, max: 1, playing: false, startedAt: 0 },
+  history: { items: [], index: -1 },
+  events: null,
+  version: null,
+  launching: false,
+  time: 0,
+  dragging: false,
+  dragMoved: false,
+  pointerX: 0,
+  pointerY: 0,
+  lastX: 0,
+  lastY: 0,
+};
+
+const els = {
+  canvas: document.getElementById('stage'),
+  labels: document.getElementById('labels'),
+  atlas: document.getElementById('atlas'),
+  settings: document.getElementById('settings'),
+  settingsButton: document.getElementById('settings-button'),
+  settingsClose: document.getElementById('settings-close'),
+  settingsName: document.getElementById('settings-name'),
+  settingsPath: document.getElementById('settings-path'),
+  settingsObsidian: document.getElementById('settings-obsidian'),
+  settingsViews: document.getElementById('settings-views'),
+  settingsWrites: document.getElementById('settings-writes'),
+  settingsRoads: document.getElementById('settings-roads'),
+  settingsRoutes: document.getElementById('settings-routes'),
+  sidebar: document.getElementById('sidebar'),
+  vaultButton: document.getElementById('vault-button'),
+  vaultTitle: document.getElementById('vault-title'),
+  vaultSub: document.getElementById('vault-sub'),
+  stats: document.getElementById('stats'),
+  folders: document.getElementById('folders'),
+  foldersReset: document.getElementById('folders-reset'),
+  vaultList: document.getElementById('vault-list'),
+  addVault: document.getElementById('add-vault'),
+  searchButton: document.getElementById('search-button'),
+  newNote: document.getElementById('new-note'),
+  panel: document.getElementById('panel'),
+  panelBody: document.getElementById('panel-body'),
+  panelActions: document.getElementById('panel-actions'),
+  panelCrumbs: document.getElementById('panel-crumbs'),
+  panelClose: document.getElementById('panel-close'),
+  panelBack: document.getElementById('panel-back'),
+  panelForward: document.getElementById('panel-forward'),
+  palette: document.getElementById('palette'),
+  paletteInput: document.getElementById('palette-input'),
+  paletteResults: document.getElementById('palette-results'),
+  replay: document.getElementById('replay'),
+  replayRange: document.getElementById('replay-range'),
+  replayPlay: document.getElementById('replay-play'),
+  selection: document.getElementById('selection'),
+  trayCount: document.getElementById('tray-count'),
+  trayClear: document.getElementById('tray-clear'),
+  compose: document.getElementById('compose'),
+  composeForm: document.getElementById('compose-form'),
+  composeKicker: document.getElementById('compose-kicker'),
+  composeLabel: document.getElementById('compose-label'),
+  composeTitle: document.getElementById('compose-title'),
+  composeSub: document.getElementById('compose-sub'),
+  composeCancel: document.getElementById('compose-cancel'),
+  launch: document.getElementById('launch'),
+  launchForm: document.getElementById('launch-form'),
+  launchList: document.getElementById('launch-list'),
+  launchPath: document.getElementById('launch-path'),
+  launchError: document.getElementById('launch-error'),
+  launchSubmit: document.getElementById('launch-submit'),
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Local only, and optional: a private-mode browser just loses the memory.
+const prefs = {
+  get(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw === null ? fallback : JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
+  },
+  set(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* storage unavailable */
+    }
+  },
+};
+
+function viewForVault(id) {
+  return prefs.get(`cortex.view.${id}`, prefs.get('cortex.launchView', 'universe'));
+}
+
+function launchView() {
+  const checked = document.querySelector('input[name="launch-view"]:checked');
+  return checked ? checked.value : 'universe';
+}
+
+function selectionIndices() {
+  const indices = new Set();
+  if (!state.graph) return indices;
+  for (const id of state.selection) {
+    const index = nodeIndex(id);
+    if (index >= 0) indices.add(index);
+  }
+  return indices;
+}
+
+function boot() {
+  wire();
+  start();
+}
+
+async function start() {
+  try {
+    const listing = await api.listVaults();
+    if (listing) {
+      state.live = true;
+      state.readOnly = Boolean(listing.read_only);
+      state.vaults = listing.vaults || [];
+      ui.renderVaultList(els.vaultList, state.vaults, state.vaultId, openListedVault);
+      ui.renderLaunch(els.launchList, state.vaults, {
+        onOpen: openListedVault,
+        onForget: forgetVault,
+      });
+      const active = state.vaults.find(
+        (vault) => vault.id === listing.active && !vault.missing,
+      );
+      if (active) {
+        await switchVault(active.id);
+      } else {
+        showLaunch();
+      }
+      ui.hideBoot();
+      requestAnimationFrame(loop);
+      return;
+    }
+
+    document.body.classList.add('is-static');
+    const graph = await api.loadStaticGraph();
+    applyGraph(graph);
+    document.addEventListener('visibilitychange', onVisibility);
+    ui.hideBoot();
+    requestAnimationFrame(loop);
+  } catch (error) {
+    if (state.live) {
+      ui.hideBoot();
+      showLaunch(error.message || 'Could not open that folder');
+      requestAnimationFrame(loop);
+    } else {
+      ui.setBootStatus(error.message || 'Could not open that folder');
+    }
+  }
+}
+
+function wire() {
+  const storedView = prefs.get('cortex.launchView', 'universe');
+  const storedRadio = document.querySelector(`input[name="launch-view"][value="${storedView}"]`);
+  if (storedRadio) storedRadio.checked = true;
+
+  els.canvas.addEventListener('pointerdown', onPointerDown);
+  els.canvas.addEventListener('pointermove', onPointerMove);
+  els.canvas.addEventListener('pointerup', onPointerUp);
+  els.canvas.addEventListener('pointerleave', () => setHover(null));
+  els.canvas.addEventListener('wheel', onWheel, { passive: false });
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('resize', onResize);
+
+  document.querySelectorAll('.view[data-mode]').forEach((button) => {
+    button.addEventListener('click', () => setMode(button.dataset.mode));
+  });
+  els.panelClose.addEventListener('click', closePanel);
+  els.panelBack.addEventListener('click', goBack);
+  els.panelForward.addEventListener('click', goForward);
+  els.selection.querySelectorAll('[data-template]').forEach((button) => {
+    button.addEventListener('click', () => openCompose(button.dataset.template));
+  });
+  els.trayClear.addEventListener('click', clearSelection);
+  els.composeForm.addEventListener('submit', submitCompose);
+  els.composeCancel.addEventListener('click', closeCompose);
+  els.composeTitle.addEventListener('input', updateComposeState);
+  els.compose.addEventListener('click', (event) => {
+    if (event.target === els.compose) closeCompose();
+  });
+  els.replayRange.addEventListener('input', onScrub);
+  els.replayPlay.addEventListener('click', startReplay);
+  els.newNote.addEventListener('click', createNote);
+  els.paletteInput.addEventListener('input', () => {
+    state.palette.query = els.paletteInput.value;
+    scheduleSearch();
+  });
+  els.paletteInput.addEventListener('keydown', onPaletteKey);
+  els.paletteResults.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-hit-index]');
+    if (button) openHit(Number(button.dataset.hitIndex));
+  });
+  els.palette.addEventListener('click', (event) => {
+    if (event.target === els.palette) closePalette();
+  });
+  els.searchButton.addEventListener('click', openPalette);
+  els.settingsButton.addEventListener('click', openSettings);
+  els.settingsClose.addEventListener('click', closeSettings);
+  els.settings.addEventListener('click', (event) => {
+    if (event.target === els.settings) closeSettings();
+  });
+  els.settingsViews.querySelectorAll('[data-mode]').forEach((button) => {
+    button.addEventListener('click', () => setMode(button.dataset.mode));
+  });
+  els.settingsRoads.addEventListener('change', () => {
+    prefs.set('cortex.atlas.roads', els.settingsRoads.checked);
+    if (state.atlas) state.atlas.setRoads(els.settingsRoads.checked);
+  });
+  els.settingsRoutes.addEventListener('change', () => {
+    prefs.set('cortex.atlas.routes', els.settingsRoutes.checked);
+    if (state.atlas) state.atlas.setRoutes(els.settingsRoutes.checked);
+  });
+  els.vaultButton.addEventListener('click', () => showLaunch());
+  els.addVault.addEventListener('click', () => showLaunch());
+  els.foldersReset.addEventListener('click', resetFolders);
+  els.launchForm.addEventListener('submit', submitLaunch);
+  document.addEventListener('visibilitychange', onVisibility);
+}
+
+/* ---------- vaults ---------- */
+
+function currentVault() {
+  return state.vaults.find((vault) => vault.id === state.vaultId) || null;
+}
+
+async function refreshVaults() {
+  const listing = await api.listVaults();
+  if (!listing) return;
+  state.vaults = listing.vaults || [];
+  ui.renderVaultList(els.vaultList, state.vaults, state.vaultId, openListedVault);
+  ui.renderLaunch(els.launchList, state.vaults, {
+    onOpen: openListedVault,
+    onForget: forgetVault,
+  });
+}
+
+function showLaunch(message) {
+  state.launching = true;
+  els.launch.hidden = false;
+  els.sidebar.hidden = true;
+  document.body.classList.remove('has-sidebar');
+  showLaunchError(message);
+  els.launchPath.value = '';
+  refreshVaults();
+  resizeCamera();
+  if (!message) els.launchPath.focus();
+}
+
+function showLaunchError(message) {
+  els.launchError.hidden = !message;
+  els.launchError.textContent = message || '';
+}
+
+function hideLaunch() {
+  state.launching = false;
+  els.launch.hidden = true;
+  showLaunchError(null);
+}
+
+async function submitLaunch(event) {
+  event.preventDefault();
+  const path = els.launchPath.value.trim();
+  if (!path) {
+    showLaunchError('Enter the path to a folder of Markdown notes.');
+    return;
+  }
+  els.launchSubmit.disabled = true;
+  els.launchSubmit.textContent = 'Opening…';
+  try {
+    const view = launchView();
+    const vault = await api.addVault(path);
+    hideLaunch();
+    await refreshVaults();
+    await switchVault(vault.id, view);
+  } catch (error) {
+    showLaunchError(error.message || 'Could not open that folder.');
+  } finally {
+    els.launchSubmit.disabled = false;
+    els.launchSubmit.textContent = 'Open';
+  }
+}
+
+async function openListedVault(vault) {
+  if (vault.missing) {
+    showLaunchError('That folder is no longer there. Use Forget to remove it.');
+    return;
+  }
+  try {
+    const view = launchView();
+    if (!vault.loaded) await api.addVault(vault.path);
+    hideLaunch();
+    await switchVault(vault.id, view);
+  } catch (error) {
+    showLaunchError(error.message || 'Could not open that folder.');
+  }
+}
+
+async function forgetVault(vault) {
+  try {
+    await api.forgetVault(vault.id);
+    if (vault.id === state.vaultId) {
+      state.vaultId = null;
+      state.graph = null;
+      state.renderer = null;
+      els.panel.hidden = true;
+      els.sidebar.hidden = true;
+      document.body.classList.remove('has-sidebar');
+      showLaunch();
+    }
+    await refreshVaults();
+  } catch (error) {
+    showLaunchError(error.message || 'Could not remove that folder.');
+  }
+}
+
+async function switchVault(id, view) {
+  const { graph, version } = await api.fetchGraph(id);
+  resetVaultState();
+  state.vaultId = id;
+  state.version = version;
+  showApp();
+  applyGraph(graph);
+  setMode(view || viewForVault(id), { persist: false, animate: false });
+  await refreshVaults();
+  watchVault();
+}
+
+function showApp() {
+  hideLaunch();
+  if (state.live) {
+    els.sidebar.hidden = false;
+    document.body.classList.add('has-sidebar');
+  }
+  resizeCamera();
+}
+
+function resetVaultState() {
+  state.cache.clear();
+  state.selection.clear();
+  state.history = { items: [], index: -1 };
+  state.detail = null;
+  state.editing = false;
+  state.selected = null;
+  state.hidden.clear();
+  state.version = null;
+  openToken += 1;
+  if (state.events) state.events.abort();
+  state.events = null;
+  els.panel.hidden = true;
+  els.selection.hidden = true;
+  els.settings.hidden = true;
+  if (state.atlas) state.atlas.reset();
+  syncHistory();
+}
+
+/** Long poll: the server answers the moment this vault's version changes. */
+function watchVault() {
+  if (state.events) state.events.abort();
+  if (!state.live || !state.vaultId) return;
+  const controller = new AbortController();
+  state.events = controller;
+  const vaultId = state.vaultId;
+
+  (async () => {
+    while (!controller.signal.aborted) {
+      try {
+        const info = await api.waitForChange(vaultId, state.version, controller.signal);
+        if (controller.signal.aborted || state.vaultId !== vaultId) break;
+        if (info.vault && info.vault !== vaultId) continue;
+        if (!info.version || info.version === state.version) continue;
+        if (state.editing) {
+          // Do not pull the ground out from under a draft; offer a refresh instead.
+          state.version = info.version;
+          ui.toast('This note changed on disk. Save to overwrite, or close and reopen.');
+          continue;
+        }
+        await refreshGraph();
+      } catch (error) {
+        if (controller.signal.aborted || error.name === 'AbortError') break;
+        await sleep(1200);
+      }
+    }
+  })();
+}
+
+/* ---------- graph ---------- */
+
+async function refreshGraph() {
+  if (!state.vaultId) return;
+  try {
+    const { graph, version } = await api.fetchGraph(state.vaultId);
+    applyGraph(graph);
+    state.version = version;
+    if (state.hover != null) state.renderer.setFocus(state.hover);
+  } catch {
+    /* transient failure: keep the current view */
+  }
+}
+
+function applyGraph(graph) {
+  state.graph = graph;
+  state.meta = graph.meta;
+  document.title = `${graph.meta.title} — Cortex`;
+  els.vaultTitle.textContent = graph.meta.title;
+  els.vaultSub.textContent = state.live
+    ? (currentVault()?.path || '')
+    : 'static demo';
+  els.newNote.hidden = !state.live;
+  ui.setStats(graph.meta);
+  ui.renderFolders(els.folders, graph.meta.folders, state.hidden, toggleFolder, PALETTE);
+  ui.syncFolders(state.hidden);
+  buildLookup();
+  buildIncoming();
+
+  if (!state.renderer) {
+    state.renderer = new Renderer(els.canvas);
+    state.renderer.onContextLost = () => ui.toast('Graphics context lost — reload to restore');
+  }
+  state.renderer.setGraph(graph);
+  state.renderer.setFolderFilter(state.hidden);
+  if (state.brain > 0) state.renderer.setMorph(state.brain);
+  if (state.detail) {
+    const index = nodeIndex(state.detail.id);
+    state.selected = index >= 0 ? index : null;
+  }
+  computeTimeline();
+  buildLabels();
+  syncSelection();
+  syncAtlas();
+  if (state.selected != null) state.renderer.setFocus(state.selected);
+  resizeCamera();
+  if (!state.replay.playing) {
+    state.reveal = state.mode === 'replay' ? 0.015 : 1;
+  }
+}
+
+function buildLookup() {
+  state.lookup.clear();
+  for (const node of state.graph.nodes) {
+    state.lookup.set(node.id.toLowerCase(), node.id);
+    state.lookup.set(node.title.toLowerCase(), node.id);
+    const stem = node.id.split('/').pop();
+    if (stem && !state.lookup.has(stem.toLowerCase())) state.lookup.set(stem.toLowerCase(), node.id);
+  }
+}
+
+function buildIncoming() {
+  state.incoming.clear();
+  for (const edge of state.graph.edges) {
+    const list = state.incoming.get(edge.target) || [];
+    list.push({ source: edge.source, weight: edge.weight });
+    state.incoming.set(edge.target, list);
+  }
+}
+
+function resolveTarget(target) {
+  const key = String(target || '').trim().replace(/\.md$/i, '').toLowerCase();
+  if (!key) return null;
+  return state.lookup.get(key) || state.lookup.get(key.split('/').pop()) || null;
+}
+
+function nodeIndex(id) {
+  if (!state.graph) return -1;
+  return state.graph.nodes.findIndex((node) => node.id === id);
+}
+
+function computeTimeline() {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const node of state.graph.nodes) {
+    const value = Date.parse(`${node.created}T00:00:00Z`);
+    if (!Number.isFinite(value)) continue;
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  if (!Number.isFinite(min) || max <= min) {
+    min = Date.now() - 365 * 86400000;
+    max = Date.now();
+  }
+  state.replay.min = min;
+  state.replay.max = max;
+}
+
+function buildLabels() {
+  els.labels.innerHTML = '';
+  state.labels = [];
+  state.folderLabels = [];
+
+  const ranked = [...state.graph.nodes]
+    .map((node, index) => ({ node, index }))
+    .sort((a, b) => b.node.pagerank - a.node.pagerank)
+    .slice(0, 16);
+  if (state.selected != null && !ranked.some((entry) => entry.index === state.selected)) {
+    const index = state.selected;
+    ranked.unshift({ node: state.graph.nodes[index], index });
+  }
+  for (const entry of ranked) {
+    const element = document.createElement('span');
+    element.className = 'star-label';
+    element.textContent = entry.node.title;
+    els.labels.appendChild(element);
+    state.labels.push({ index: entry.index, element });
+  }
+
+  const centroids = new Map();
+  for (const node of state.graph.nodes) {
+    const entry = centroids.get(node.folder) || { x: 0, y: 0, z: 0, n: 0 };
+    entry.x += node.x; entry.y += node.y; entry.z += node.z; entry.n += 1;
+    centroids.set(node.folder, entry);
+  }
+  for (const folder of state.graph.meta.folders) {
+    const centroid = centroids.get(folder.name);
+    if (!centroid || centroid.n === 0) continue;
+    // Big folders are rings: a label at their centroid would be misleading.
+    if (folder.count > 48) continue;
+    const element = document.createElement('span');
+    element.className = 'star-label galaxy-label';
+    element.textContent = folder.name;
+    els.labels.appendChild(element);
+    state.folderLabels.push({
+      element,
+      position: [centroid.x / centroid.n, centroid.y / centroid.n, centroid.z / centroid.n],
+      brainPosition: state.renderer.brainAnchors.get(folder.name) || null,
+    });
+  }
+}
+
+function resizeCamera() {
+  if (!state.renderer) return;
+  const width = els.canvas.clientWidth || 1;
+  const height = els.canvas.clientHeight || 1;
+  state.camera.aspect = width / height;
+  state.renderer.resize();
+}
+
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, (now - (loop.last || now)) / 1000);
+  loop.last = now;
+  if (!state.renderer) return;
+  if (state.mode === 'atlas') {
+    if (state.atlas) state.atlas.tick(now);
+    return;
+  }
+
+  state.time += dt;
+
+  if (state.brain !== state.brainTarget) {
+    const delta = state.brainTarget - state.brain;
+    state.brain += delta * Math.min(1, dt * 4.2);
+    if (Math.abs(delta) < 0.0015) state.brain = state.brainTarget;
+  }
+  state.renderer.setMorph(easeInOut(clamp(state.brain, 0, 1)));
+
+  if (state.replay.playing) {
+    const elapsed = (now - state.replay.startedAt) / 1000;
+    const progress = clamp(elapsed / 15, 0, 1);
+    state.reveal = 0.015 + progress * 0.985;
+    els.replayRange.value = String(Math.round(progress * 1000));
+    ui.setTimelineDate(formatDate(progress));
+    if (progress >= 1) {
+      state.replay.playing = false;
+      els.replayPlay.textContent = 'Play';
+    }
+  }
+  state.renderer.setReveal(state.reveal);
+
+  state.camera.update(dt);
+  state.renderer.render(state.camera, state.time);
+  updateLabels();
+}
+
+function updateLabels() {
+  const camera = state.camera;
+  const placed = [];
+  const focusSet = state.selected != null
+    ? new Set([state.selected, ...(state.renderer.neighbors[state.selected] || [])])
+    : null;
+  const width = els.canvas.clientWidth || 1;
+  const height = els.canvas.clientHeight || 1;
+
+  // Greedy de-overlap: a label only appears when it has room to breathe.
+  for (const label of state.labels) {
+    const screen = state.renderer.screenOf(label.index);
+    const node = state.graph.nodes[label.index];
+    const focused = state.hover === label.index || state.selected === label.index;
+    let visible = screen.alpha > 0.5 && !state.hidden.has(node.folder)
+      && screen.x > 40 && screen.x < width - 40 && screen.y > 24 && screen.y < height - 40;
+    if (visible && focusSet && !focusSet.has(label.index)) visible = false;
+    if (visible && !focused) {
+      for (const other of placed) {
+        if (Math.abs(other.x - screen.x) < 170 && Math.abs(other.y - screen.y) < 40) {
+          visible = false;
+          break;
+        }
+      }
+    }
+    label.element.style.opacity = visible ? String(clamp(1.35 - screen.depth * 0.16, 0.28, 0.95)) : '0';
+    if (visible) {
+      placed.push({ x: screen.x, y: screen.y });
+      label.element.style.left = `${screen.x}px`;
+      label.element.style.top = `${screen.y}px`;
+    }
+  }
+
+  const brain = state.brain > 0.35;
+  for (const label of state.folderLabels) {
+    if (state.reveal < 0.92 || (brain && !label.brainPosition)) {
+      label.element.style.opacity = '0';
+      continue;
+    }
+    const position = brain ? label.brainPosition : label.position;
+    const point = project(
+      camera.viewProjection,
+      position[0],
+      position[1],
+      position[2],
+      width,
+      height,
+    );
+    let visible = Boolean(point);
+    if (point) {
+      for (const other of placed) {
+        if (Math.abs(other.x - point.x) < 160 && Math.abs(other.y - point.y) < 46) {
+          visible = false;
+          break;
+        }
+      }
+    }
+    if (!visible || !point) {
+      label.element.style.opacity = '0';
+      continue;
+    }
+    label.element.style.opacity = '0.5';
+    label.element.style.left = `${point.x}px`;
+    label.element.style.top = `${point.y + 30}px`;
+  }
+}
+
+function formatDate(progress) {
+  const value = state.replay.min + (state.replay.max - state.replay.min) * clamp(progress, 0, 1);
+  const date = new Date(value);
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
+}
+
+function setMode(mode, { persist = true, animate = true } = {}) {
+  state.mode = mode;
+  ui.setModeButtons(mode);
+  syncSettingsViews();
+
+  const atlasMode = mode === 'atlas';
+  els.replay.hidden = mode !== 'replay';
+  els.canvas.hidden = atlasMode;
+  els.labels.hidden = atlasMode;
+  els.atlas.hidden = !atlasMode;
+  document.body.classList.toggle('mode-atlas', atlasMode);
+
+  if (atlasMode) {
+    const atlas = ensureAtlas();
+    syncAtlas();
+    atlas.setRoads(prefs.get('cortex.atlas.roads', true));
+    atlas.setRoutes(prefs.get('cortex.atlas.routes', true));
+    atlas.resize();
+    atlas.dirty = true;
+    els.atlas.focus({ preventScroll: true });
+  } else {
+    state.brainTarget = mode === 'brain' ? 1 : 0;
+    state.camera.frame(mode);
+    resizeCamera();
+  }
+
+  if (mode === 'replay' && animate) {
+    beginReplay();
+  } else {
+    state.replay.playing = false;
+    els.replayPlay.textContent = 'Play';
+    state.reveal = 1;
+    if (mode === 'replay') ui.setTimelineDate(formatDate(1));
+  }
+
+  if (persist && state.vaultId) {
+    prefs.set(`cortex.view.${state.vaultId}`, mode);
+    prefs.set('cortex.launchView', mode);
+  }
+}
+
+function startReplay() {
+  if (state.mode !== 'replay') {
+    setMode('replay');
+    return;
+  }
+  beginReplay();
+}
+
+function beginReplay() {
+  state.reveal = 0.015;
+  state.replay.playing = true;
+  state.replay.startedAt = performance.now();
+  els.replayRange.value = '0';
+  els.replayPlay.textContent = 'Playing';
+  ui.setTimelineDate(formatDate(0));
+}
+
+function onScrub(event) {
+  state.replay.playing = false;
+  els.replayPlay.textContent = 'Play';
+  state.mode = 'replay';
+  ui.setModeButtons('replay');
+  els.replay.hidden = false;
+  state.brainTarget = 0;
+  const progress = Number(event.target.value) / 1000;
+  state.reveal = 0.015 + progress * 0.985;
+  ui.setTimelineDate(formatDate(progress));
+}
+
+function toggleFolder(name) {
+  if (state.hidden.has(name)) state.hidden.delete(name);
+  else state.hidden.add(name);
+  ui.syncFolders(state.hidden);
+  state.renderer.setFolderFilter(state.hidden);
+  if (state.atlas) state.atlas.setHidden(state.hidden);
+}
+
+function resetFolders() {
+  state.hidden.clear();
+  ui.syncFolders(state.hidden);
+  state.renderer.setFolderFilter(state.hidden);
+  if (state.atlas) state.atlas.setHidden(state.hidden);
+}
+
+/* ---------- atlas ---------- */
+
+function ensureAtlas() {
+  if (state.atlas) return state.atlas;
+  state.atlas = new Atlas(els.atlas, {
+    onSelect: (index, additive) => {
+      if (additive) toggleSelection(index);
+      else openNote(index);
+    },
+    onHover: (index, x, y) => {
+      if (index == null || !state.graph) ui.hideTooltip();
+      else ui.showTooltip(state.graph.nodes[index], x, y);
+    },
+    onBackground: () => {
+      if (!els.panel.hidden) closePanel();
+    },
+  });
+  state.atlas.setRoads(prefs.get('cortex.atlas.roads', true));
+  state.atlas.setRoutes(prefs.get('cortex.atlas.routes', true));
+  return state.atlas;
+}
+
+function syncAtlas() {
+  if (!state.atlas || !state.graph) return;
+  state.atlas.setGraph(state.graph);
+  state.atlas.setHidden(state.hidden);
+  state.atlas.setSelection(selectionIndices());
+  state.atlas.setFocus(state.selected);
+}
+
+function syncSettingsViews() {
+  if (!els.settingsViews) return;
+  els.settingsViews.querySelectorAll('[data-mode]').forEach((button) => {
+    const active = button.dataset.mode === state.mode;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+}
+
+function openSettings() {
+  const vault = currentVault();
+  if (!vault) {
+    ui.toast('Open a folder first');
+    return;
+  }
+  els.settingsName.textContent = vault.name;
+  els.settingsPath.textContent = vault.path;
+  els.settingsObsidian.hidden = !vault.obsidian;
+  els.settingsWrites.textContent = state.readOnly
+    ? 'This folder is open read-only. Cortex can read it, but will not write to it.'
+    : 'Notes are written as plain Markdown in the folder, so Obsidian sees them immediately.';
+  els.settingsRoads.checked = prefs.get('cortex.atlas.roads', true);
+  els.settingsRoutes.checked = prefs.get('cortex.atlas.routes', true);
+  syncSettingsViews();
+  els.settings.hidden = false;
+  els.settingsClose.focus();
+}
+
+function closeSettings() {
+  els.settings.hidden = true;
+  els.settingsButton.focus();
+}
+
+/* ---------- pointer ---------- */
+
+function setHover(index) {
+  if (state.hover === index) return;
+  state.hover = index;
+  state.renderer.setFocus(index);
+  if (index == null) ui.hideTooltip();
+  else ui.showTooltip(state.graph.nodes[index], state.pointerX, state.pointerY);
+  els.canvas.style.cursor = index != null ? 'pointer' : '';
+}
+
+function localPoint(event) {
+  const rect = els.canvas.getBoundingClientRect();
+  return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+function onPointerDown(event) {
+  if (event.button !== 0) return;
+  state.dragging = true;
+  state.dragMoved = false;
+  state.pointerX = event.clientX;
+  state.pointerY = event.clientY;
+  state.lastX = event.clientX;
+  state.lastY = event.clientY;
+  state.camera.dragging = true;
+  setHover(null);
+  els.canvas.setPointerCapture(event.pointerId);
+}
+
+function onPointerMove(event) {
+  state.pointerX = event.clientX;
+  state.pointerY = event.clientY;
+  if (state.dragging) {
+    const dx = event.clientX - state.lastX;
+    const dy = event.clientY - state.lastY;
+    state.lastX = event.clientX;
+    state.lastY = event.clientY;
+    if (Math.abs(dx) + Math.abs(dy) > 2) state.dragMoved = true;
+    state.camera.orbit(dx, dy);
+    return;
+  }
+  const point = localPoint(event);
+  const index = state.renderer.pick(point.x, point.y);
+  setHover(index >= 0 ? index : null);
+  if (index >= 0) {
+    ui.showTooltip(state.graph.nodes[index], state.pointerX, state.pointerY);
+  }
+}
+
+function onPointerUp(event) {
+  const point = localPoint(event);
+  state.dragging = false;
+  state.camera.dragging = false;
+  if (!state.dragMoved) {
+    const index = state.renderer.pick(point.x, point.y);
+    const additive = event.metaKey || event.ctrlKey || event.shiftKey;
+    if (index >= 0 && additive) {
+      toggleSelection(index);
+    } else if (index >= 0) {
+      openNote(index);
+    } else if (!els.panel.hidden) {
+      closePanel();
+    }
+  }
+  state.dragMoved = false;
+}
+
+function onWheel(event) {
+  event.preventDefault();
+  state.camera.zoom(event.deltaY);
+}
+
+function onResize() {
+  resizeCamera();
+  if (state.atlas) state.atlas.resize();
+}
+
+function onVisibility() {
+  loop.last = performance.now();
+}
+
+/* ---------- keyboard ---------- */
+
+function isTyping() {
+  const active = document.activeElement;
+  return active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+}
+
+function onKeyDown(event) {
+  const typing = isTyping();
+  const mod = event.metaKey || event.ctrlKey;
+
+  if (mod && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    if (state.palette.open) closePalette();
+    else openPalette();
+    return;
+  }
+  if (mod && event.key === '[') {
+    event.preventDefault();
+    goBack();
+    return;
+  }
+  if (mod && event.key === ']') {
+    event.preventDefault();
+    goForward();
+    return;
+  }
+  if (mod && event.key.toLowerCase() === 'o') {
+    event.preventDefault();
+    showLaunch();
+    return;
+  }
+  if (event.key === 'Escape') {
+    if (!els.settings.hidden) closeSettings();
+    else if (!els.compose.hidden) closeCompose();
+    else if (state.palette.open) closePalette();
+    else if (state.launching && state.vaultId) hideLaunch();
+    else if (!els.panel.hidden) closePanel();
+    else setHover(null);
+    return;
+  }
+  if (typing || state.launching || !state.graph) return;
+
+  if (event.key === '/') {
+    event.preventDefault();
+    openPalette();
+  } else if (event.key === '1') setMode('universe');
+  else if (event.key === '2') setMode('brain');
+  else if (event.key === '3') setMode('replay');
+  else if (event.key === '4') setMode('atlas');
+  else if (event.key === ' ' || event.key === 'Spacebar') {
+    event.preventDefault();
+    setMode(state.mode === 'brain' ? 'universe' : 'brain');
+  } else if (event.key.toLowerCase() === 'r') startReplay();
+  else if (event.key.toLowerCase() === 'n' && state.live) createNote();
+  else if (event.key.toLowerCase() === 'c' && state.selected != null) {
+    toggleSelection(state.selected);
+    if (state.detail) renderPanel(state.detail);
+  } else if (event.key.toLowerCase() === 'f') {
+    state.camera.yaw = 0.55;
+    state.camera.pitch = 0.22;
+    state.camera.frame(state.mode);
+  }
+}
+
+/* ---------- note panel + history ---------- */
+
+function pushHistory(id) {
+  const { items } = state.history;
+  if (items[state.history.index] === id) return;
+  items.length = state.history.index + 1;
+  items.push(id);
+  state.history.index = items.length - 1;
+  if (items.length > 80) {
+    items.shift();
+    state.history.index -= 1;
+  }
+  syncHistory();
+}
+
+function syncHistory() {
+  if (!els.panelBack) return;
+  els.panelBack.disabled = state.history.index <= 0;
+  els.panelForward.disabled = state.history.index >= state.history.items.length - 1;
+}
+
+function goBack() {
+  if (state.history.index <= 0) return;
+  state.history.index -= 1;
+  openHistoryEntry();
+}
+
+function goForward() {
+  if (state.history.index >= state.history.items.length - 1) return;
+  state.history.index += 1;
+  openHistoryEntry();
+}
+
+async function openHistoryEntry() {
+  const id = state.history.items[state.history.index];
+  const index = nodeIndex(id);
+  if (index < 0) {
+    syncHistory();
+    return;
+  }
+  await openNote(index, { record: false });
+}
+
+// A page opened, then quickly replaced, must not be overwritten by the slower
+// response of the page that lost the race.
+let openToken = 0;
+
+async function openNote(index, { record = true } = {}) {
+  const node = state.graph.nodes[index];
+  if (!node) return;
+  const token = ++openToken;
+  state.selected = index;
+  state.renderer.setFocus(index);
+  if (state.atlas) state.atlas.setFocus(index);
+  if (record) pushHistory(node.id);
+  const detail = await getDetail(node);
+  if (!detail || token !== openToken) return;
+  state.detail = detail;
+  state.editing = false;
+  renderPanel(detail);
+}
+
+async function getDetail(node) {
+  if (state.live) {
+    if (state.cache.has(node.id)) return state.cache.get(node.id);
+    try {
+      const detail = await api.fetchNote(node.id, state.vaultId);
+      state.cache.set(node.id, detail);
+      return detail;
+    } catch (error) {
+      ui.toast(error.message || 'Could not open that note');
+      return null;
+    }
+  }
+  return localDetail(node);
+}
+
+function localDetail(node) {
+  const backlinks = (state.incoming.get(node.id) || [])
+    .map(({ source, weight }) => ({
+      id: state.graph.nodes[source].id,
+      title: state.graph.nodes[source].title,
+      folder: state.graph.nodes[source].folder,
+      weight,
+    }))
+    .slice(0, 16);
+  const related = relatedFromGraph(node.id);
+  return {
+    id: node.id,
+    title: node.title,
+    folder: node.folder,
+    created: node.created,
+    words: node.words,
+    tags: node.tags,
+    markdown: node.body || node.excerpt,
+    raw: null,
+    backlinks,
+    mentions: [],
+    related,
+  };
+}
+
+function relatedFromGraph(id) {
+  const index = state.graph.nodes.findIndex((node) => node.id === id);
+  if (index < 0) return [];
+  const neighbours = new Map();
+  for (const edge of state.graph.edges) {
+    if (!neighbours.has(edge.source)) neighbours.set(edge.source, new Set());
+    if (!neighbours.has(edge.target)) neighbours.set(edge.target, new Set());
+    neighbours.get(edge.source).add(edge.target);
+    neighbours.get(edge.target).add(edge.source);
+  }
+  const base = neighbours.get(index) || new Set();
+  const scored = [];
+  for (const [candidate, other] of neighbours) {
+    if (candidate === index) continue;
+    let intersection = 0;
+    for (const item of base) if (other.has(item)) intersection += 1;
+    const union = base.size + other.size - intersection;
+    if (union > 0) scored.push({ candidate, score: intersection / union });
+  }
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .map(({ candidate }) => {
+      const node = state.graph.nodes[candidate];
+      return { id: node.id, title: node.title, folder: node.folder, weight: 0 };
+    });
+}
+
+function renderPanel(detail) {
+  // The body usually repeats its title as an H1; the panel already shows it.
+  let markdown = detail.markdown || '';
+  const heading = /^\s*#\s+(.+)\r?\n/.exec(markdown);
+  if (heading && heading[1].trim().toLowerCase() === detail.title.trim().toLowerCase()) {
+    markdown = markdown.slice(heading[0].length);
+  }
+  const html = renderMarkdown(markdown, (target) => Boolean(resolveTarget(target)));
+  els.panelBody.innerHTML = ui.panelHtml(detail, html);
+  els.panelBody.scrollTop = 0;
+  els.panel.hidden = false;
+  ui.setCrumbs(`${state.meta.title} / ${detail.folder}`);
+  syncHistory();
+
+  els.panelActions.innerHTML = '';
+  if (state.live) {
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'btn btn-primary';
+    edit.textContent = 'Edit';
+    edit.addEventListener('click', requestEdit);
+    els.panelActions.appendChild(edit);
+  }
+  const collect = document.createElement('button');
+  collect.type = 'button';
+  collect.className = 'btn';
+  const collected = state.selection.has(detail.id);
+  collect.textContent = collected ? 'Collected' : 'Collect';
+  collect.title = 'Collect this note as evidence for a brief or an idea note';
+  collect.addEventListener('click', () => {
+    const index = nodeIndex(detail.id);
+    if (index < 0) return;
+    toggleSelection(index);
+    if (state.detail) renderPanel(state.detail);
+  });
+  els.panelActions.appendChild(collect);
+
+  const status = document.createElement('span');
+  status.className = 'panel-status';
+  status.id = 'panel-status';
+  status.textContent = state.live ? '' : 'static demo';
+  els.panelActions.appendChild(status);
+
+  els.panelBody.querySelectorAll('.wikilink').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      const id = resolveTarget(link.dataset.target);
+      if (!id) {
+        ui.toast(`No note called “${link.dataset.target}” yet`);
+        return;
+      }
+      const index = nodeIndex(id);
+      if (index >= 0) openNote(index);
+    });
+  });
+  els.panelBody.querySelectorAll('[data-note-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const index = nodeIndex(button.dataset.noteId);
+      if (index >= 0) openNote(index);
+    });
+  });
+}
+
+function closePanel() {
+  if (els.panel.hidden) return;
+  openToken += 1;
+  els.panel.hidden = true;
+  state.detail = null;
+  state.editing = false;
+  state.selected = null;
+  if (state.renderer) state.renderer.setFocus(state.hover);
+  if (state.atlas) state.atlas.setFocus(null);
+}
+
+function requestEdit() {
+  if (!state.detail || !state.live) return;
+  state.editing = true;
+  state.draft = state.detail.raw ?? state.detail.markdown;
+  els.panelBody.innerHTML = ui.editorHtml(state.detail, state.draft);
+  els.panelActions.innerHTML = '';
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'btn btn-primary';
+  save.textContent = 'Save';
+  save.addEventListener('click', saveEdits);
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', () => {
+    state.editing = false;
+    renderPanel(state.detail);
+  });
+  els.panelActions.append(save, cancel);
+  const textarea = document.getElementById('note-editor');
+  if (textarea) {
+    textarea.focus();
+    textarea.addEventListener('input', () => {
+      state.draft = textarea.value;
+    });
+    textarea.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault();
+        saveEdits();
+      }
+    });
+  }
+}
+
+async function saveEdits() {
+  if (!state.detail) return;
+  const status = document.getElementById('panel-status');
+  if (status) status.textContent = 'Saving…';
+
+  try {
+    const textarea = document.getElementById('note-editor');
+    const content = textarea ? textarea.value : state.draft;
+    const result = await api.saveNote({ id: state.detail.id, content }, state.vaultId);
+    state.cache.delete(state.detail.id);
+    state.version = result.version;
+    await refreshGraph();
+    const index = nodeIndex(result.id);
+    if (index >= 0) await openNote(index);
+    ui.toast('Saved');
+  } catch (error) {
+    if (status) status.textContent = 'Save failed';
+    ui.toast(error.message || 'Could not save');
+  }
+}
+
+async function createNote() {
+  if (!state.live) return;
+  try {
+    const result = await api.saveNote(
+      { title: 'Untitled', content: '---\ntags: []\n---\n\n# Untitled\n\n' },
+      state.vaultId,
+    );
+    state.version = result.version;
+    await refreshGraph();
+    const index = nodeIndex(result.id);
+    if (index >= 0) {
+      await openNote(index);
+      requestEdit();
+    }
+  } catch (error) {
+    ui.toast(error.message || 'Could not create a note');
+  }
+}
+
+/* ---------- collection ---------- */
+
+function toggleSelection(index) {
+  const node = state.graph && state.graph.nodes[index];
+  if (!node) return;
+  if (state.selection.has(node.id)) state.selection.delete(node.id);
+  else state.selection.add(node.id);
+  syncSelection();
+}
+
+function clearSelection() {
+  state.selection.clear();
+  syncSelection();
+}
+
+function syncSelection() {
+  const indices = selectionIndices();
+  if (state.renderer) state.renderer.setSelection(indices);
+  if (state.atlas) state.atlas.setSelection(indices);
+  renderSelection();
+}
+
+function renderSelection() {
+  const count = state.selection.size;
+  els.selection.hidden = count === 0;
+  els.trayCount.textContent = String(count);
+  els.selection.querySelectorAll('[data-template]').forEach((button) => {
+    button.disabled = count < 2;
+    button.title = count < 2 ? 'Collect at least two notes first' : '';
+  });
+}
+
+function openCompose(template) {
+  if (!state.live) {
+    ui.toast('The static demo cannot write notes');
+    return;
+  }
+  if (state.selection.size < 2) {
+    ui.toast('⌘-click or shift-click at least two stars to collect them');
+    return;
+  }
+  state.compose = template;
+  const research = template === 'research';
+  els.composeKicker.textContent = research ? 'Research brief' : 'Idea refinement';
+  els.composeLabel.textContent = research ? 'The question' : 'The decision';
+  els.composeTitle.placeholder = research
+    ? 'How does attention shape deep work?'
+    : 'Should this be one product or two?';
+  els.composeTitle.value = '';
+  els.compose.hidden = false;
+  els.composeTitle.focus();
+  updateComposeState();
+}
+
+function closeCompose() {
+  els.compose.hidden = true;
+  state.compose = null;
+}
+
+function updateComposeState() {
+  const count = state.selection.size;
+  els.composeSub.textContent = `${count} collected ${count === 1 ? 'note' : 'notes'} will be linked as evidence.`;
+  const submit = els.composeForm.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = els.composeTitle.value.trim().length < 3;
+}
+
+async function submitCompose(event) {
+  event.preventDefault();
+  if (!state.compose) return;
+  const title = els.composeTitle.value.trim();
+  if (title.length < 3) return;
+  const template = state.compose;
+  const submit = els.composeForm.querySelector('button[type="submit"]');
+  const notes = [...state.selection];
+  if (submit) {
+    submit.disabled = true;
+    submit.textContent = 'Writing…';
+  }
+  try {
+    const result = await api.synthesize({ title, template, notes }, state.vaultId);
+    closeCompose();
+    state.selection.clear();
+    syncSelection();
+    state.version = result.version;
+    await refreshGraph();
+    const index = nodeIndex(result.id);
+    if (index >= 0) await openNote(index);
+    ui.toast(template === 'research' ? 'Research brief created' : 'Idea note created');
+  } catch (error) {
+    ui.toast(error.message || 'Could not create that note');
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = 'Create note';
+    }
+  }
+}
+
+/* ---------- search ---------- */
+
+function openPalette() {
+  state.palette.open = true;
+  els.palette.hidden = false;
+  els.paletteInput.value = '';
+  state.palette.query = '';
+  state.palette.active = 0;
+  els.paletteInput.focus();
+  scheduleSearch(true);
+}
+
+function closePalette() {
+  state.palette.open = false;
+  els.palette.hidden = true;
+  els.paletteInput.blur();
+}
+
+function scheduleSearch(immediate = false) {
+  clearTimeout(state.palette.timer);
+  const run = () => search(state.palette.query);
+  if (immediate) run();
+  else state.palette.timer = setTimeout(run, 130);
+}
+
+async function search(query) {
+  if (!state.graph) return;
+  const needle = query.trim();
+  if (!needle) {
+    state.palette.hits = [...state.graph.nodes]
+      .sort((a, b) => b.pagerank - a.pagerank)
+      .slice(0, 12)
+      .map((node) => ({ id: node.id, title: node.title, folder: node.folder, snippet: node.excerpt }));
+  } else if (!state.live) {
+    const lower = needle.toLowerCase();
+    state.palette.hits = state.graph.nodes
+      .filter(
+        (node) =>
+          node.title.toLowerCase().includes(lower)
+          || node.tags.some((tag) => tag.includes(lower))
+          || node.folder.toLowerCase().includes(lower),
+      )
+      .sort((a, b) => b.pagerank - a.pagerank)
+      .slice(0, 20)
+      .map((node) => ({ id: node.id, title: node.title, folder: node.folder, snippet: node.excerpt }));
+  } else {
+    try {
+      const hits = await api.searchNotes(needle, state.vaultId, 20);
+      if (state.palette.query.trim() !== needle) return;
+      state.palette.hits = hits;
+    } catch {
+      state.palette.hits = [];
+    }
+  }
+  state.palette.active = 0;
+  ui.renderPaletteHits(els.paletteResults, state.palette.hits, state.palette.active);
+}
+
+function onPaletteKey(event) {
+  const count = state.palette.hits.length;
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    if (count) {
+      state.palette.active = (state.palette.active + 1) % count;
+      ui.renderPaletteHits(els.paletteResults, state.palette.hits, state.palette.active);
+    }
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (count) {
+      state.palette.active = (state.palette.active - 1 + count) % count;
+      ui.renderPaletteHits(els.paletteResults, state.palette.hits, state.palette.active);
+    }
+  } else if (event.key === 'Enter') {
+    event.preventDefault();
+    openHit(state.palette.active);
+  }
+}
+
+function openHit(hitIndex) {
+  const hit = state.palette.hits[hitIndex];
+  if (!hit) return;
+  closePalette();
+  const index = nodeIndex(hit.id);
+  if (index >= 0) openNote(index);
+}
+
+boot();
