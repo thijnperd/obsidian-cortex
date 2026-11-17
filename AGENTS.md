@@ -14,7 +14,10 @@ cargo run -q -p cortex -- seed-demo demo # deterministic 174-note vault
 cargo run -q -p cortex -- serve demo --open
 cargo run -q -p cortex -- export demo --out dist
 cargo run -q -p cortex -- mcp demo       # MCP server on stdio
+cargo run -q -p cortex -- mcp-config --vault demo --write
 cargo run -q -p cortex -- agents --off   # the per-vault MCP switch
+cargo run -q -p cortex -- doctor         # no server needed
+cargo run -q -p cortex -- stop           # ask the background instance to exit
 node --check web/js/*.js                 # no build step for the UI
 ```
 
@@ -48,6 +51,12 @@ node --check web/js/*.js                 # no build step for the UI
   resolves it with `store::note_path`; never pass a raw path to a process.
 - **Agent access is deny-by-default.** A vault with no `agents` entry in the
   registry has no access; do not "fix" that by defaulting to allowed.
+- **One process owns an instance.** `cortex app` runs the server in-process and
+  its life is the window's; `serve` is the console path. `server.json` is a
+  discovery file, not a lock — the health probe decides whether it is current.
+- **The window belongs to the browser.** It is Chromium `--app` with a private
+  profile; the app waits on that child. Do not "improve" this into a webview
+  without reopening ADR 0005.
 - **Every note must survive the reveal animation.** `appear` values feed
   `smoothstep(appear, appear + 0.05, reveal)`; a value at or above 1 hides the
   note in every 3D view.

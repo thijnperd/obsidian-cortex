@@ -122,6 +122,38 @@ export async function setAgentAccess(id, enabled) {
   return readJson(response);
 }
 
+/** The platform folder dialog. `path` is null when it was cancelled. */
+export async function pickFolder() {
+  const response = await fetch('./api/pick-folder', {
+    method: 'POST',
+    headers: WRITE_HEADERS,
+    body: '{}',
+  });
+  return readJson(response);
+}
+
+/** The MCP switch, the snippet, and which client configs already name it. */
+export async function mcpStatus() {
+  const response = await fetch('./api/mcp/status', { cache: 'no-store' });
+  return readJson(response);
+}
+
+/** Starts `cortex mcp` and runs a real initialize + tools/list handshake. */
+export async function testMcp() {
+  const response = await fetch('./api/mcp/test', {
+    method: 'POST',
+    headers: WRITE_HEADERS,
+    body: '{}',
+  });
+  return readJson(response);
+}
+
+/** Version, build, port and the paths a bug report needs. */
+export async function about() {
+  const response = await fetch('./api/about', { cache: 'no-store' });
+  return readJson(response);
+}
+
 /**
  * Long poll: resolves when the vault version differs from `version`, or after
  * the server's 25 s timeout. Rejects with AbortError when the caller cancels.

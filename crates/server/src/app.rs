@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
-use axum::extract::{DefaultBodyLimit, Query, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Query, State};
 use axum::http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode, Uri};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -40,6 +40,7 @@ use cortex_core::Vault;
 
 use crate::assets;
 use crate::desktop;
+use crate::{instance, mcp_setup, version};
 
 const MAX_BODY: usize = MAX_NOTE_BYTES as usize + 64 * 1024;
 /// Stat-only check. Cheap enough to feel instant without an OS watcher crate,
@@ -61,6 +62,10 @@ pub struct Config {
     pub app_window: bool,
     pub bind: String,
     pub port: u16,
+    /// Take the next free port when `port` is busy instead of failing.
+    pub port_fallback: bool,
+    /// Accepted by `POST /api/stop`, from loopback only.
+    pub stop_token: String,
 }
 
 #[derive(Clone)]
@@ -71,6 +76,7 @@ pub struct AppState {
     active: Arc<RwLock<Option<String>>>,
     revision: watch::Sender<u64>,
     last_write: Arc<RwLock<Instant>>,
+    stop: Option<watch::Sender<bool>>,
 }
 
 pub struct VaultHandle {
@@ -219,6 +225,16 @@ struct NoteRef {
 
 /// Builds the app, the remembered vault (if any) and one watcher per vault.
 pub async fn serve(config: Config) -> anyhow::Result<()> {
+    serve_with(config, None, None).await
+}
+
+/// The same server, with a ready signal for the app and a shutdown channel for
+/// the stop route. `serve` is the console path: Ctrl+C, and no discovery file.
+pub async fn serve_with(
+    config: Config,
+    ready: Option<tokio::sync::oneshot::Sender<u16>>,
+    stop: Option<watch::Sender<bool>>,
+) -> anyhow::Result<()> {
     let mut registry = Registry::load();
     let mut wanted: Vec<(PathBuf, String)> = Vec::new();
 
@@ -289,13 +305,31 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         eprintln!("[cortex] warning: could not save the vault list");
     }
 
+    let listener = bind_with_fallback(&config).await?;
+    let address = listener.local_addr()?;
+    if address.port() != config.port {
+        println!(
+            "[cortex] port {} is busy — listening on {}",
+            config.port,
+            address.port()
+        );
+    }
+    println!("[cortex] listening on http://{address}");
+    if !address.ip().is_loopback() {
+        println!("[cortex] note: bound beyond loopback; ensure the network is trusted");
+    }
+
     let state = AppState {
-        config: config.clone(),
+        config: Config {
+            port: address.port(),
+            ..config.clone()
+        },
         vaults: Arc::new(RwLock::new(handles.clone())),
         registry: Arc::new(RwLock::new(registry)),
         active: Arc::new(RwLock::new(active)),
         revision,
         last_write: Arc::new(RwLock::new(Instant::now() - Duration::from_secs(60))),
+        stop: stop.clone(),
     };
     for handle in &handles {
         tokio::spawn(watch(handle.clone(), state.revision.clone()));
@@ -314,6 +348,11 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         .route("/api/vaults/forget", post(api_forget_vault))
         .route("/api/vaults/agents", post(api_vault_agents))
         .route("/api/reveal", post(api_reveal))
+        .route("/api/about", get(api_about))
+        .route("/api/pick-folder", post(api_pick_folder))
+        .route("/api/mcp/status", get(api_mcp_status))
+        .route("/api/mcp/test", post(api_mcp_test))
+        .route("/api/stop", post(api_stop))
         .route("/api/events", get(api_events))
         .route("/api/graph", get(api_graph))
         .route("/api/note", get(api_note))
@@ -329,13 +368,8 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         }))
         .with_state(state.clone());
 
-    let address: SocketAddr = format!("{}:{}", config.bind, config.port)
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid bind address: {}:{}", config.bind, config.port))?;
-    let listener = tokio::net::TcpListener::bind(address).await?;
-    println!("[cortex] listening on http://{address}");
-    if !address.ip().is_loopback() {
-        println!("[cortex] note: bound beyond loopback; ensure the network is trusted");
+    if let Some(ready) = ready {
+        let _ = ready.send(address.port());
     }
     if config.open_browser {
         let url = if address.ip().is_unspecified() {
@@ -343,19 +377,63 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         } else {
             format!("http://{address}")
         };
-        if !(config.app_window && desktop::open_app_window(&url, 1440, 900)) {
+        if config.app_window {
+            desktop::open_window(&url, 1440, 900);
+        } else {
             desktop::open_url(&url);
         }
     }
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+
+    let shutdown = async move {
+        match stop {
+            Some(sender) => {
+                let mut receiver = sender.subscribe();
+                let _ = receiver.changed().await;
+            }
+            None => {
+                let _ = tokio::signal::ctrl_c().await;
+            }
+        }
+        println!("[cortex] shutting down");
+    };
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown)
+    .await?;
     Ok(())
 }
 
-async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
-    println!("[cortex] shutting down");
+/// Bind `port`, or the next free one when the app asked for a fallback. A raw
+/// `os error 10048` is never the user's problem: the message names the fix.
+async fn bind_with_fallback(config: &Config) -> anyhow::Result<tokio::net::TcpListener> {
+    let ip: std::net::IpAddr = config
+        .bind
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid bind address: {}", config.bind))?;
+    let first = config.port;
+    let mut candidates = vec![first];
+    if config.port_fallback {
+        candidates.extend(
+            (first.saturating_add(1)..=first.saturating_add(20)).filter(|port| *port != first),
+        );
+        candidates.push(0);
+    }
+    let mut last = None;
+    for port in candidates {
+        match tokio::net::TcpListener::bind(SocketAddr::new(ip, port)).await {
+            Ok(listener) => return Ok(listener),
+            Err(error) => last = Some(error),
+        }
+    }
+    let error = last.unwrap_or_else(|| std::io::Error::other("no port available"));
+    anyhow::bail!(
+        "could not listen on {}:{} — {} (is Cortex already running? try `cortex stop`, or pass --port)",
+        config.bind,
+        first,
+        error
+    )
 }
 
 /// Stable id for a vault path: FNV-1a, so the UI can bookmark one without
@@ -769,8 +847,131 @@ fn error_response(error: cortex_core::Error) -> Response {
     json_response(status, body)
 }
 
-async fn api_health() -> Response {
+#[derive(Serialize)]
+struct AboutInfo {
+    version: &'static str,
+    build: &'static str,
+    port: u16,
+    pid: u32,
+    config: Option<String>,
+    log: Option<String>,
+    releases: &'static str,
+    read_only: bool,
+}
+
+async fn api_about(State(state): State<AppState>) -> Response {
+    let info = AboutInfo {
+        version: version::VERSION,
+        build: version::build(),
+        port: state.config.port,
+        pid: std::process::id(),
+        config: instance::config_dir().map(|path| path.display().to_string()),
+        log: instance::log_path().map(|path| path.display().to_string()),
+        releases: version::RELEASES_URL,
+        read_only: state.config.read_only,
+    };
+    json_response(
+        StatusCode::OK,
+        serde_json::to_string(&info).unwrap_or_default(),
+    )
+}
+
+async fn api_pick_folder(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Some(rejection) = begin_admin(&state, &headers).await {
+        return rejection;
+    }
+    let picked = desktop::pick_folder()
+        .await
+        .map(|path| path.display().to_string());
+    json_response(StatusCode::OK, json!({ "path": picked }).to_string())
+}
+
+async fn api_mcp_status(State(state): State<AppState>) -> Response {
+    let Some(handle) = find_vault(&state, None).await else {
+        return no_vault();
+    };
+    let agents = state
+        .registry
+        .read()
+        .await
+        .agents(&handle.root)
+        .unwrap_or(false);
+    let body = json!({
+        "vault": handle.id,
+        "name": handle.name,
+        "agents": agents,
+        "binary": mcp_setup::binary().display().to_string(),
+        "snippet": serde_json::to_string_pretty(&mcp_setup::snippet(&handle.root)).unwrap_or_default(),
+        "clients": mcp_setup::status(&handle.root),
+    });
+    json_response(StatusCode::OK, body.to_string())
+}
+
+/// The test the client will run: start `cortex mcp`, initialize, list tools.
+async fn api_mcp_test(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Some(rejection) = begin_admin(&state, &headers).await {
+        return rejection;
+    }
+    let Some(handle) = find_vault(&state, None).await else {
+        return no_vault();
+    };
+    let root = handle.root.clone();
+    let result = tokio::task::spawn_blocking(move || mcp_setup::handshake(&root)).await;
+    let body = match result {
+        Ok(Ok(handshake)) => json!({
+            "ok": true,
+            "server": handshake.server,
+            "tools": handshake.tools.len(),
+            "names": handshake.tools,
+        }),
+        Ok(Err(message)) => json!({ "ok": false, "error": message }),
+        Err(_) => json!({ "ok": false, "error": "the handshake test crashed" }),
+    };
+    json_response(StatusCode::OK, body.to_string())
+}
+
+async fn api_stop(
+    State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+) -> Response {
+    if !peer.ip().is_loopback() {
+        return forbidden();
+    }
+    let token = headers
+        .get("x-cortex-stop")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+    if token.is_empty() || token != state.config.stop_token {
+        return forbidden();
+    }
+    let requested = state
+        .stop
+        .as_ref()
+        .map(|sender| sender.send(true).is_ok())
+        .unwrap_or(false);
+    if !requested {
+        return json_response(
+            StatusCode::CONFLICT,
+            r#"{"error":"this instance was started in the foreground; press Ctrl+C","code":"not_stoppable"}"#
+                .to_string(),
+        );
+    }
+    println!("[cortex] stop requested");
     json_response(StatusCode::OK, r#"{"ok":true}"#.to_string())
+}
+
+async fn api_health() -> Response {
+    json_response(
+        StatusCode::OK,
+        json!({
+            "ok": true,
+            "app": "cortex",
+            "version": version::VERSION,
+            "build": version::build(),
+        })
+        .to_string(),
+    )
 }
 
 async fn api_graph(State(state): State<AppState>, Query(query): Query<VaultQuery>) -> Response {

@@ -40,6 +40,7 @@ const state = {
   history: { items: [], index: -1 },
   events: null,
   version: null,
+  about: null,
   launching: false,
   time: 0,
   dragging: false,
@@ -67,6 +68,12 @@ const els = {
   settingsAgents: document.getElementById('settings-agents'),
   settingsAgentsHelp: document.getElementById('settings-agents-help'),
   settingsReveal: document.getElementById('settings-reveal'),
+  settingsMcpTest: document.getElementById('settings-mcp-test'),
+  settingsMcpConfig: document.getElementById('settings-mcp-config'),
+  settingsMcpStatus: document.getElementById('settings-mcp-status'),
+  settingsAbout: document.getElementById('settings-about'),
+  settingsUpdate: document.getElementById('settings-update'),
+  launchBrowse: document.getElementById('launch-browse'),
   sidebar: document.getElementById('sidebar'),
   vaultButton: document.getElementById('vault-button'),
   vaultTitle: document.getElementById('vault-title'),
@@ -261,6 +268,12 @@ function wire() {
     setAgentAccess(els.settingsAgents.checked);
   });
   els.settingsReveal.addEventListener('click', () => revealVault(currentVault()));
+  els.launchBrowse.addEventListener('click', browseFolder);
+  els.settingsMcpTest.addEventListener('click', testMcp);
+  els.settingsMcpConfig.addEventListener('click', copyMcpConfig);
+  els.settingsUpdate.addEventListener('click', () => {
+    if (state.about?.releases) window.open(state.about.releases, '_blank', 'noopener');
+  });
   els.vaultButton.addEventListener('click', () => showLaunch());
   els.addVault.addEventListener('click', () => showLaunch());
   els.foldersReset.addEventListener('click', resetFolders);
@@ -856,6 +869,79 @@ function syncSettingsViews() {
   });
 }
 
+async function browseFolder() {
+  if (!els.launchBrowse) return;
+  els.launchBrowse.disabled = true;
+  try {
+    const picked = await api.pickFolder();
+    if (picked?.path) {
+      els.launchPath.value = picked.path;
+      els.launchForm.requestSubmit();
+    }
+  } catch (error) {
+    showLaunchError(error.message);
+  } finally {
+    els.launchBrowse.disabled = false;
+  }
+}
+
+async function refreshMcpStatus() {
+  if (!els.settingsMcpStatus) return;
+  els.settingsMcpStatus.textContent = 'Checking the MCP server…';
+  try {
+    const status = await api.mcpStatus();
+    const clients = (status.clients || [])
+      .map(
+        (client) =>
+          `${client.name}: ${client.configured ? 'configured' : client.present ? 'not configured' : 'not installed'}`,
+      )
+      .join(' · ');
+    els.settingsMcpStatus.textContent = `${status.agents ? 'Agent access on' : 'Agent access off'}${clients ? ` · ${clients}` : ''}`;
+  } catch (error) {
+    els.settingsMcpStatus.textContent = error.message;
+  }
+}
+
+async function testMcp() {
+  if (!currentVault()) return;
+  els.settingsMcpTest.disabled = true;
+  els.settingsMcpStatus.textContent = 'Starting cortex mcp…';
+  try {
+    const result = await api.testMcp();
+    els.settingsMcpStatus.textContent = result.ok
+      ? `Connected: ${result.tools} tools, MCP ${result.server}.`
+      : result.error || 'The MCP server refused';
+    ui.toast(result.ok ? 'The MCP server answered' : 'MCP test failed');
+  } catch (error) {
+    els.settingsMcpStatus.textContent = error.message;
+  } finally {
+    els.settingsMcpTest.disabled = false;
+  }
+}
+
+async function copyMcpConfig() {
+  try {
+    const status = await api.mcpStatus();
+    if (!navigator.clipboard) throw new Error('The clipboard is not available here');
+    await navigator.clipboard.writeText(status.snippet);
+    ui.toast('Config copied — restart the AI client after pasting it');
+  } catch (error) {
+    ui.toast(error.message);
+  }
+}
+
+async function loadAbout() {
+  if (!els.settingsAbout) return;
+  try {
+    const about = await api.about();
+    state.about = about;
+    const build = about.build && about.build !== 'dev' ? ` (${about.build})` : '';
+    els.settingsAbout.textContent = `Cortex ${about.version}${build} · port ${about.port} · ${about.config || 'config folder unknown'}`;
+  } catch {
+    els.settingsAbout.textContent = 'Cortex';
+  }
+}
+
 function openSettings() {
   const vault = currentVault();
   if (!vault) {
@@ -871,6 +957,8 @@ function openSettings() {
   els.settingsRoads.checked = prefs.get('cortex.atlas.roads', true);
   els.settingsRoutes.checked = prefs.get('cortex.atlas.routes', true);
   syncAgentHelp(vault);
+  refreshMcpStatus();
+  loadAbout();
   els.settingsReveal.disabled = Boolean(vault.missing);
   syncSettingsViews();
   els.settings.hidden = false;

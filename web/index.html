@@ -138,14 +138,27 @@
         </section>
 
         <section class="settings-section">
-          <h3>Agent access</h3>
+          <h3>AI clients</h3>
           <label class="check"><input type="checkbox" id="settings-agents" checked /> Let AI clients read and write this vault</label>
           <p class="field-help" id="settings-agents-help"></p>
+          <div class="settings-actions">
+            <button class="btn" id="settings-mcp-test" type="button">Test connection</button>
+            <button class="btn" id="settings-mcp-config" type="button">Copy config</button>
+          </div>
+          <p class="field-help" id="settings-mcp-status">—</p>
         </section>
 
         <section class="settings-section">
           <h3>Writes</h3>
           <p class="field-help" id="settings-writes">Notes are written as plain Markdown in the folder.</p>
+        </section>
+
+        <section class="settings-section">
+          <h3>About</h3>
+          <p class="field-help" id="settings-about">—</p>
+          <div class="settings-actions">
+            <button class="btn" id="settings-update" type="button">Check for updates</button>
+          </div>
         </section>
       </div>
     </div>
@@ -175,7 +188,8 @@
       <form class="launch-form" id="launch-form">
         <label class="field-label" for="launch-path">Folder path</label>
         <div class="field-row">
-          <input class="field-input" id="launch-path" type="text" placeholder="~/Notes" autocomplete="off" spellcheck="false" />
+          <input class="field-input" id="launch-path" type="text" placeholder="C:\Users\you\Notes" autocomplete="off" spellcheck="false" />
+          <button class="btn" id="launch-browse" type="button">Browse…</button>
           <button class="btn btn-primary" id="launch-submit" type="submit">Open</button>
         </div>
         <p class="field-error" id="launch-error" role="alert" hidden></p>

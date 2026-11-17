@@ -1,7 +1,14 @@
 mod app;
 mod assets;
 mod desktop;
+mod doctor;
+mod instance;
+mod launch;
 mod mcp;
+mod mcp_setup;
+#[cfg(any(windows, target_os = "macos"))]
+mod tray;
+mod version;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,21 +28,22 @@ use cortex_core::vault::{ScanOptions, Vault};
     about = "A Markdown vault rendered as a 3D knowledge universe"
 )]
 struct Cli {
-    /// With no subcommand, Cortex reopens the vault you used last.
+    /// With no subcommand, Cortex starts in the background and opens its window.
     #[command(subcommand)]
     command: Option<Command>,
 }
 
 #[derive(Subcommand)]
 enum Command {
-    /// Serve a vault and its universe in the browser.
+    /// Serve a vault in the foreground (Ctrl+C stops it).
     Serve {
         /// Folder to open. Omit it to reopen the last vault.
         vault: Option<PathBuf>,
         #[arg(long, default_value = "127.0.0.1")]
         bind: String,
-        #[arg(long, default_value_t = 3000)]
-        port: u16,
+        /// Default 3000; the next free port is used when it is busy.
+        #[arg(long)]
+        port: Option<u16>,
         #[arg(long)]
         title: Option<String>,
         /// Disable all writes to the vault.
@@ -54,6 +62,13 @@ enum Command {
         #[arg(long)]
         app: bool,
     },
+    /// The instance: server, window and tray in one process.
+    #[command(hide = true)]
+    App,
+    /// Stop the instance that is running in the background.
+    Stop,
+    /// Print a diagnostic report without starting anything.
+    Doctor,
     /// Show or change whether AI clients may operate a vault over MCP.
     Agents {
         /// Vault to look at. Omit it to use the vault you opened last.
@@ -91,27 +106,26 @@ enum Command {
         /// Vault to bind to. Omit it to use the vault you opened last.
         vault: Option<PathBuf>,
     },
-    /// Print the MCP client configuration for this binary.
-    McpConfig,
+    /// Print the MCP client configuration for this binary and vault.
+    McpConfig {
+        /// Vault the client should open. Omit it to use the last vault.
+        #[arg(long)]
+        vault: Option<PathBuf>,
+        /// Merge the server into Claude Desktop and Cursor configs.
+        #[arg(long)]
+        write: bool,
+    },
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    #[cfg(unix)]
+    restore_sigpipe();
+
     match Cli::parse().command {
-        None => {
-            app::serve(app::Config {
-                roots: Vec::new(),
-                title: None,
-                read_only: false,
-                allow_any_origin: false,
-                allow_framing: false,
-                open_browser: true,
-                app_window: true,
-                bind: "127.0.0.1".to_string(),
-                port: 3000,
-            })
-            .await
-        }
+        None => launch::detach(),
+        Some(Command::App) => launch::run_app(),
+        Some(Command::Stop) => launch::stop(),
+        Some(Command::Doctor) => doctor::run(),
         Some(Command::Serve {
             vault,
             bind,
@@ -131,7 +145,7 @@ async fn main() -> Result<()> {
                 }
                 None => Vec::new(),
             };
-            app::serve(app::Config {
+            let config = app::Config {
                 roots,
                 title,
                 read_only,
@@ -140,9 +154,12 @@ async fn main() -> Result<()> {
                 open_browser: open || app,
                 app_window: app,
                 bind,
-                port,
-            })
-            .await
+                port: port.unwrap_or(3000),
+                port_fallback: port.is_none(),
+                stop_token: instance::token(),
+            };
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(app::serve(config))
         }
         Some(Command::SeedDemo { vault, force }) => {
             let count = demo::seed(&vault, force).context("could not seed demo vault")?;
@@ -153,17 +170,28 @@ async fn main() -> Result<()> {
             );
             Ok(())
         }
+        Some(Command::Agents { vault, on, off }) => agent_switch(vault, on, off),
         Some(Command::Export { vault, out, title }) => export(&vault, &out, title),
         Some(Command::Index { vault }) => index(&vault),
-        Some(Command::Agents { vault, on, off }) => agent_switch(vault, on, off),
         Some(Command::Mcp { vault }) => {
             let code = mcp::serve(vault);
             std::process::exit(code);
         }
-        Some(Command::McpConfig) => {
-            mcp::print_config();
-            Ok(())
-        }
+        Some(Command::McpConfig { vault, write }) => mcp_setup::print_and_write(vault, write),
+    }
+}
+
+/// Rust ignores `SIGPIPE`, so `cortex doctor | head` would panic on the closed
+/// pipe. A CLI should exit quietly instead.
+#[cfg(unix)]
+fn restore_sigpipe() {
+    extern "C" {
+        fn signal(signum: i32, handler: usize) -> usize;
+    }
+    const SIGPIPE: i32 = 13;
+    const SIG_DFL: usize = 0;
+    unsafe {
+        signal(SIGPIPE, SIG_DFL);
     }
 }
 

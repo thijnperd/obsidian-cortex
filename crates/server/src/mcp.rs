@@ -925,31 +925,6 @@ pub fn serve(root: Option<PathBuf>) -> i32 {
     0
 }
 
-/// Print the snippet an MCP client needs, ready to paste. JSON on stdout, the
-/// where-to-put-it part on stderr so stdout stays copyable.
-pub fn print_config() {
-    let exe = std::env::current_exe()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|_| "cortex".to_string());
-    let config = json!({
-        "mcpServers": {
-            "cortex": {
-                "command": exe,
-                "args": ["mcp"],
-            }
-        }
-    });
-    println!("{}", pretty(&config));
-    eprintln!(
-        "\nPaste that into your client's MCP config:\n\
-         \x20 Claude Desktop  ~/Library/Application Support/Claude/claude_desktop_config.json (macOS)\n\
-         \x20                  %APPDATA%\\Claude\\claude_desktop_config.json (Windows)\n\
-         \x20 Cursor           .cursor/mcp.json in the project, or ~/.cursor/mcp.json\n\
-         \x20 Zed              settings.json → context_servers\n\
-         \nRun `cortex mcp <vault>` instead of `cortex mcp` to pin one folder.\n"
-    );
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
