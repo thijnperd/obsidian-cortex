@@ -57,7 +57,7 @@ impl Registry {
         let json = serde_json::to_vec_pretty(self).unwrap_or_else(|_| b"{}".to_vec());
         let temp = path.with_extension("json.tmp");
         fs::write(&temp, json)?;
-        fs::rename(temp, path)
+        crate::replace_file(&temp, path)
     }
 
     /// Adds or refreshes a vault and makes it the active one.

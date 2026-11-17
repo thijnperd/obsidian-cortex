@@ -149,7 +149,7 @@ pub fn write_note(root: &Path, id: &str, content: &str) -> Result<PathBuf> {
             .open(&temp)?;
         file.write_all(content.as_bytes())?;
         file.sync_all()?;
-        fs::rename(&temp, &path)?;
+        crate::replace_file(&temp, &path)?;
         Ok(())
     })();
 
@@ -342,12 +342,30 @@ mod tests {
         }
     }
 
+    // Windows needs developer mode or an elevated token to create symlinks, so
+    // the escape check is exercised on Unix only; `note_path` itself is shared.
+    #[cfg(unix)]
     #[test]
     fn refuses_symlink_escape() {
         let dir = vault();
         let outside = tempfile::tempdir().unwrap();
         std::os::unix::fs::symlink(outside.path(), dir.path().join("link")).unwrap();
         assert!(note_path(dir.path(), "link/secret").is_err());
+    }
+
+    #[test]
+    fn overwrites_an_existing_note() {
+        let dir = vault();
+        write_note(dir.path(), "Ideas/Deep Work", "one").unwrap();
+        write_note(dir.path(), "Ideas/Deep Work", "two").unwrap();
+        let body = fs::read_to_string(dir.path().join("Ideas/Deep Work.md")).unwrap();
+        assert_eq!(body, "two");
+        let leftovers: Vec<_> = fs::read_dir(dir.path().join("Ideas"))
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty());
     }
 
     #[test]
