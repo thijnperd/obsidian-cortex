@@ -257,7 +257,7 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | macOS (Apple silicon) | `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
-Tagged releases (`v0.3.0`) are fixed; every push to `main` also refreshes the
+Tagged releases (`v0.4.0`) are fixed; every push to `main` also refreshes the
 rolling `latest` build. The version appears in `cortex --version`, in **Vault
 settings → About**, and on `/api/about`. `SHA256SUMS.txt` is attached to every
 release.
