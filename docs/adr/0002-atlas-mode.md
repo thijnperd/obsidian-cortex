@@ -43,7 +43,7 @@ stroked as a dashed wall. Inside the wall, the wilderness is cleared.
 **Roads are bucketed by width.** Every link becomes a meandering road, and the
 width is `0.8 + log2(1 + weight) * 0.55`, so link count is visible as thickness
 rather than as a number. Roads are grouped into one `Path2D` per quarter-unit
-width: 338 links cost a dozen strokes, not 338. Links *inside* a settlement are
+width: 557 links cost a dozen strokes, not 557. Links *inside* a settlement are
 not drawn — at country scale they turn a clump of notes into a sunburst, and
 the clump already reads as a town.
 
