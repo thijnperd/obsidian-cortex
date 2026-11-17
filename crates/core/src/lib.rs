@@ -19,3 +19,19 @@ pub mod vault;
 pub use error::{Error, Result};
 pub use graph::GraphData;
 pub use vault::Vault;
+
+/// Move `temp` onto `target`.
+///
+/// On Unix this is an atomic rename. Windows refuses to rename onto a file
+/// that still exists, so the target is removed first; the temp file survives a
+/// failure either way, so nothing is lost if the second step goes wrong.
+pub(crate) fn replace_file(
+    temp: &std::path::Path,
+    target: &std::path::Path,
+) -> std::io::Result<()> {
+    #[cfg(windows)]
+    if target.exists() {
+        std::fs::remove_file(target)?;
+    }
+    std::fs::rename(temp, target)
+}
