@@ -55,6 +55,8 @@ const els = {
   canvas: document.getElementById('stage'),
   labels: document.getElementById('labels'),
   atlas: document.getElementById('atlas'),
+  decisions: document.getElementById('decisions'),
+  decisionsBoard: document.getElementById('decisions-board'),
   settings: document.getElementById('settings'),
   settingsButton: document.getElementById('settings-button'),
   settingsClose: document.getElementById('settings-close'),
@@ -505,6 +507,7 @@ function applyGraph(graph) {
     : 'static demo';
   els.newNote.hidden = !state.live;
   ui.setStats(graph.meta);
+  ui.renderDecisions(els.decisionsBoard, graph.structures, openDecision);
   ui.renderFolders(els.folders, graph.meta.folders, state.hidden, toggleFolder, PALETTE);
   ui.syncFolders(state.hidden);
   buildLookup();
@@ -555,6 +558,13 @@ function resolveTarget(target) {
   const key = String(target || '').trim().replace(/\.md$/i, '').toLowerCase();
   if (!key) return null;
   return state.lookup.get(key) || state.lookup.get(key.split('/').pop()) || null;
+}
+
+/** A card names a note id; the board can open it without leaving the view. */
+function openDecision(id) {
+  const index = nodeIndex(id);
+  if (index >= 0) openNote(index);
+  else ui.toast('That note is not in this vault any more');
 }
 
 function nodeIndex(id) {
@@ -643,6 +653,8 @@ function loop(now) {
     if (state.atlas) state.atlas.tick(now);
     return;
   }
+  // The board is DOM: no scene to draw, and no reason to keep paying for one.
+  if (state.mode === 'decisions') return;
 
   state.time += dt;
 
@@ -751,11 +763,14 @@ function setMode(mode, { persist = true, animate = true } = {}) {
   syncSettingsViews();
 
   const atlasMode = mode === 'atlas';
+  const boardMode = mode === 'decisions';
   els.replay.hidden = mode !== 'replay';
-  els.canvas.hidden = atlasMode;
-  els.labels.hidden = atlasMode;
+  els.canvas.hidden = atlasMode || boardMode;
+  els.labels.hidden = atlasMode || boardMode;
   els.atlas.hidden = !atlasMode;
+  els.decisions.hidden = !boardMode;
   document.body.classList.toggle('mode-atlas', atlasMode);
+  document.body.classList.toggle('mode-decisions', boardMode);
 
   if (atlasMode) {
     const atlas = ensureAtlas();
@@ -1101,6 +1116,7 @@ function onKeyDown(event) {
   else if (event.key === '2') setMode('brain');
   else if (event.key === '3') setMode('replay');
   else if (event.key === '4') setMode('atlas');
+  else if (event.key === '5') setMode('decisions');
   else if (event.key === ' ' || event.key === 'Spacebar') {
     event.preventDefault();
     setMode(state.mode === 'brain' ? 'universe' : 'brain');

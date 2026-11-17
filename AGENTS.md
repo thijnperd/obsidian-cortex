@@ -7,7 +7,7 @@ way they are.
 ## Commands
 
 ```bash
-cargo test --workspace --all-targets     # 59+ tests, fast
+cargo test --workspace --all-targets     # 95+ tests, fast
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
 cargo run -q -p cortex -- seed-demo demo # deterministic 174-note vault
