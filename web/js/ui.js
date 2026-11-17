@@ -265,6 +265,116 @@ export function hideTooltip() {
   if (element) element.hidden = true;
 }
 
+const STATUS_LABELS = { open: 'Open', refining: 'Refining' };
+
+function statusLabel(status) {
+  if (STATUS_LABELS[status]) return STATUS_LABELS[status];
+  if (!status) return 'Other';
+  const words = status.replace(/[-_]/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function decisionCard(card, onOpen) {
+  const article = document.createElement('article');
+  article.className = 'decision-card';
+
+  const kind = document.createElement('p');
+  kind.className = 'decision-kind';
+  kind.textContent = card.kind === 'idea' ? 'Idea' : 'Research brief';
+  article.appendChild(kind);
+
+  const title = document.createElement('button');
+  title.type = 'button';
+  title.className = 'decision-title';
+  title.textContent = card.title;
+  title.addEventListener('click', () => onOpen(card.id));
+  article.appendChild(title);
+
+  const meta = document.createElement('p');
+  meta.className = 'decision-meta';
+  const sources = Number(card.sources) || 0;
+  meta.textContent = [card.folder, card.created, `${sources} ${sources === 1 ? 'source' : 'sources'}`]
+    .filter(Boolean)
+    .join(' · ');
+  article.appendChild(meta);
+
+  if (card.evidence && card.evidence.length) {
+    const chips = document.createElement('div');
+    chips.className = 'decision-sources';
+    for (const source of card.evidence) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'decision-source';
+      chip.textContent = source.title;
+      chip.title = `${source.title} — ${source.folder}`;
+      chip.addEventListener('click', () => onOpen(source.id));
+      chips.appendChild(chip);
+    }
+    article.appendChild(chips);
+  }
+
+  if (card.missing) {
+    const missing = document.createElement('p');
+    missing.className = 'decision-missing';
+    const count = Number(card.missing);
+    missing.textContent = `${count} ${count === 1 ? 'link points' : 'links point'} nowhere`;
+    article.appendChild(missing);
+  }
+
+  return article;
+}
+
+/** The decisions view: structure notes grouped by their frontmatter status. */
+export function renderDecisions(container, structures, onOpen) {
+  container.textContent = '';
+  const cards = (structures && structures.cards) || [];
+
+  if (!cards.length) {
+    const empty = document.createElement('div');
+    empty.className = 'decisions-empty';
+    const title = document.createElement('h2');
+    title.textContent = 'No structure notes yet';
+    const body = document.createElement('p');
+    body.textContent =
+      'Collect a few notes, then press Research brief or Refine idea. Cortex writes the note into Synthesis/ and it appears here, with the notes it cites.';
+    empty.append(title, body);
+    container.appendChild(empty);
+    return;
+  }
+
+  const columns = new Map();
+  for (const card of cards) {
+    const key = card.status || 'open';
+    if (!columns.has(key)) columns.set(key, []);
+    columns.get(key).push(card);
+  }
+
+  for (const [status, group] of columns) {
+    const column = document.createElement('section');
+    column.className = 'decision-col';
+
+    const head = document.createElement('h2');
+    head.className = 'decision-col-title';
+    head.textContent = statusLabel(status);
+    const count = document.createElement('span');
+    count.className = 'decision-col-count';
+    count.textContent = String(group.length);
+    head.appendChild(count);
+    column.appendChild(head);
+
+    for (const card of group) column.appendChild(decisionCard(card, onOpen));
+    container.appendChild(column);
+  }
+
+  const total = Number(structures.total) || cards.length;
+  if (total > cards.length) {
+    const more = document.createElement('p');
+    more.className = 'decisions-more';
+    more.textContent = `Showing ${cards.length} of ${total} structure notes.`;
+    container.appendChild(more);
+  }
+}
+
 export function setTimelineDate(text) {
   const element = document.getElementById('replay-date');
   if (element) element.textContent = text;

@@ -29,6 +29,16 @@ folder becomes one country on the atlas and one colour in the graph.
 The first three are WebGL scenes (`web/js/renderer.js`); the atlas is a 2D
 canvas (`web/js/atlas.js`).
 
+**Structure note** — a note Cortex writes for you: `type: research` (a brief)
+or `type: idea` (an idea refinement), with a `status` and an evidence list of
+`[[wikilinks]]`. Written into `Synthesis/` by default.
+_Avoid_: synthesis note, decision doc
+
+**Decisions view** — the fifth view (`5`): structure notes as cards, grouped by
+their `status`, each showing the notes it cites. Read-only; `status` is
+frontmatter the user owns. Built as `structures::Board` in the graph payload.
+_Avoid_: kanban, board (the atlas already owns that word)
+
 **Country** — one folder on the atlas. Its **capital** is the layout seed, its
 **field** is the shrunk Voronoi cell used for membership, and its **outline** is
 the roughened coast that is actually drawn.

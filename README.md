@@ -7,7 +7,9 @@ selection into a research brief or an idea decision.
 Four views share one graph: a 3D **universe**, a **brain**, a **timeline**, and
 an **atlas** that draws folders as countries on a parchment map and links as
 roads. Same notes, different question: where does this live, and what connects
-to it?
+to it? A fifth, **Decisions**, steps out of the graph: it lists the research
+briefs and idea refinements you have written, grouped by status, with the notes
+each one cites.
 
 It reads and writes plain Markdown, so an existing Obsidian or Logseq vault
 works as-is. No account, no cloud, no database.
@@ -62,7 +64,8 @@ replacing your draft.
    and open questions.
 
 Every claim in the brief is one click from its source, because the evidence
-list is made of `[[wikilinks]]`, not copies.
+list is made of `[[wikilinks]]`, not copies — and the brief itself joins the
+**Decisions** view, under `open`, with those sources on the card.
 
 ## The idea-refinement loop
 
@@ -72,7 +75,8 @@ risk / reversibility, a recommendation, and "what would change my mind".
 
 This is the part most note tools leave out: they help you collect and connect,
 then stop before a decision exists. Cortex makes the decision artifact a
-first-class note in the same graph.
+first-class note in the same graph, and keeps it in **Decisions** until its
+`status` says otherwise.
 
 ## The atlas
 
@@ -96,6 +100,30 @@ Drag to pan, wheel or `+`/`-` to zoom, `0` to fit, arrow keys to pan with the
 keyboard, click a place to open it. Hiding a folder dims its country and its
 roads rather than deleting them.
 
+## Decisions
+
+The fifth view answers a different question: *what have I concluded, and on
+what?* Every note with `type: research` or `type: idea` — the two kinds Cortex
+writes — appears as a card, grouped by its `status`.
+
+- `open` and `refining` are the columns Cortex creates. Any other value you
+  write in frontmatter becomes its own column, so `answered` or `parked` works
+  without Cortex pretending to know what it means.
+- A card shows its folder, its date, how many notes it cites, and those notes as
+  chips. Click a chip to open the source; click the title to read or edit the
+  brief.
+- Links that point nowhere are counted on the card instead of being hidden.
+- The board is read-only on purpose. `status` is your frontmatter, editable in
+  Obsidian, another editor or by an agent: Cortex reports it and does not take
+  the field over. Obsidian's Bases already moves cards between columns; what it
+  cannot do is show the evidence a decision rests on.
+- Empty is a real state. Until you write a brief, the view explains the loop
+  instead of pretending to have data.
+
+The board is built from the same vault scan as the graph, so it updates on the
+same live poll, works in `cortex export`, and costs one field in the graph
+payload rather than a second index.
+
 ## Navigating
 
 `Ctrl` on Windows and Linux, `⌘` on macOS.
@@ -106,7 +134,7 @@ roads rather than deleting them.
 | Back / forward through opened notes | `Ctrl [` / `Ctrl ]` (`⌘[` / `⌘]`), or `‹` `›` in the panel |
 | Collect / uncollect a note | `Ctrl` / `⌘` / `Shift` + click, or `c` |
 | Focus a note | click it (local graph only) |
-| Views | `1` graph, `2` brain, `3` timeline, `4` atlas |
+| Views | `1` graph, `2` brain, `3` timeline, `4` atlas, `5` decisions |
 | Reset camera | `f` |
 | New note / edit | `n`, or `Edit` in the panel |
 | Open another folder | `Ctrl O` / `⌘O` |
@@ -216,7 +244,7 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | macOS (Apple silicon) | `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
-Tagged releases (`v0.2.0`) are fixed; every push to `main` also refreshes the
+Tagged releases (`v0.3.0`) are fixed; every push to `main` also refreshes the
 rolling `latest` build. The version appears in `cortex --version`, in **Vault
 settings → About**, and on `/api/about`. `SHA256SUMS.txt` is attached to every
 release.

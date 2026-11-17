@@ -1,10 +1,10 @@
 ; Cortex, per-user install. No admin, no service: a Start Menu entry, an
 ; uninstaller, an optional login entry, and App Paths so `cortex` resolves.
 ;
-; CI passes the version: ISCC.exe /DAppVersion=0.2.0 installer\cortex.iss
+; CI passes the version: ISCC.exe /DAppVersion=0.3.0 installer\cortex.iss
 
 #ifndef AppVersion
-  #define AppVersion "0.2.0"
+  #define AppVersion "0.3.0"
 #endif
 
 [Setup]

@@ -15,6 +15,14 @@
   <canvas id="atlas" class="atlas" tabindex="0" hidden
     aria-label="Map of notes. Arrow keys pan, plus and minus zoom, zero resets, Enter opens the highlighted place."></canvas>
 
+  <section class="decisions" id="decisions" hidden aria-labelledby="decisions-title">
+    <header class="decisions-head">
+      <h2 class="decisions-title" id="decisions-title">Decisions</h2>
+      <p class="decisions-sub">Research briefs and idea refinements, with the notes each one rests on.</p>
+    </header>
+    <div class="decisions-board" id="decisions-board"></div>
+  </section>
+
   <div class="boot" id="boot">
     <p class="boot-status" id="boot-status">Opening vault…</p>
   </div>
@@ -33,6 +41,7 @@
       <button class="view" data-mode="brain" type="button" aria-pressed="false">Brain</button>
       <button class="view" data-mode="replay" type="button" aria-pressed="false">Timeline</button>
       <button class="view" data-mode="atlas" type="button" aria-pressed="false">Atlas</button>
+      <button class="view" data-mode="decisions" type="button" aria-pressed="false">Decisions</button>
     </div>
 
     <div class="toolbar-actions">
@@ -127,6 +136,7 @@
             <button class="choice" data-mode="brain" type="button" aria-pressed="false">Brain</button>
             <button class="choice" data-mode="replay" type="button" aria-pressed="false">Timeline</button>
             <button class="choice" data-mode="atlas" type="button" aria-pressed="false">Atlas</button>
+            <button class="choice" data-mode="decisions" type="button" aria-pressed="false">Decisions</button>
           </div>
           <p class="field-help">Cortex remembers the view you last used in each vault.</p>
         </section>
@@ -201,6 +211,7 @@
             <label class="choice"><input type="radio" name="launch-view" value="brain" /><span>Brain</span></label>
             <label class="choice"><input type="radio" name="launch-view" value="replay" /><span>Timeline</span></label>
             <label class="choice"><input type="radio" name="launch-view" value="atlas" /><span>Atlas</span></label>
+            <label class="choice"><input type="radio" name="launch-view" value="decisions" /><span>Decisions</span></label>
           </div>
         </fieldset>
       </form>
