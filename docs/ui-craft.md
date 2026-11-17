@@ -177,5 +177,8 @@ visible).
 - Label collisions in dense views are reduced, not solved.
 - The quiet states exist (empty backlinks, empty mentions, no vault open,
   missing folder) but no first-run tour exists beyond the launch screen.
-- Desktop widths above 1000px have not been visually verified; the test browser
-  used for the redesign was 480px wide.
+- The atlas was checked at 1400×900 and at 384×723. Labels are placed in
+  screen space with collision boxes, so a 122-note settlement still crowds; the
+  reading is "that clump is a city", not a legible list.
+- Atlas places are one symbol. A capital/town/hamlet hierarchy is not drawn yet.
+- Panels are not resizable, in any view.
