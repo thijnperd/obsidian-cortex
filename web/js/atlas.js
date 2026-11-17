@@ -241,6 +241,15 @@ function convexHull(points) {
   return lower.concat(upper);
 }
 
+/**
+ * Settlements should stay towns, not turn into one white disc. The radius
+ * shrinks as a folder grows, so the 250-note journal becomes a country of
+ * villages instead of a single smeared capital.
+ */
+function clusterRadius(count) {
+  return clamp(58 * Math.sqrt(32 / Math.max(8, count)), 16, 58);
+}
+
 /** Single-linkage grouping, so a clump of linked notes becomes one settlement. */
 function clusterPoints(points, radius) {
   const groups = [];
@@ -481,7 +490,7 @@ export class Atlas {
     this.countries.forEach((country, index) => {
       country.places = this.placeMembers(country, maxDegree);
       country.label = labelPoint(country);
-      const groups = clusterPoints(country.places, 58);
+      const groups = clusterPoints(country.places, clusterRadius(country.count));
       country.walls = groups.map(wallPath).filter(Boolean);
       groups.forEach((group, cluster) => {
         for (const place of group) place.cluster = `${index}:${cluster}`;
@@ -566,14 +575,31 @@ export class Atlas {
     const area = Math.abs(polygonArea(polygon));
     const radius = Math.sqrt(area / Math.PI) * 0.66;
     const count = members.length;
+    // A big folder becomes a country of towns, not one white disc. Town centres
+    // sit on a ring inside the border and each town gets its share of notes.
+    const towns = count > 48 ? Math.min(12, Math.ceil(count / 24)) : 1;
+    const perTown = Math.ceil(count / towns);
+    const townSpread = towns > 1 ? radius * 0.72 : 0;
+    const townRadius = towns > 1
+      ? Math.min(radius * 0.26, Math.max(16, Math.sqrt(perTown) * 7))
+      : radius;
+    const random = mulberry(country.name.length * 131 + count);
+    const townCentres = Array.from({ length: towns }, (_, town) => {
+      if (towns === 1) return [capital.x, capital.y];
+      const angle = town * 2.399963 + 0.35;
+      const reach = townSpread * (0.82 + random() * 0.18);
+      return [capital.x + Math.cos(angle) * reach, capital.y + Math.sin(angle) * reach];
+    });
     const points = members.map((nodeIndex, slot) => {
-      const angle = slot * GOLDEN;
-      const ring = radius * Math.sqrt((slot + 0.7) / count);
-      // Dense folders (a daily journal) still read as a settlement, not a smear.
+      const town = Math.min(towns - 1, Math.floor(slot / perTown));
+      const localSlot = slot - town * perTown;
+      const centre = townCentres[town];
+      const angle = localSlot * GOLDEN;
+      const ring = townRadius * Math.sqrt((localSlot + 0.7) / perTown);
       return {
         index: nodeIndex,
-        x: capital.x + Math.cos(angle) * ring * 0.82,
-        y: capital.y + Math.sin(angle) * ring * 0.82,
+        x: centre[0] + Math.cos(angle) * ring * 0.82,
+        y: centre[1] + Math.sin(angle) * ring * 0.82,
       };
     });
 
@@ -636,6 +662,9 @@ export class Atlas {
       }
     }
 
+    // A journal of 250 notes at full marker size is a field of bubbles. Dense
+    // folders get smaller marks, so the country reads as stipple with hubs.
+    const density = count > 240 ? 0.42 : count > 120 ? 0.58 : 1;
     return points.map((point) => {
       const node = this.graph.nodes[point.index];
       const relative = Math.sqrt((node.degree || 0) / maxDegree);
@@ -643,7 +672,7 @@ export class Atlas {
         index: point.index,
         x: point.x,
         y: point.y,
-        r: 2.4 + relative * 5.2,
+        r: (2.4 + relative * 5.2) * density,
         title: node.title,
         folder: node.folder,
         degree: node.degree || 0,
