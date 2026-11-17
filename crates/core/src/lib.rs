@@ -13,6 +13,7 @@ pub mod markdown;
 pub mod registry;
 pub mod search;
 pub mod store;
+pub mod structures;
 pub mod synthesis;
 pub mod vault;
 

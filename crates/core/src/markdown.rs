@@ -22,6 +22,10 @@ pub struct Frontmatter {
     #[serde(default)]
     pub tags: Vec<String>,
     pub date: Option<String>,
+    /// Frontmatter `type`: `research` and `idea` mark a structure note.
+    pub kind: Option<String>,
+    /// Frontmatter `status`: the column a structure note sits in.
+    pub status: Option<String>,
     #[serde(default)]
     pub extra: BTreeMap<String, String>,
 }
@@ -181,6 +185,8 @@ fn parse_frontmatter(block: &str) -> Frontmatter {
                     fm.date = Some(truncate_chars(date, 40));
                 }
             }
+            "type" | "kind" => fm.kind = items.first().and_then(|value| label(value)),
+            "status" | "state" => fm.status = items.first().and_then(|value| label(value)),
             _ => {
                 fm.extra.insert(key, truncate_chars(value, 300));
             }
@@ -201,6 +207,22 @@ fn split_list(value: &str) -> Vec<String> {
         .filter(|item| !item.is_empty())
         .take(64)
         .collect()
+}
+
+/// A frontmatter label Cortex groups by (`type`, `status`). Single line, lower
+/// case and bounded: it is shown in the decisions view, never used as a path.
+fn label(value: &str) -> Option<String> {
+    let text = value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+    let text: String = text.chars().filter(|c| !c.is_control()).take(40).collect();
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
 }
 
 fn unquote(value: &str) -> String {
@@ -430,6 +452,17 @@ mod tests {
         assert_eq!(parsed.frontmatter.tags, vec!["focus", "craft"]);
         assert_eq!(parsed.frontmatter.aliases, vec!["Deep", "Focus"]);
         assert!(parsed.body.starts_with("# Heading"));
+    }
+
+    #[test]
+    fn reads_type_and_status_as_bounded_labels() {
+        let parsed = parse("---\ntype: IDEA\nstatus:  \"In Progress\"\n---\n# X");
+        assert_eq!(parsed.frontmatter.kind.as_deref(), Some("idea"));
+        assert_eq!(parsed.frontmatter.status.as_deref(), Some("in progress"));
+
+        let missing = parse("# X");
+        assert!(missing.frontmatter.kind.is_none());
+        assert!(missing.frontmatter.status.is_none());
     }
 
     #[test]
