@@ -10,7 +10,7 @@ way they are.
 cargo test --workspace --all-targets     # 95+ tests, fast
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
-cargo run -q -p cortex -- seed-demo demo # deterministic 174-note vault
+cargo run -q -p cortex -- seed-demo demo # deterministic 328-note vault
 cargo run -q -p cortex -- serve demo --open
 cargo run -q -p cortex -- export demo --out dist
 cargo run -q -p cortex -- mcp demo       # MCP server on stdio

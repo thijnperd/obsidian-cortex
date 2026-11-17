@@ -16,7 +16,7 @@ works as-is. No account, no cloud, no database.
 
 ## The five views
 
-The seeded demo vault, 176 notes — same graph, five ways to ask about it.
+The seeded demo vault, 328 notes — same graph, five ways to ask about it.
 
 | | |
 | --- | --- |
@@ -29,7 +29,7 @@ The seeded demo vault, 176 notes — same graph, five ways to ask about it.
 
 ```bash
 cargo run -p cortex                       # reopens the last vault, or offers a picker
-cargo run -p cortex -- seed-demo demo     # optional: a 174-note example vault
+cargo run -p cortex -- seed-demo demo     # optional: a 328-note example vault
 cargo run -p cortex -- serve demo         # open one folder directly
 ```
 
@@ -331,3 +331,10 @@ in [`docs/research-workflows.md`](docs/research-workflows.md).
 `crates/server` is axum plus the embedded `web/` UI, which is hand-written
 WebGL2 with no build step. CI runs the checks on Linux, macOS and Windows and
 publishes the static export to GitHub Pages.
+
+## Credits
+
+The Brain view's cortical surface is a simplified version of the
+[Detailed Human Brain Model](https://3d.nih.gov/entries/3DPX-021161) from NIH 3D
+(Johnson J), used under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+It was reduced from 377,701 to 20,018 triangles for the renderer.

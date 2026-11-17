@@ -58,17 +58,17 @@ name. `your notes as a universe` in the page title. A permanent instruction
 line at the bottom: `drag to orbit · scroll to zoom · ⌘K search · ⌘-click to
 collect for synthesis`.
 
-**Replace with:** `Indexing 174 notes…` (a fact, with a number, that ends when
+**Replace with:** `Indexing 328 notes…` (a fact, with a number, that ends when
 it is done). The vault's own folder path where the subtitle is. Discoverable
 hints behind `?`, shown in full only on a first run.
 
 ### 6. Space words on top of data
 
-`174 stars · 338 arcs · 7 galaxies · 6 clusters`. The graph *is* spatial; the
+`328 stars · 557 arcs · 7 galaxies · 16 clusters`. The graph *is* spatial; the
 chrome does not need to keep insisting on it. A tool reports what the data is,
 and lets the visual metaphor be the visual metaphor.
 
-**Replace with:** `174 notes · 338 links · 7 folders · 6 clusters`.
+**Replace with:** `328 notes · 557 links · 7 folders · 16 clusters`.
 
 ### 7. Contrast is below the floor
 
@@ -159,8 +159,8 @@ visible).
   history arrows, and the collection tray moved out of the canvas into the
   sidebar.
 - **The scene keeps the metaphor; the data does not.** Views are still called
-  Graph, Brain and Timeline. Counts read `174 notes · 338 links · 7 folders ·
-  6 clusters`, and the boot line counts notes instead of narrating a mood.
+  Graph, Brain and Timeline. Counts read `328 notes · 557 links · 7 folders ·
+  16 clusters`, and the boot line counts notes instead of narrating a mood.
 - **Notes open each other.** A `[[link]]`, a backlink or a mention opens in
   place, with back/forward through the chain (`⌘[` / `⌘]`). Split panes were
   considered and deliberately left out; the panel is the unit of reading.
