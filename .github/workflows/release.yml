@@ -10,6 +10,8 @@ permissions:
   contents: write
 
 jobs:
+  # Linux and Windows build in a couple of minutes and always get runners, so
+  # whatever produces the download must not wait for anything else.
   build:
     name: build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
@@ -19,9 +21,6 @@ jobs:
         include:
           - os: ubuntu-latest
             target: linux-x86_64
-            archive: tar.gz
-          - os: macos-latest
-            target: macos-arm64
             archive: tar.gz
           - os: windows-latest
             target: windows-x86_64
@@ -59,10 +58,38 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # macOS runners on this account can take tens of minutes to be assigned, or
+  # never arrive. Its build is its own job so the download never waits on it:
+  # the archive is added to the release by `publish-macos` once it finishes.
+  build-macos:
+    name: build (macos-arm64)
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace --all-targets --locked
+      - name: Build
+        run: cargo build --release -p cortex --locked
+      - name: Package (unix)
+        run: |
+          mkdir -p out/cortex
+          cp target/release/cortex out/cortex/cortex
+          cp README.md out/cortex/README.md
+          tar -czf cortex-macos-arm64.tar.gz -C out cortex
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cortex-macos-arm64
+          path: cortex-macos-arm64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: attach binaries to the version release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -73,7 +100,8 @@ jobs:
         with:
           files: artifacts/*
           generate_release_notes: true
-          fail_on_unmatched_files: true
+          # macOS is missing if its runner never arrived; the tag still ships.
+          fail_on_unmatched_files: false
 
   # Every push to main refreshes one moving `latest` release, so there is always
   # a binary to download without cutting a version tag.
@@ -109,5 +137,24 @@ jobs:
 
             Linux and macOS builds are unsigned; macOS needs
             `xattr -d com.apple.quarantine ./cortex` once after unpacking.
+
+            The macOS archive is attached a little later than the others: its
+            runner is queued, and the download is not held back waiting for it.
           files: artifacts/*
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
+
+  # Adds the macOS archive to the release `publish-latest` just created, so a
+  # slow macOS queue costs only its own job, never the download.
+  publish-macos:
+    name: attach the macOS binary when it is ready
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [publish-latest, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cortex-macos-arm64
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload latest cortex-macos-arm64.tar.gz --clobber
