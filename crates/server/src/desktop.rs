@@ -6,7 +6,7 @@
 //! returned to the caller instead of being swallowed.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 
 use cortex_core::registry;
 use cortex_core::store;
@@ -39,9 +39,9 @@ pub fn open_url(url: &str) {
 /// Edge or Brave with `--app`, in a profile of its own so it does not disturb
 /// the browser session and does not hit "already running".
 ///
-/// Returns false when no Chromium-family browser exists; the caller should then
-/// fall back to [`open_url`].
-pub fn open_app_window(url: &str, width: u32, height: u32) -> bool {
+/// Returns the window's process when one was started; the caller keeps it to
+/// know when the window closed. `None` means no Chromium-family browser exists.
+pub fn open_app_window(url: &str, width: u32, height: u32) -> Option<Child> {
     let profile = app_profile();
     let _ = std::fs::create_dir_all(&profile);
     for executable in chromium_candidates() {
@@ -52,11 +52,103 @@ pub fn open_app_window(url: &str, width: u32, height: u32) -> bool {
             .arg(format!("--user-data-dir={}", profile.display()))
             .arg("--no-first-run")
             .arg("--no-default-browser-check");
-        if spawn(&mut command) {
-            return true;
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        if let Ok(child) = command.spawn() {
+            return Some(child);
         }
     }
-    false
+    None
+}
+
+/// A chromeless window if possible, a normal browser tab otherwise.
+pub fn open_window(url: &str, width: u32, height: u32) -> Option<Child> {
+    match open_app_window(url, width, height) {
+        Some(child) => Some(child),
+        None => {
+            open_url(url);
+            None
+        }
+    }
+}
+
+/// Pick a folder with the platform's own dialog.
+///
+/// Windows gets the real file dialog; macOS and Linux have no in-process GUI
+/// here, so they ask their picker command rather than linking a toolkit into a
+/// binary that is otherwise self-contained. `None` means cancelled, or no
+/// picker available — the typed path still works.
+pub async fn pick_folder() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        return tokio::task::spawn_blocking(|| {
+            rfd::FileDialog::new()
+                .set_title("Open a Markdown folder")
+                .pick_folder()
+        })
+        .await
+        .ok()
+        .flatten();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let output = tokio::process::Command::new("osascript")
+            .args([
+                "-e",
+                "POSIX path of (choose folder with prompt \"Open a Markdown folder\")",
+            ])
+            .output()
+            .await
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        return (!path.is_empty()).then(|| PathBuf::from(path));
+    }
+    #[cfg(target_os = "linux")]
+    {
+        for (program, args) in [
+            (
+                "zenity",
+                vec![
+                    "--file-selection",
+                    "--directory",
+                    "--title=Open a Markdown folder",
+                ],
+            ),
+            (
+                "kdialog",
+                vec!["--getexistingdirectory", ".", "Open a Markdown folder"],
+            ),
+        ] {
+            let Ok(output) = tokio::process::Command::new(program)
+                .args(args)
+                .output()
+                .await
+            else {
+                continue;
+            };
+            if !output.status.success() {
+                return None;
+            }
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Some(PathBuf::from(path));
+            }
+        }
+        None
+    }
+}
+
+/// For `cortex doctor`: which browser would host the window.
+pub fn browser_label() -> String {
+    match chromium_candidates().first() {
+        Some(path) => path.display().to_string(),
+        None => "no Chromium browser found — the UI opens as a normal tab".to_string(),
+    }
 }
 
 /// Resource directory for the app window: `vaults.json` lives in the config

@@ -110,8 +110,9 @@ impl Registry {
     }
 
     /// The agent switch for a vault, or `None` when the folder is not one of
-    /// ours (in which case the caller decides; MCP allows it, because pointing
-    /// a client at a folder by hand is itself the opt-in).
+    /// ours. `None` is not permission: `cortex mcp` refuses a folder with no
+    /// switch, so naming a path on the command line cannot bypass the toggle
+    /// (ADR 0003).
     pub fn agents(&self, path: &Path) -> Option<bool> {
         let canonical = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
         self.get(&canonical).map(|entry| entry.agents)

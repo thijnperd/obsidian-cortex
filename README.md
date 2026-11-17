@@ -20,9 +20,11 @@ cargo run -p cortex -- serve demo         # open one folder directly
 
 ## Opening a folder
 
-Run `cortex` with no arguments and it reopens whatever you used last. With
-nothing remembered you get a launch screen: the vaults you have opened before,
-and a field for a folder path.
+Run `cortex` (or the Start Menu shortcut) and it reopens whatever you used
+last. With nothing remembered you get a launch screen: the folders you have
+opened before, **Browse…** for the platform's folder dialog, and a path field
+for the places a dialog cannot reach (a network share, a WSL path, another
+drive).
 
 - Vaults are remembered in `vaults.json` in your platform config directory
   (`$XDG_CONFIG_HOME/cortex`, `~/Library/Application Support/cortex`,
@@ -32,8 +34,10 @@ and a field for a folder path.
   act on the vault you are looking at.
 - Choose the view you land in on the launch screen (**Open in**), or change it
   later from **Vault settings**. Cortex remembers the view per vault.
-- `cortex serve ~/Notes` still opens one directly, and `⌘O` returns to the
-  picker.
+- `cortex serve <folder>` still opens one in the foreground, and `Ctrl+O`
+  (`⌘O` on macOS) returns to the picker. Closing the app window ends the
+  background instance; `cortex stop` does it from a terminal, and
+  `cortex doctor` says what is running, on which port, with which browser.
 - Nothing is copied, moved or synced. Cortex reads the folder in place, and a
   folder that has been moved shows up struck through until you forget it.
 
@@ -94,16 +98,18 @@ roads rather than deleting them.
 
 ## Navigating
 
+`Ctrl` on Windows and Linux, `⌘` on macOS.
+
 | Action | Key |
 | --- | --- |
-| Search every note | `⌘K` or `/` |
-| Back / forward through opened notes | `⌘[` / `⌘]`, or `‹` `›` in the panel |
-| Collect / uncollect a note | `⌘`/`Ctrl`/`Shift` + click, or `c` |
+| Search every note | `Ctrl K` / `⌘K`, or `/` |
+| Back / forward through opened notes | `Ctrl [` / `Ctrl ]` (`⌘[` / `⌘]`), or `‹` `›` in the panel |
+| Collect / uncollect a note | `Ctrl` / `⌘` / `Shift` + click, or `c` |
 | Focus a note | click it (local graph only) |
 | Views | `1` graph, `2` brain, `3` timeline, `4` atlas |
 | Reset camera | `f` |
 | New note / edit | `n`, or `Edit` in the panel |
-| Open another folder | `⌘O` |
+| Open another folder | `Ctrl O` / `⌘O` |
 
 The folder list toggles visibility; hidden folders dim instead of disappearing,
 so the context stays visible. Clicking a `[[link]]`, a backlink or an unlinked
@@ -126,13 +132,22 @@ can read the vault, create notes and rewrite sections — through the same guard
 the app enforces.
 
 ```bash
-cortex mcp ~/Notes    # stdio MCP server bound to one vault
-cortex mcp-config     # print the snippet your client needs
+cortex mcp ~/Notes                    # stdio MCP server bound to one vault
+cortex mcp-config --vault ~/Notes     # the snippet, with this binary and this folder
+cortex mcp-config --vault ~/Notes --write   # merge it into Claude Desktop and Cursor
 ```
 
-Paste the printed JSON into Claude Desktop's `claude_desktop_config.json`,
-Cursor's `.cursor/mcp.json`, or Zed's `context_servers`, then restart the
-client. Without an argument `cortex mcp` binds to the vault you opened last.
+The printed JSON contains the absolute path to the binary **and** the folder,
+so the copy-paste version works. `--write` merges `mcpServers.cortex` into
+Claude Desktop and Cursor, backing the file up first and leaving every other
+key alone; Zed and everything else get the snippet to paste. Cortex has no
+approval step of its own: the AI client decides whether to trust a server, and
+most clients only read their config at startup — **restart the client** after
+adding it. Vault settings → **AI clients** has the same snippet, a status line
+for each client, and **Test connection**, which really starts `cortex mcp`,
+initializes it and lists its tools.
+
+Without an argument `cortex mcp` binds to the vault you opened last.
 
 | Tool | What it does |
 | --- | --- |
@@ -188,34 +203,52 @@ and the same-origin check rather than by `--read-only`. Combined with
 `--allow-any-origin` that means anyone who can reach the server can point it at
 any folder the process can read — which is why the default is loopback-only.
 
-## Download
+## Download (Windows first)
 
-Every push to `main` refreshes one rolling release, so there is always a
-freshly built binary:
-
-**https://github.com/thijnperd/obsidian-cortex/releases/tag/latest**
+**Installer:** `CortexSetup-<version>.exe` — per user, no admin, Start Menu
+entry, uninstaller, optional start-at-login. **Portable:**
+`cortex-windows-x86_64.zip`, unpack and run `cortex.exe`. Both from
+https://github.com/thijnperd/obsidian-cortex/releases
 
 | Platform | File |
 | --- | --- |
-| Windows x86-64 | `cortex-windows-x86_64.zip` |
+| Windows x86-64 | `CortexSetup-<version>.exe` or `cortex-windows-x86_64.zip` |
 | macOS (Apple silicon) | `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
-One self-contained binary per platform: no runtime, no installer, the whole UI
-embedded. Run `cortex` and pick your Obsidian vault from the launch screen — it
-opens in a chromeless window (Chrome, Edge or Brave, with a profile of its own)
-rather than a browser tab, so it behaves like an app without shipping a second
-runtime. Without one of those browsers you get a normal tab; `serve --app` asks
-for the window explicitly. Or point it straight at a folder:
+Tagged releases (`v0.2.0`) are fixed; every push to `main` also refreshes the
+rolling `latest` build. The version appears in `cortex --version`, in **Vault
+settings → About**, and on `/api/about`. `SHA256SUMS.txt` is attached to every
+release.
+
+### Windows says it is unsafe
+
+The executable is unsigned, so SmartScreen shows *Windows protected your PC* on
+the first run: **More info → Run anyway**. There is no auto-update yet;
+**Check for updates** in About opens the release page. The full walk through,
+including uninstall and checksum verification, is in
+[installing on Windows](docs/install-windows.md).
+
+### What starts when you run `cortex`
+
+One process owns the server, the window and (on Windows and macOS) the tray
+icon. It starts in the background, so the terminal comes straight back and
+closing it changes nothing. Closing the window ends the instance; **Quit
+Cortex** in the tray does the same. If port 3000 is taken it takes the next free
+port, records it in `server.json`, and a second launch opens a window against
+the running instance instead of dying on a bind error. `cortex stop` ends it,
+`cortex doctor` explains it.
+
+The window is Chrome, Edge or Brave in `--app` mode with a profile of its own —
+a chromeless window without shipping a second runtime. Without one of those
+browsers you get a normal tab, and closing that tab cannot end the instance, so
+use the tray or `cortex stop`. Linux has no tray: it runs until `cortex stop`.
+
+Or point it straight at a folder, in the foreground:
 
 ```bash
 cortex serve ~/Documents/MyVault --open
 ```
-
-macOS builds are unsigned, so the first run needs
-`xattr -d com.apple.quarantine ./cortex`. Version tags (`v*`) publish the same
-archives with release notes. GitHub Pages hosts the demo vault only; there is
-no hosted version of your own vault.
 
 ## Design constraints
 
@@ -235,6 +268,19 @@ cargo test -p cortex-core
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
+
+## When something is wrong
+
+```bash
+cortex doctor     # version, config and log paths, live instance, port,
+                  # browser, every vault and its agent switch, MCP clients
+cortex stop       # ask the background instance to exit
+```
+
+The background process writes `<config>/cortex.log`; the tray's **Show log**
+opens it, and it rotates once at 1 MiB. A busy port is no longer an error: the
+next free one is chosen and printed. If `cortex` says nothing at all, run
+`cortex app` in a terminal — it is the same process with its output attached.
 
 The workflow design is grounded in primary documentation from Obsidian,
 Logseq, Heptabase, Roam, Zettelkasten and Forte Labs; the notes and sources are

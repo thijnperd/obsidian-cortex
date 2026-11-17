@@ -51,7 +51,36 @@ session stops on its next call.
 
 **App window** — `cortex`'s default launch: Chrome, Edge or Brave in `--app` mode
 with its own profile, so the UI has a chromeless window without an embedded
-webview. Falls back to a browser tab.
+webview. Falls back to a browser tab. Its lifetime is the instance's: closing
+it ends the app.
+
+**Instance** — one running Cortex: its server, its window and, on Windows and
+macOS, its tray icon. At most one tray instance per user; `server.json` names
+it.
+_Avoid_: daemon, service, background task
+
+**Tray app** — the `cortex` process with no subcommand: it owns the server
+in-process, opens the app window and shows the tray menu. Its life is the
+window's; there is no minimize-to-tray.
+
+**Handoff** — a second launch finding the running instance through
+`server.json` and opening a window against it instead of starting a second
+server.
+_Avoid_: reuse, attach
+
+**Discovery file** — `server.json` in the config directory: port, process id,
+version, start time and the per-run stop token. Advisory; the health probe
+decides whether it is current.
+_Avoid_: lock file, pid file
+
+**Doctor** — `cortex doctor`: the diagnostic report — config directory,
+discovery file, vaults and their agent switches, chosen port, browser found,
+log path, last error. It must work without a server running.
+_Avoid_: diagnostics dump
+
+**Install** — the per-user installed copy of Cortex (Start Menu entry,
+uninstaller), as opposed to the portable archive. Both run the same binary.
+_Avoid_: setup, package
 
 **Reveal** — showing a vault or note in Explorer, Finder or the platform file
 manager (`POST /api/reveal`). Goes through the same write guard as a note edit.
