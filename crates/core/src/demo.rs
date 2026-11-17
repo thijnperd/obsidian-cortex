@@ -10,6 +10,7 @@ use std::path::Path;
 
 use crate::dates;
 use crate::store;
+use crate::synthesis::{self, Evidence, Template};
 
 const MARKER: &str = ".cortex-demo";
 
@@ -636,6 +637,41 @@ pub fn seed(root: &Path, force: bool) -> std::io::Result<usize> {
         write_seed(root, seed, created, &mut written)?;
     }
 
+    // Two structure notes, so the decisions view has something to show on a
+    // first run. They go through the same builder the app uses, so the demo
+    // cannot drift from the frontmatter Cortex actually writes.
+    let briefs: [(Template, &str, &[&str]); 2] = [
+        (
+            Template::Research,
+            "How does attention shape deep work?",
+            &[
+                "Deep Work",
+                "Attention Economy",
+                "Interruption Debt",
+                "Cognitive Load",
+            ],
+        ),
+        (
+            Template::Idea,
+            "Should search come before the graph?",
+            &["Second Brain", "Zettelkasten", "The Atlas"],
+        ),
+    ];
+    for (template, question, titles) in briefs {
+        let evidence = titles
+            .iter()
+            .map(|title| Evidence {
+                title: (*title).to_string(),
+                folder: "Ideas".to_string(),
+                excerpt: String::new(),
+            })
+            .collect::<Vec<_>>();
+        let body = synthesis::build(template, question, &evidence);
+        let id = format!("Synthesis/{}", store::slugify(question));
+        store::write_note(root, &id, &body).map_err(|err| Error::other(err.to_string()))?;
+        written += 1;
+    }
+
     let mut day = start;
     let mut entry = 0usize;
     while day <= today {
@@ -721,6 +757,10 @@ mod tests {
         );
         assert!(vault.notes.iter().all(|n| !n.title.is_empty()));
         assert!(vault.notes.iter().any(|n| n.folder == "Maps"));
+        let board = crate::structures::board(&vault);
+        assert_eq!(board.total, 2, "the demo ships a brief and an idea");
+        assert_eq!(board.open, 2);
+        assert!(board.cards.iter().all(|card| !card.evidence.is_empty()));
     }
 
     #[test]

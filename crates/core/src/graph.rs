@@ -7,6 +7,7 @@ use serde::Serialize;
 
 use crate::dates;
 use crate::layout::{self, LayoutOptions};
+use crate::structures;
 use crate::vault::Vault;
 
 pub const PALETTE_SIZE: usize = 8;
@@ -16,6 +17,9 @@ pub struct GraphData {
     pub meta: Meta,
     pub nodes: Vec<Node>,
     pub edges: Vec<OutEdge>,
+    /// The decisions view, derived from the same scan. Shipped with the graph so
+    /// a static export has it too, with no second request or cache to keep.
+    pub structures: structures::Board,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -197,6 +201,7 @@ impl GraphData {
             },
             nodes,
             edges,
+            structures: structures::board(vault),
         }
     }
 
@@ -438,5 +443,22 @@ mod tests {
     fn handles_empty_graph() {
         assert!(pagerank(0, &[]).is_empty());
         assert!(communities(0, &[]).is_empty());
+    }
+
+    #[test]
+    fn ships_structure_notes_with_the_graph() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Source.md"), "# Source\n").unwrap();
+        std::fs::write(
+            dir.path().join("Brief.md"),
+            "---\ntype: research\ntitle: \"A question\"\n---\n\n# A question\n\n- [[Source]]\n",
+        )
+        .unwrap();
+        let vault = Vault::load(dir.path(), "T", Default::default()).unwrap();
+        let graph = GraphData::build(&vault, "t", &LayoutOptions::default());
+        assert_eq!(graph.structures.total, 1);
+        assert_eq!(graph.structures.open, 1);
+        assert_eq!(graph.structures.cards[0].sources, 1);
+        assert!(graph.to_json().contains("\"structures\""));
     }
 }

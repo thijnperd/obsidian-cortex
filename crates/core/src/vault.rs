@@ -46,6 +46,11 @@ pub struct Note {
     pub body: String,
     pub excerpt: String,
     pub tags: Vec<String>,
+    /// Frontmatter `type`: `research`/`idea` means Cortex wrote this as a
+    /// structure note. Other values are preserved but not classified.
+    pub kind: Option<String>,
+    /// Frontmatter `status`, normalised by the parser.
+    pub status: Option<String>,
     pub aliases: Vec<String>,
     pub headings: Vec<Heading>,
     pub links: Vec<Link>,
@@ -175,6 +180,8 @@ impl Vault {
                 body: parsed.body,
                 excerpt: parsed.excerpt,
                 tags,
+                kind: parsed.frontmatter.kind,
+                status: parsed.frontmatter.status,
                 aliases: parsed.frontmatter.aliases,
                 headings: parsed.headings,
                 links: parsed.links,
