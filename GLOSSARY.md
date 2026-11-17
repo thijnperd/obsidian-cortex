@@ -43,6 +43,19 @@ land between them, stippled with grass.
 **Agent** — an external AI client talking to `cortex mcp`. Not a feature inside
 the UI: there is no model in Cortex and no API key.
 
+**Agent access** — the per-vault switch that decides whether an agent may drive
+that vault. Stored beside the vault list, not in the vault; deny by default, so a
+folder Cortex has never seen has no access until it is opened or `cortex agents
+<folder> --on` is run. Off means `cortex mcp` refuses to start *and* a connected
+session stops on its next call.
+
+**App window** — `cortex`'s default launch: Chrome, Edge or Brave in `--app` mode
+with its own profile, so the UI has a chromeless window without an embedded
+webview. Falls back to a browser tab.
+
+**Reveal** — showing a vault or note in Explorer, Finder or the platform file
+manager (`POST /api/reveal`). Goes through the same write guard as a note edit.
+
 **House format** — the formatting rules an agent follows when it creates or
 rewrites notes: one H1 matching the file name, ATX headings, wikilinks,
 frontmatter keys Cortex reads, one trailing newline. Written down in

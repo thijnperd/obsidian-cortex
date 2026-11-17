@@ -115,6 +115,9 @@
           <p class="settings-name" id="settings-name">—</p>
           <p class="settings-path" id="settings-path"></p>
           <p class="badge" id="settings-obsidian" hidden>Obsidian vault</p>
+          <div class="settings-actions">
+            <button class="btn" id="settings-reveal" type="button">Show in folder</button>
+          </div>
         </section>
 
         <section class="settings-section">
@@ -132,6 +135,12 @@
           <h3>Map</h3>
           <label class="check"><input type="checkbox" id="settings-roads" checked /> Roads between linked places</label>
           <label class="check"><input type="checkbox" id="settings-routes" checked /> Trade routes between countries</label>
+        </section>
+
+        <section class="settings-section">
+          <h3>Agent access</h3>
+          <label class="check"><input type="checkbox" id="settings-agents" checked /> Let AI clients read and write this vault</label>
+          <p class="field-help" id="settings-agents-help"></p>
         </section>
 
         <section class="settings-section">

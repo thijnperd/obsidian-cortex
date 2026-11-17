@@ -36,7 +36,7 @@ const state = {
   labels: [],
   folderLabels: [],
   palette: { open: false, hits: [], active: 0, timer: null, query: '' },
-  replay: { min: 0, max: 1, playing: false, startedAt: 0 },
+  replay: { min: 0, max: 1, playing: false, startedAt: 0, undated: false },
   history: { items: [], index: -1 },
   events: null,
   version: null,
@@ -64,6 +64,9 @@ const els = {
   settingsWrites: document.getElementById('settings-writes'),
   settingsRoads: document.getElementById('settings-roads'),
   settingsRoutes: document.getElementById('settings-routes'),
+  settingsAgents: document.getElementById('settings-agents'),
+  settingsAgentsHelp: document.getElementById('settings-agents-help'),
+  settingsReveal: document.getElementById('settings-reveal'),
   sidebar: document.getElementById('sidebar'),
   vaultButton: document.getElementById('vault-button'),
   vaultTitle: document.getElementById('vault-title'),
@@ -158,7 +161,7 @@ async function start() {
       state.live = true;
       state.readOnly = Boolean(listing.read_only);
       state.vaults = listing.vaults || [];
-      ui.renderVaultList(els.vaultList, state.vaults, state.vaultId, openListedVault);
+      ui.renderVaultList(els.vaultList, state.vaults, state.vaultId, openListedVault, revealVault);
       ui.renderLaunch(els.launchList, state.vaults, {
         onOpen: openListedVault,
         onForget: forgetVault,
@@ -254,6 +257,10 @@ function wire() {
     prefs.set('cortex.atlas.routes', els.settingsRoutes.checked);
     if (state.atlas) state.atlas.setRoutes(els.settingsRoutes.checked);
   });
+  els.settingsAgents.addEventListener('change', () => {
+    setAgentAccess(els.settingsAgents.checked);
+  });
+  els.settingsReveal.addEventListener('click', () => revealVault(currentVault()));
   els.vaultButton.addEventListener('click', () => showLaunch());
   els.addVault.addEventListener('click', () => showLaunch());
   els.foldersReset.addEventListener('click', resetFolders);
@@ -267,11 +274,45 @@ function currentVault() {
   return state.vaults.find((vault) => vault.id === state.vaultId) || null;
 }
 
+/// Hands the vault folder to Explorer, Finder or the file manager.
+function revealVault(vault) {
+  if (!vault) return;
+  if (vault.missing) {
+    ui.toast('That folder is no longer there');
+    return;
+  }
+  // The id goes in the body: the query string is ignored by a POST route, and
+  // any vault row can be revealed, not only the active one.
+  api.revealInFolder({ vault: vault.id }, vault.id).catch((error) => ui.toast(error.message));
+}
+
+function syncAgentHelp(vault) {
+  const on = vault.agents !== false;
+  els.settingsAgents.checked = on;
+  els.settingsAgentsHelp.textContent = on
+    ? 'AI clients can read and write this vault over MCP. Turn this off to refuse them — including a client that is already connected.'
+    : 'MCP clients are refused for this vault: cortex mcp will not start, and a connected client stops on its next call.';
+}
+
+async function setAgentAccess(enabled) {
+  const vault = currentVault();
+  if (!vault) return;
+  try {
+    const result = await api.setAgentAccess(vault.id, enabled);
+    vault.agents = result.agents !== false;
+    syncAgentHelp(vault);
+    ui.toast(vault.agents ? 'Agent access is on' : 'Agent access is off');
+  } catch (error) {
+    els.settingsAgents.checked = !enabled;
+    ui.toast(error.message);
+  }
+}
+
 async function refreshVaults() {
   const listing = await api.listVaults();
   if (!listing) return;
   state.vaults = listing.vaults || [];
-  ui.renderVaultList(els.vaultList, state.vaults, state.vaultId, openListedVault);
+  ui.renderVaultList(els.vaultList, state.vaults, state.vaultId, openListedVault, revealVault);
   ui.renderLaunch(els.launchList, state.vaults, {
     onOpen: openListedVault,
     onForget: forgetVault,
@@ -517,7 +558,10 @@ function computeTimeline() {
     if (value < min) min = value;
     if (value > max) max = value;
   }
-  if (!Number.isFinite(min) || max <= min) {
+  // No frontmatter dates (or all the same): say so instead of inventing a
+  // year of history for the scrubber.
+  state.replay.undated = !Number.isFinite(min) || max <= min;
+  if (state.replay.undated) {
     min = Date.now() - 365 * 86400000;
     max = Date.now();
   }
@@ -682,6 +726,7 @@ function updateLabels() {
 }
 
 function formatDate(progress) {
+  if (state.replay.undated) return 'No dates in this vault';
   const value = state.replay.min + (state.replay.max - state.replay.min) * clamp(progress, 0, 1);
   const date = new Date(value);
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
@@ -825,6 +870,8 @@ function openSettings() {
     : 'Notes are written as plain Markdown in the folder, so Obsidian sees them immediately.';
   els.settingsRoads.checked = prefs.get('cortex.atlas.roads', true);
   els.settingsRoutes.checked = prefs.get('cortex.atlas.routes', true);
+  syncAgentHelp(vault);
+  els.settingsReveal.disabled = Boolean(vault.missing);
   syncSettingsViews();
   els.settings.hidden = false;
   els.settingsClose.focus();

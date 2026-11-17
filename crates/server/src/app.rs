@@ -26,6 +26,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tokio::sync::{watch, RwLock};
 
 use cortex_core::graph::GraphData;
@@ -38,6 +39,7 @@ use cortex_core::vault::{fingerprint_of, ScanOptions};
 use cortex_core::Vault;
 
 use crate::assets;
+use crate::desktop;
 
 const MAX_BODY: usize = MAX_NOTE_BYTES as usize + 64 * 1024;
 /// Stat-only check. Cheap enough to feel instant without an OS watcher crate,
@@ -55,6 +57,8 @@ pub struct Config {
     pub allow_framing: bool,
     /// Open the UI in the default browser once the listener is up.
     pub open_browser: bool,
+    /// Prefer a chromeless Chromium window over a browser tab.
+    pub app_window: bool,
     pub bind: String,
     pub port: u16,
 }
@@ -110,6 +114,8 @@ struct VaultSummary {
     /// True when the folder carries an `.obsidian/` directory: it can be opened
     /// as-is, and Cortex writes plain Markdown that Obsidian will pick up.
     obsidian: bool,
+    /// AI clients may operate this vault: the MCP switch, kept in the registry.
+    agents: bool,
 }
 
 #[derive(Serialize)]
@@ -122,6 +128,19 @@ struct VaultList {
 #[derive(Deserialize)]
 struct VaultQuery {
     vault: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct AgentsRequest {
+    id: String,
+    enabled: bool,
+}
+
+#[derive(Deserialize)]
+struct RevealRequest {
+    vault: Option<String>,
+    /// A note id to highlight, or nothing for the vault folder itself.
+    note: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -293,6 +312,8 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let app = Router::new()
         .route("/api/vaults", get(api_vaults).post(api_add_vault))
         .route("/api/vaults/forget", post(api_forget_vault))
+        .route("/api/vaults/agents", post(api_vault_agents))
+        .route("/api/reveal", post(api_reveal))
         .route("/api/events", get(api_events))
         .route("/api/graph", get(api_graph))
         .route("/api/note", get(api_note))
@@ -322,7 +343,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         } else {
             format!("http://{address}")
         };
-        open_in_browser(&url);
+        if !(config.app_window && desktop::open_app_window(&url, 1440, 900)) {
+            desktop::open_url(&url);
+        }
     }
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
@@ -333,33 +356,6 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
     println!("[cortex] shutting down");
-}
-
-/// Best-effort hand-off to the desktop's URL handler. No crate, no shell
-/// string interpolation: the URL is passed as a single argument.
-fn open_in_browser(url: &str) {
-    #[cfg(target_os = "windows")]
-    let mut command = {
-        let mut command = std::process::Command::new("cmd");
-        command.args(["/C", "start", "", url]);
-        command
-    };
-    #[cfg(target_os = "macos")]
-    let mut command = {
-        let mut command = std::process::Command::new("open");
-        command.arg(url);
-        command
-    };
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let mut command = {
-        let mut command = std::process::Command::new("xdg-open");
-        command.arg(url);
-        command
-    };
-    let _ = command
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
 }
 
 /// Stable id for a vault path: FNV-1a, so the UI can bookmark one without
@@ -469,6 +465,79 @@ async fn find_vault(state: &AppState, id: Option<&str>) -> Option<Arc<VaultHandl
     vaults.first().cloned()
 }
 
+/// Best-effort hand-off to the desktop's file manager. The note id is
+/// validated exactly like a write, so a request cannot turn into "open any path
+/// on this machine".
+async fn api_reveal(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<RevealRequest>,
+) -> Response {
+    if let Some(rejection) = begin_admin(&state, &headers).await {
+        return rejection;
+    }
+    let Some(handle) = find_vault(&state, payload.vault.as_deref()).await else {
+        return bad_request("no vault is open");
+    };
+    match desktop::reveal_target(&handle.root, payload.note.as_deref()) {
+        Ok((path, select)) => {
+            if desktop::reveal(&path, select) {
+                json_response(StatusCode::OK, r#"{"opened":true}"#.to_string())
+            } else {
+                json_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    r#"{"error":"no file manager could be started","code":"no_opener"}"#
+                        .to_string(),
+                )
+            }
+        }
+        Err(error) => bad_request(&error.to_string()),
+    }
+}
+
+/// The MCP switch. A separate route from a note write: it changes Cortex's own
+/// settings, not the vault, so `--read-only` does not block it.
+async fn api_vault_agents(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<AgentsRequest>,
+) -> Response {
+    if let Some(rejection) = begin_admin(&state, &headers).await {
+        return rejection;
+    }
+    let root = {
+        let registry = state.registry.read().await;
+        registry
+            .vaults
+            .iter()
+            .find(|entry| vault_id(&entry.path) == payload.id)
+            .map(|entry| entry.path.clone())
+    };
+    let Some(root) = root else {
+        return bad_request("unknown vault");
+    };
+    let applied = {
+        let mut registry = state.registry.write().await;
+        let applied = registry.set_agents(&root, payload.enabled);
+        if applied && registry.save().is_err() {
+            eprintln!("[cortex] warning: could not save the agent switch");
+        }
+        applied
+    };
+    if !applied {
+        return bad_request("unknown vault");
+    }
+    println!(
+        "[cortex] agent access {} for {}",
+        if payload.enabled { "on" } else { "off" },
+        registry::name_for(&root)
+    );
+    json_response(
+        StatusCode::OK,
+        json!({"id": payload.id, "agents": payload.enabled}).to_string(),
+    )
+}
+
 async fn api_vaults(State(state): State<AppState>) -> Response {
     let handles = state.vaults.read().await.clone();
     let registry = state.registry.read().await.clone();
@@ -493,6 +562,7 @@ async fn api_vaults(State(state): State<AppState>) -> Response {
             loaded: handle.is_some(),
             missing: !entry.path.is_dir(),
             obsidian: entry.path.join(".obsidian").is_dir(),
+            agents: entry.agents,
         });
     }
     // A vault opened by flag but missing from the registry should still appear.
@@ -509,6 +579,10 @@ async fn api_vaults(State(state): State<AppState>) -> Response {
             active: active.as_deref() == Some(handle.id.as_str()),
             missing: false,
             obsidian: handle.root.join(".obsidian").is_dir(),
+            agents: registry
+                .get(&handle.root)
+                .map(|entry| entry.agents)
+                .unwrap_or(true),
         });
     }
 

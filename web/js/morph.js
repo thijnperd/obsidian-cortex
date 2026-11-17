@@ -111,6 +111,8 @@ export function buildBrainPositions(nodes, folderNames) {
 
 export function buildAppearValues(nodes) {
   const appear = new Float32Array(nodes.length);
+  const count = nodes.length;
+  if (count === 0) return appear;
   let min = Infinity;
   let max = -Infinity;
   const days = nodes.map((node) => {
@@ -122,12 +124,20 @@ export function buildAppearValues(nodes) {
     if (day < min) min = day;
     if (day > max) max = day;
   }
+  // No usable chronology: a vault with no frontmatter dates, or one whose files
+  // were all unpacked today, so every note carries the same date. Filling with 1
+  // made `smoothstep(w, w + 0.05, reveal)` zero for every reveal <= 1, which
+  // hid every star and every arc in all three 3D views. Spread the birth time
+  // by index instead, so the reveal still cascades and everything is visible.
   if (!Number.isFinite(min) || max <= min) {
-    appear.fill(1);
+    const step = count > 1 ? 0.9 / (count - 1) : 0;
+    for (let index = 0; index < count; index += 1) appear[index] = index * step;
     return appear;
   }
   days.forEach((day, index) => {
-    appear[index] = day === null ? 1 : clamp((day - min) / (max - min), 0, 1);
+    // Undated notes are older than anything else: born at the start, so they are
+    // visible in every view instead of never arriving.
+    appear[index] = day === null ? 0 : clamp((day - min) / (max - min), 0, 1);
   });
   return appear;
 }

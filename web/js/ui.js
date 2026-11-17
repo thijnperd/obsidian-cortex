@@ -55,10 +55,11 @@ export function syncFolders(hidden) {
   if (reset) reset.hidden = hidden.size === 0;
 }
 
-export function renderVaultList(container, vaults, activeId, onOpen) {
+export function renderVaultList(container, vaults, activeId, onOpen, onReveal) {
   container.innerHTML = '';
   for (const vault of vaults) {
     const item = document.createElement('li');
+    item.className = 'vault-row';
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'vault-item';
@@ -78,6 +79,22 @@ export function renderVaultList(container, vaults, activeId, onOpen) {
     button.append(name, count);
     button.addEventListener('click', () => onOpen(vault));
     item.appendChild(button);
+
+    if (onReveal) {
+      const reveal = document.createElement('button');
+      reveal.type = 'button';
+      reveal.className = 'vault-reveal';
+      reveal.textContent = '⤢';
+      reveal.title = `Show ${vault.name} in the file manager`;
+      reveal.setAttribute('aria-label', `Show ${vault.name} in the file manager`);
+      reveal.disabled = Boolean(vault.missing);
+      reveal.addEventListener('click', (event) => {
+        event.stopPropagation();
+        onReveal(vault);
+      });
+      item.appendChild(reveal);
+    }
+
     container.appendChild(item);
   }
 }
