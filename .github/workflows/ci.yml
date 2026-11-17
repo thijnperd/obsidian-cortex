@@ -34,6 +34,10 @@ jobs:
       - name: Test
         run: cargo test --workspace --all-targets --locked
 
+  # Linux and Windows only. macOS runners are the scarce resource on this
+  # account, and `release.yml` already builds and tests macOS on every push to
+  # main; asking for a second one here starves the release job, which then sits
+  # queued until the next push supersedes it.
   build:
     name: build (${{ matrix.target }})
     needs: check
@@ -43,8 +47,6 @@ jobs:
         include:
           - os: ubuntu-latest
             target: linux-x86_64
-          - os: macos-latest
-            target: macos
           - os: windows-latest
             target: windows
     runs-on: ${{ matrix.os }}
@@ -66,7 +68,12 @@ jobs:
   pages:
     name: demo → github pages
     needs: check
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    # Pages is off for private repositories, so this job only runs once the
+    # repository has it enabled and the PAGES_ENABLED variable is set to true.
+    if: >-
+      github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && vars.PAGES_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
