@@ -14,6 +14,19 @@ each one cites.
 It reads and writes plain Markdown, so an existing Obsidian or Logseq vault
 works as-is. No account, no cloud, no database.
 
+## The five views
+
+The seeded demo vault, 176 notes — same graph, five ways to ask about it.
+
+| | |
+| --- | --- |
+| ![Graph view: a 3D universe of notes](docs/screenshots/01-graph.jpg) | ![Brain view: the same graph folded into hemispheres](docs/screenshots/02-brain.jpg) |
+| **Graph** — notes are stars, links are light. Drag to orbit, scroll to zoom, `f` to reframe. | **Brain** — the same graph laid out as two hemispheres, for seeing clusters instead of single notes. |
+| ![Timeline view: the vault replayed in the order it was written](docs/screenshots/03-timeline.jpg) | ![Atlas view: folders as countries on a parchment map](docs/screenshots/04-atlas.jpg) |
+| **Timeline** — the vault replayed in the order it was written, with a scrubber that goes anywhere. | **Atlas** — folders as countries, notes as places, links as roads, on a map that never moves. |
+| ![Decisions view: research briefs and ideas grouped by status](docs/screenshots/05-decisions.jpg) | |
+| **Decisions** — research briefs and idea refinements, grouped by `status`, with the notes each one cites. | Read-only on purpose: `status` stays your frontmatter, editable in Obsidian or by an agent. |
+
 ```bash
 cargo run -p cortex                       # reopens the last vault, or offers a picker
 cargo run -p cortex -- seed-demo demo     # optional: a 174-note example vault
