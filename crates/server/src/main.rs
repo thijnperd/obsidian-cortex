@@ -1,5 +1,6 @@
 mod app;
 mod assets;
+mod mcp;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -70,6 +71,13 @@ enum Command {
         #[arg(default_value = ".")]
         vault: PathBuf,
     },
+    /// Serve the vault to AI clients over the Model Context Protocol (stdio).
+    Mcp {
+        /// Vault to bind to. Omit it to use the vault you opened last.
+        vault: Option<PathBuf>,
+    },
+    /// Print the MCP client configuration for this binary.
+    McpConfig,
 }
 
 #[tokio::main]
@@ -129,6 +137,14 @@ async fn main() -> Result<()> {
         }
         Some(Command::Export { vault, out, title }) => export(&vault, &out, title),
         Some(Command::Index { vault }) => index(&vault),
+        Some(Command::Mcp { vault }) => {
+            let code = mcp::serve(vault);
+            std::process::exit(code);
+        }
+        Some(Command::McpConfig) => {
+            mcp::print_config();
+            Ok(())
+        }
     }
 }
 
