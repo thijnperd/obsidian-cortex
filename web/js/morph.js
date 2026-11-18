@@ -2,9 +2,9 @@
 //
 // Each folder becomes a region on one of two hemispheres; notes are spread
 // through the lobe's volume rather than pinned to its surface, so the links
-// between them read as fibre tracts. Very large folders (the journal) become a
-// diffuse core inside both hemispheres: chronology, without the wire halo the
-// old orbiting belt produced.
+// between them read as fibre tracts. Diary folders become a diffuse core
+// inside both hemispheres: chronology, without the wire halo the old orbiting
+// belt produced. A large topic folder is not a diary and keeps its lobe.
 
 import { clamp } from './math.js';
 
@@ -14,7 +14,7 @@ const CORE_TILT = 0.12;
 
 /// Returns `{ positions, anchors }`; anchors are per-folder surface points so
 /// the UI can label each region of the brain.
-export function buildBrainPositions(nodes, folderNames) {
+export function buildBrainPositions(nodes, folderNames, diaries = new Set()) {
   const anchors = new Map();
   const folderIndex = new Map(folderNames.map((name, index) => [name, index]));
   const sums = new Map();
@@ -45,7 +45,7 @@ export function buildBrainPositions(nodes, folderNames) {
     const folder = folderIndex.get(node.folder) ?? 0;
     const count = counts.get(node.folder) || 0;
 
-    if (count > 48) {
+    if (diaries.has(node.folder)) {
       // Diffuse core: a seeded spiral through the middle of both hemispheres.
       // It is inside the shell, so the chapter links cross the lobes instead of
       // drawing a ring around them.
@@ -121,6 +121,14 @@ export function buildBrainPositions(nodes, folderNames) {
     // The mesh has no tissue under the temporal lobes: keep nodes above the
     // brainstem so nothing floats in the black below the brain.
     if (index % 3 === 1) brain[index] = clamp(brain[index], -0.32, 0.42);
+  }
+
+  // Region labels follow the same pull-in as the notes, or a label can sit in
+  // the black outside the cortex and look like it belongs to another view.
+  for (const anchor of anchors.values()) {
+    anchor[0] *= 0.86;
+    anchor[1] = clamp(anchor[1] * 0.86, -0.32, 0.42);
+    anchor[2] *= 0.86;
   }
 
   return { positions: brain, anchors };

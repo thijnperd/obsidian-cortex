@@ -9,6 +9,8 @@
 // Everything is drawn on a 2D canvas in world units (0..WORLD) and then
 // transformed, so panning and zooming never re-layout anything.
 
+import { isOverview } from './scale.js';
+
 const WORLD = 1000;
 const EDGE = 108;
 const GOLDEN = 2.399963229728653;
@@ -582,6 +584,7 @@ export class Atlas {
   build() {
     const graph = this.graph;
     if (!graph) return;
+    this.overview = isOverview(graph.nodes.length);
     const folders = (graph.meta.folders || []).filter((folder) => folder.count > 0);
     const byFolder = new Map();
     graph.nodes.forEach((node, index) => {
@@ -628,7 +631,7 @@ export class Atlas {
       country.places = this.placeMembers(country, maxDegree);
       country.label = labelPoint(country);
       const groups = clusterPoints(country.places, clusterRadius(country.count));
-      country.walls = groups.map(wallPath).filter(Boolean);
+      country.walls = this.overview ? [] : groups.map(wallPath).filter(Boolean);
       groups.forEach((group, cluster) => {
         for (const place of group) place.cluster = `${index}:${cluster}`;
       });
@@ -696,6 +699,9 @@ export class Atlas {
       // Links inside one settlement are streets: at country scale they turn a
       // tight clump of notes into a sunburst. The clump already reads as a town.
       if (from.cluster && from.cluster === to.cluster) continue;
+      // In an overview, a single hub with a hundred links turns the roads into
+      // a white starburst. Its neighbours are already in the same stipple.
+      if (this.overview && ((from.degree || 0) > 8 || (to.degree || 0) > 8)) continue;
       candidates.push({ edge, from, to, weight: Math.max(1, edge.weight || 1) });
     }
     // A 20,000-link vault would otherwise draw a hairball. Keep the strongest
@@ -711,7 +717,7 @@ export class Atlas {
     for (const { edge, from, to, weight } of candidates) {
       const path = smoothOpen(meander(from, to, edge.source * 31 + edge.target * 7));
       if (from.country !== to.country) {
-        if (routesDrawn >= 2500) continue;
+        if (routesDrawn >= (this.overview ? 400 : 2500)) continue;
         routesDrawn += 1;
         add(routes, 1 + Math.log2(1 + weight) * 0.35, path);
       } else {
@@ -737,7 +743,10 @@ export class Atlas {
     const perTown = Math.ceil(count / towns);
     const townSpread = towns > 1 ? radius * 0.8 : 0;
     const townRadius = towns > 1
-      ? Math.min(radius * 0.16, Math.max(10, Math.sqrt(perTown) * 4.5))
+      ? Math.min(
+        radius * (this.overview ? 0.42 : 0.16),
+        Math.max(10, Math.sqrt(perTown) * (this.overview ? 5.5 : 4.5)),
+      )
       : radius;
     const random = mulberry(country.name.length * 131 + count);
     const townCentres = Array.from({ length: towns }, (_, town) => {
@@ -780,7 +789,7 @@ export class Atlas {
         x: point.x,
         y: point.y,
         r: (2.4 + relative * 5.2) * density,
-        stipple: count > 64,
+        stipple: count > 64 || this.overview,
         folderCount: count,
         title: node.title,
         folder: node.folder,
@@ -791,8 +800,9 @@ export class Atlas {
 
     // A daily journal of 1,300 entries is 1.7 million pairwise checks *per
     // pass*: the town spiral is already even, so skip the physics and let the
-    // stipple carry the density.
-    if (count > 800) {
+    // stipple carry the density. In a large vault every 120-note folder would
+    // pay that cost too, so the overview skips it for all stippled folders.
+    if (count > 800 || (this.overview && count > 64)) {
       for (const point of points) {
         if (!pointInPoly(point.x, point.y, polygon)) {
           const inside = this.nearestInside(point.x, point.y, polygon, capital);
@@ -1203,7 +1213,7 @@ export class Atlas {
           && height >= elev[id - n] && height >= elev[id + n]
           && noise2(gx, gy, 41) > 0.12
           && !nearPlace(x, y)
-          && mountains.length < 280) {
+          && mountains.length < (this.overview ? 150 : 280)) {
           mountains.push({
             x,
             y,
@@ -1215,7 +1225,7 @@ export class Atlas {
           && fbm(x * 0.02, y * 0.02, 211, 3) > 0.48
           && noise2(gx, gy, 67) > 0.2
           && !nearPlace(x, y)
-          && forests.length < 340) {
+          && forests.length < (this.overview ? 0 : 340)) {
           forests.push({
             x,
             y,
@@ -1856,9 +1866,21 @@ export class Atlas {
       if (place.stipple) {
         // A 240-note folder is a field, not a wall of badges: solid ink dots
         // read as stipple, and the old white discs stopped swallowing the land.
+        // In a large-vault overview the stipple is lighter still, so five
+        // towns do not merge into five black pills.
         ctx.beginPath();
-        ctx.arc(place.x, place.y, Math.max(0.7, place.r * (place.folderCount > 240 ? 0.55 : 0.6)), 0, Math.PI * 2);
-        ctx.fillStyle = rgba(ink, place.folderCount > 240 ? 0.34 : 0.4);
+        ctx.arc(
+          place.x,
+          place.y,
+          Math.max(0.7, place.r * (place.folderCount > 240 ? 0.5 : 0.55) * (this.overview ? 0.8 : 1)),
+          0,
+          Math.PI * 2,
+        );
+        ctx.fillStyle = rgba(
+          ink,
+          this.overview ? (place.folderCount > 240 ? 0.2 : 0.24)
+            : (place.folderCount > 240 ? 0.34 : 0.4),
+        );
         ctx.fill();
         ctx.restore();
         continue;
@@ -1906,7 +1928,9 @@ export class Atlas {
     const scale = this.scale();
     // Country names first: they anchor the map. Big countries win a collision
     // with a small neighbour, or a 40-country map becomes a word cloud.
-    const named = [...this.countries].sort((a, b) => b.count - a.count);
+    const named = [...this.countries]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, this.overview ? 26 : this.countries.length);
     for (const country of named) {
       if (!country.polygon.length || !country.label) continue;
       const [x, y] = this.toScreen(country.label.x, country.label.y);
@@ -1933,7 +1957,7 @@ export class Atlas {
       .filter((place) => !this.hidden.has(place.folder))
       .filter((place) => place.index === this.focus || place.index === this.hover || place.degree >= 4)
       .sort((a, b) => b.pagerank - a.pagerank)
-      .slice(0, 22);
+      .slice(0, this.overview ? 8 : 22);
 
     ctx.save();
     ctx.font = `12px ${SERIF}`;

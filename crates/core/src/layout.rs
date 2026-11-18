@@ -67,7 +67,12 @@ pub fn compute(
             edges,
             opts.seed ^ (group as u64).wrapping_mul(0x9E37_79B9),
         );
-        let radius = (0.20 + 0.35 * (list.len() as f64 / 100.0).sqrt()).min(0.55);
+        let shared = if group_count > CROWN_GROUPS {
+            0.65
+        } else {
+            1.0
+        };
+        let radius = (0.20 + 0.35 * (list.len() as f64 / 100.0).sqrt()).min(0.55) * shared;
         for (slot, node) in list.iter().enumerate() {
             positions[*node] = [
                 center[0] + local[slot][0] * radius,
@@ -85,6 +90,10 @@ pub fn compute(
 }
 
 const RING_THRESHOLD: usize = 48;
+/// Above this many folders, two crowns turn into two crowded arcs. Spread the
+/// galaxies over a sphere instead so every folder keeps its own patch of sky.
+const CROWN_GROUPS: usize = 12;
+const GOLDEN_ANGLE: f64 = 2.399_963_229_728_653;
 
 /// Is this folder a diary? Large is not enough: a 120-note topic folder is
 /// large too. A diary has many distinct dates, a long span, and little more
@@ -151,6 +160,19 @@ fn layout_ring(list: &[usize], times: &[i64], seed: u64) -> Vec<[f64; 3]> {
 fn galaxy_center(group: usize, group_count: usize) -> [f64; 3] {
     if group_count <= 1 {
         return [0.0; 3];
+    }
+    if group_count > CROWN_GROUPS {
+        // A Fibonacci sphere of galaxies: even spacing without a flat band,
+        // and the same arrangement on every load.
+        let t = (group as f64 + 0.5) / group_count as f64;
+        let y = 1.0 - 2.0 * t;
+        let ring = (1.0 - y * y).max(0.0).sqrt();
+        let theta = group as f64 * GOLDEN_ANGLE;
+        return [
+            ring * theta.cos() * 1.55,
+            y * 1.1,
+            ring * theta.sin() * 1.55,
+        ];
     }
     // Two offset crowns: symmetric around the origin from any angle, with a
     // clear upper/lower hemisphere instead of a flat band.
@@ -529,6 +551,40 @@ mod tests {
             distance > 0.4,
             "galaxies should not overlap, got {distance}"
         );
+    }
+
+    #[test]
+    fn spread_out_large_folders_are_not_diaries() {
+        let list: Vec<usize> = (0..120).collect();
+        let weekly: Vec<i64> = (0..120).map(|index| index * 7).collect();
+        assert!(!looks_like_journal(&list, &weekly));
+
+        let daily: Vec<i64> = (0..240).collect();
+        let diary: Vec<usize> = (0..240).collect();
+        assert!(looks_like_journal(&diary, &daily));
+    }
+
+    #[test]
+    fn many_galaxies_spread_over_a_sphere() {
+        let centers: Vec<[f64; 3]> = (0..36).map(|group| galaxy_center(group, 36)).collect();
+        let low = centers.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
+        let high = centers
+            .iter()
+            .map(|p| p[1])
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(high - low > 1.5, "galaxies should cover both hemispheres");
+        for point in &centers {
+            assert!(point[0].hypot(point[2]) > 0.1, "no galaxy at a pole");
+        }
+        for (index, point) in centers.iter().enumerate() {
+            for other in &centers[index + 1..] {
+                let distance = ((point[0] - other[0]).powi(2)
+                    + (point[1] - other[1]).powi(2)
+                    + (point[2] - other[2]).powi(2))
+                .sqrt();
+                assert!(distance > 0.25, "galaxies should not share a centre");
+            }
+        }
     }
 
     #[test]
