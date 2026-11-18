@@ -163,6 +163,47 @@ function relationList(title, notes, empty) {
   );
 }
 
+function todayIso() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function isReviewDue(date) {
+  return Boolean(date) && date <= todayIso();
+}
+
+function decisionTrail(detail) {
+  if (detail.kind !== 'research' && detail.kind !== 'idea') return '';
+  const due = isReviewDue(detail.review_on);
+  const facts = [];
+  facts.push(
+    `<span class="trail-fact">Status <strong>${escapeHtml(detail.status || (detail.kind === 'idea' ? 'refining' : 'open'))}</strong></span>`,
+  );
+  if (detail.confidence !== null && detail.confidence !== undefined) {
+    facts.push(`<span class="trail-fact">Confidence <strong>${Number(detail.confidence)}%</strong></span>`);
+  }
+  if (detail.review_on) {
+    facts.push(
+      `<span class="trail-fact${due ? ' trail-review' : ''}">Review <strong>${escapeHtml(detail.review_on)}</strong></span>`,
+    );
+  } else {
+    facts.push('<span class="trail-fact">No review date</span>');
+  }
+  const supersedes = detail.supersedes
+    ? `<button class="trail-supersedes" type="button" data-note-id="${escapeHtml(detail.supersedes.id)}">Supersedes “${escapeHtml(detail.supersedes.title)}”</button>`
+    : '';
+  return `
+    <section class="decision-trail${due ? ' is-due' : ''}" id="decision-trail" aria-label="Decision trail">
+      <div class="trail-head">
+        <p class="trail-kicker">Decision trail</p>
+        ${due ? '<span class="trail-flag">Review due</span>' : ''}
+      </div>
+      <div class="trail-facts">${facts.join('')}</div>
+      ${supersedes}
+      <p class="trail-help">The evidence below is linked from this note. Press <kbd>y</kbd> to jump back here.</p>
+    </section>`;
+}
+
 export function panelHtml(detail, markdownHtml) {
   const tags = (detail.tags || [])
     .map((tag) => `<span class="note-tag">#${escapeHtml(tag)}</span>`)
@@ -179,7 +220,9 @@ export function panelHtml(detail, markdownHtml) {
     <h1 class="note-title">${escapeHtml(detail.title)}</h1>
     <div class="note-meta">${meta}</div>
     ${tags ? `<div class="note-tags">${tags}</div>` : ''}
+    ${decisionTrail(detail)}
     <div class="prose" id="note-prose">${markdownHtml}</div>
+    ${detail.kind && detail.evidence ? relationList('Linked sources', detail.evidence, 'No linked sources yet.') : ''}
     ${relationList('Backlinks', detail.backlinks, 'No note links here yet.')}
     ${detail.mentions && detail.mentions.length ? relationList('Mentions', detail.mentions, '') : ''}
     ${relationList('Related', detail.related, 'Nothing shares a neighbour yet.')}
@@ -280,7 +323,8 @@ function statusLabel(status) {
 
 function decisionCard(card, onOpen) {
   const article = document.createElement('article');
-  article.className = 'decision-card';
+  const due = isReviewDue(card.review_on);
+  article.className = `decision-card${due ? ' is-due' : ''}`;
 
   const kind = document.createElement('p');
   kind.className = 'decision-kind';
@@ -297,10 +341,34 @@ function decisionCard(card, onOpen) {
   const meta = document.createElement('p');
   meta.className = 'decision-meta';
   const sources = Number(card.sources) || 0;
-  meta.textContent = [card.folder, card.created, `${sources} ${sources === 1 ? 'source' : 'sources'}`]
+  const confidence =
+    card.confidence !== null && card.confidence !== undefined ? `${Number(card.confidence)}% confidence` : '';
+  meta.textContent = [
+    card.folder,
+    card.created,
+    `${sources} ${sources === 1 ? 'source' : 'sources'}`,
+    confidence,
+    card.review_on ? `review ${card.review_on}` : '',
+  ]
     .filter(Boolean)
     .join(' · ');
   article.appendChild(meta);
+
+  if (due) {
+    const flag = document.createElement('p');
+    flag.className = 'decision-review';
+    flag.textContent = 'Review due';
+    article.appendChild(flag);
+  }
+
+  if (card.supersedes) {
+    const supersedes = document.createElement('button');
+    supersedes.type = 'button';
+    supersedes.className = 'decision-supersedes';
+    supersedes.textContent = `Supersedes ${card.supersedes.title}`;
+    supersedes.addEventListener('click', () => onOpen(card.supersedes.id));
+    article.appendChild(supersedes);
+  }
 
   if (card.evidence && card.evidence.length) {
     const chips = document.createElement('div');
@@ -324,6 +392,13 @@ function decisionCard(card, onOpen) {
     missing.textContent = `${count} ${count === 1 ? 'link points' : 'links point'} nowhere`;
     article.appendChild(missing);
   }
+
+  const trail = document.createElement('button');
+  trail.type = 'button';
+  trail.className = 'decision-supersedes';
+  trail.textContent = 'Open decision trail →';
+  trail.addEventListener('click', () => onOpen(card.id));
+  article.appendChild(trail);
 
   return article;
 }

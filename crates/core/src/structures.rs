@@ -42,6 +42,12 @@ pub struct Card {
     pub status: String,
     pub folder: String,
     pub created: String,
+    /// Frontmatter `confidence`, normalised to 0–100.
+    pub confidence: Option<u8>,
+    /// Frontmatter `review_on`, as YYYY-MM-DD.
+    pub review_on: Option<String>,
+    /// The decision this card replaces, when that note resolves.
+    pub supersedes: Option<Source>,
     /// Resolved wikilinks in the note, capped at `MAX_EVIDENCE`.
     pub sources: usize,
     /// Wikilinks that point at a note the vault does not have.
@@ -120,6 +126,17 @@ pub fn board(vault: &Vault) -> Board {
             }
         }
 
+        let supersedes = note
+            .supersedes
+            .as_deref()
+            .and_then(|target| vault.resolve(target))
+            .filter(|index| vault.notes[*index].id != note.id)
+            .map(|index| Source {
+                id: vault.notes[index].id.clone(),
+                title: vault.notes[index].title.clone(),
+                folder: vault.notes[index].folder.clone(),
+            });
+
         cards.push(Card {
             id: note.id.clone(),
             title: note.title.clone(),
@@ -127,6 +144,9 @@ pub fn board(vault: &Vault) -> Board {
             status,
             folder: note.folder.clone(),
             created: note.created.clone(),
+            confidence: note.confidence,
+            review_on: note.review_on.clone(),
+            supersedes,
             sources,
             missing: missing.len(),
             evidence,
@@ -192,6 +212,28 @@ mod tests {
             idea.status, "decided",
             "a user-set status is kept, lowercased"
         );
+    }
+
+    #[test]
+    fn carries_decision_trail_metadata_and_resolves_supersession() {
+        let (_dir, vault) = vault(&[
+            (
+                "Synthesis/Old.md",
+                "---\ntype: idea\nstatus: accepted\n---\n\n# Old\n",
+            ),
+            (
+                "Synthesis/New.md",
+                "---\ntype: idea\nstatus: accepted\nconfidence: 0.8\nreview_on: 2027-01-15\nsupersedes: \"[[Old]]\"\n---\n\n# New\n",
+            ),
+        ]);
+        let card = board(&vault)
+            .cards
+            .into_iter()
+            .find(|card| card.title == "New")
+            .unwrap();
+        assert_eq!(card.confidence, Some(80));
+        assert_eq!(card.review_on.as_deref(), Some("2027-01-15"));
+        assert_eq!(card.supersedes.unwrap().title, "Old");
     }
 
     #[test]

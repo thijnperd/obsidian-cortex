@@ -51,6 +51,12 @@ pub struct Note {
     pub kind: Option<String>,
     /// Frontmatter `status`, normalised by the parser.
     pub status: Option<String>,
+    /// Frontmatter `confidence`, normalised to a 0–100 percentage.
+    pub confidence: Option<u8>,
+    /// Frontmatter `review_on`: when this decision should be revisited.
+    pub review_on: Option<String>,
+    /// Frontmatter `supersedes`: the note this decision replaces.
+    pub supersedes: Option<String>,
     pub aliases: Vec<String>,
     pub headings: Vec<Heading>,
     pub links: Vec<Link>,
@@ -182,6 +188,9 @@ impl Vault {
                 tags,
                 kind: parsed.frontmatter.kind,
                 status: parsed.frontmatter.status,
+                confidence: parsed.frontmatter.confidence,
+                review_on: parsed.frontmatter.review_on,
+                supersedes: parsed.frontmatter.supersedes,
                 aliases: parsed.frontmatter.aliases,
                 headings: parsed.headings,
                 links: parsed.links,

@@ -38,6 +38,14 @@ or `type: idea` (an idea refinement), with a `status` and an evidence list of
 `[[wikilinks]]`. Written into `Synthesis/` by default.
 _Avoid_: synthesis note, decision doc
 
+**Decision trail** — the optional `confidence`, `review_on` and `supersedes`
+frontmatter on a structure note, shown in its panel and on its Decisions card.
+A review date in the past is **due**. The trail is metadata, not a second store.
+
+**Today’s note** — `Journal/YYYY-MM-DD.md`; `t` opens it or creates it with
+Notes, Decisions and Tomorrow headings. Not a structure note, so it does not
+appear on the Decisions board.
+
 **Decisions view** — the board view (`5`): structure notes as cards, grouped by
 their `status`, each showing the notes it cites. Read-only; `status` is
 frontmatter the user owns. Built as `structures::Board` in the graph payload.

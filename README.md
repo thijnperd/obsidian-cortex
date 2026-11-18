@@ -1,21 +1,74 @@
-# Cortex
+<p align="center">
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.0.0">
+    <img src="docs/screenshots/v1-decision-trail.jpg" width="100%" alt="Cortex 1.0 showing a decision trail beside the Decisions board">
+  </a>
+</p>
 
-Cortex turns a folder of Markdown notes into a navigable 3D universe — and then
-gives that view a job: collect notes, read their local graph, and turn the
-selection into a research brief or an idea decision.
+<h1 align="center">Cortex 1.0 — Find the Why</h1>
 
-Five spatial views share one graph: a 3D **universe**, a **brain**, a
-**timeline**, an **atlas** that draws folders as countries on a parchment map,
-and a **bento** board that sizes a box for every folder by its note count. Same
-notes, different question: where does this live, what connects to it, and what
-is in here at all? A sixth, **Decisions**, steps out of the graph: it lists the
-research briefs and idea refinements you have written, grouped by status, with
-the notes each one cites.
+<p align="center"><strong>Your notes have a shape. Cortex shows you the reason.</strong></p>
+
+<p align="center">
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.0.0"><img alt="Cortex 1.0" src="https://img.shields.io/badge/version-1.0.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <img alt="Local-first" src="https://img.shields.io/badge/local--first-your%20folder-101216?style=flat-square&amp;labelColor=0a0b0d">
+  <img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
+  <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-101216?style=flat-square&amp;labelColor=0a0b0d">
+</p>
+
+Cortex is a local-first thinking space for people who refuse to lose the
+thread. Point it at a folder of Markdown and it turns what you already wrote
+into six ways of seeing it — then keeps the part most tools throw away:
+**why you decided what you decided.**
+
+No account. No cloud. No database. No model required. Just your files, a graph
+that earns its place, and a memory for judgment.
+
+**Most tools help you collect. Cortex helps you conclude.**
+
+- **See the shape.** A 3D universe, a brain, a timeline, an atlas and a bento
+  board show the same notes from different angles. The graph is not decoration:
+  it is how you find the cluster you forgot, the bridge between two projects,
+  and the note that connects nothing.
+- **Keep the evidence.** Collect two or more notes and Cortex writes the
+  research brief or idea refinement for you — a real Markdown file with
+  `[[wikilinks]]` back to every source. No prompt, no API key, no model.
+- **Find the why.** Decisions carry confidence, a review date and the note they
+  supersede. Past-due reviews surface on the board; the trail shows exactly what
+  the conclusion rests on.
+
+### The reasoning trail
+
+<p align="center">
+  <img src="docs/screenshots/v1-decisions.jpg" width="100%" alt="Cortex Decisions board with a review-due decision">
+</p>
+
+This is the release. A decision is not a note with a checkbox. It has a
+confidence level, a date when it should be looked at again, and a predecessor it
+supersedes. Cortex keeps that context in plain frontmatter, so it survives every
+editor, every export and every sync folder — and turns your graph into a record
+of **how you think**, not just what you saved.
 
 It reads and writes plain Markdown, so an existing Obsidian or Logseq vault
-works as-is. No account, no cloud, no database.
+works as-is. Research briefs, idea notes, Decisions and decision trails are
+**native Cortex features**: they are built from your notes and frontmatter on
+your machine. MCP is an optional bridge for an external AI client, not a
+dependency of any view or workflow.
 
-## The six views
+## Native, map, or MCP?
+
+| Capability | What it is | Uses the Atlas map? | Needs MCP/AI? |
+| --- | --- | --- | --- |
+| Graph, Brain, Timeline, Atlas, Bento | Native views of the same vault scan | Atlas **is** the map | No |
+| Search, backlinks, related notes | Native vault features | No | No |
+| Research brief / Refine idea | Native Markdown scaffold from selected notes | Only as a note on the map | No |
+| Decisions board / decision trails | Native board and panel derived from `type`, `status` and wikilinks | No | No |
+| Today’s note | Native file at `Journal/YYYY-MM-DD.md` | No | No |
+| External AI client | Optional MCP bridge | No | Yes, separately |
+
+The rest of this README keeps those three ideas separate: **native features**
+work on the folder, the **Atlas** is one spatial view, and **MCP** is optional.
+
+## Six views. One question.
 
 The same app at three vault sizes. The small demo is a first-run taste, the
 medium one is the full tour, and the giant one is the stress test: **5,523
@@ -104,21 +157,36 @@ work. The tab is notified over a long poll: no refresh button, no page reload.
 If the change lands in the note you are editing, Cortex warns instead of
 replacing your draft.
 
-## The research loop
+## Native setup: research and decisions
 
-1. **Collect evidence.** ⌘-click (or shift-click) stars, or press `Collect` in a
-   note panel. Collected stars stay bright while everything else dims.
-2. **Read the neighbourhood.** Opening a note dims the rest of the vault. Press
-   `Local graph` in the panel (or `l`) to isolate its two-hop neighbourhood —
-   the note, its backlinks and nearby notes — without the global hairball.
-3. **Make the structure note.** `Research brief` asks for the question and writes
-   `Synthesis/<question>.md` with frontmatter, a linked evidence list (title,
-   folder, excerpt) and sections for what the sources say, tensions, synthesis
-   and open questions.
+This is the part that makes Cortex different, and it does not use the Atlas map
+or an AI connection. Cortex builds a deterministic Markdown scaffold from the
+notes you select; it does not call a model or write the thinking for you.
+
+1. **Open a folder.** Run `cortex`, choose a vault, or use **Open another
+   folder**. Seed a throwaway vault with `cortex seed-demo demo --size small`
+   if you want to try the loop first.
+2. **Collect at least two notes.** ⌘-click (or shift-click) stars, or open a
+   note and press `Collect`. Collected notes stay bright while everything else
+dims. The **Collected** tray appears in the sidebar.
+3. **Choose a structure note.** In the tray, `Research brief` asks for a
+   question and writes `Synthesis/<question>.md`; `Refine idea` asks for the
+   decision and writes an idea note in the same folder. Both are ordinary
+   Markdown files with frontmatter, a linked evidence list (title, folder,
+   excerpt) and the sections you need to fill in. No network request, model or
+   API key is involved.
+4. **Read and revisit it in Decisions.** Press `5` (or click **Decisions**). The
+   new note appears as a card under `open` or `refining`, with the notes it
+   cites. Add optional `confidence`, `review_on` and `supersedes` frontmatter
+   to turn it into a decision with a due date and a trail.
+5. **Open the trail.** Click the card or press `y` in the note to see the
+   decision trail, its linked sources and the note it supersedes.
 
 Every claim in the brief is one click from its source, because the evidence
 list is made of `[[wikilinks]]`, not copies — and the brief itself joins the
-**Decisions** view, under `open`, with those sources on the card.
+**Decisions** view with those sources on the card. The Atlas is separate: it
+renders folders and notes on a map, so a brief appears there as a note like any
+other, but Decisions cards are not drawn on the map.
 
 ## The idea-refinement loop
 
@@ -198,8 +266,27 @@ writes — appears as a card, grouped by its `status`.
   Obsidian, another editor or by an agent: Cortex reports it and does not take
   the field over. Obsidian's Bases already moves cards between columns; what it
   cannot do is show the evidence a decision rests on.
+- **The trail.** Add `confidence`, `review_on` and `supersedes` to the
+  frontmatter. The card shows confidence and the review date; a past date is
+  marked **Review due**. The note panel shows the trail above the prose and the
+  linked sources below it. Press `y` to jump back to the trail.
 - Empty is a real state. Until you write a brief, the view explains the loop
   instead of pretending to have data.
+
+```yaml
+---
+type: idea
+status: accepted
+confidence: 0.8
+review_on: 2027-01-15
+supersedes: "[[Earlier decision]]"
+---
+```
+
+All three fields are optional. A plain Markdown note, an Obsidian vault and a
+static export keep working without them. The design is recorded in
+[ADR 0008](docs/adr/0008-decision-trails.md); the market research is in
+[docs/research/v1-note-app-landscape.md](docs/research/v1-note-app-landscape.md).
 
 The board is built from the same vault scan as the graph, so it updates on the
 same live poll, works in `cortex export`, and costs one field in the graph
@@ -220,6 +307,8 @@ payload rather than a second index.
 | Views | `1` graph, `2` brain, `3` timeline, `4` atlas, `5` decisions, `6` bento |
 | Reset camera | `f` |
 | New note / edit | `n`, or `Edit` in the panel |
+| Today’s note | `t`, or the sun button in the toolbar |
+| Jump to a decision trail | `y` while a research brief or idea note is open |
 | Open another folder | `Ctrl O` / `⌘O` |
 
 The folder list toggles visibility; hidden folders dim instead of disappearing,
@@ -249,6 +338,11 @@ character, typing it steps over instead of adding a duplicate, and backspace
 deletes an empty pair. `Enter` continues a list, task or quote marker; pressing
 it again on an empty item ends the list.
 
+Today’s note is a normal Markdown file at `Journal/YYYY-MM-DD.md`. Cortex opens
+an existing one instead of replacing it; a new one starts with Notes, Decisions
+and Tomorrow headings. Add decision metadata to any research brief or idea note
+with the optional fields shown above.
+
 ## Vault settings
 
 The gear in the toolbar holds the per-vault decisions:
@@ -257,13 +351,20 @@ The gear in the toolbar holds the per-vault decisions:
 - **Show in folder** — hands the folder to Explorer, Finder or your file
   manager. The same button (⤢) sits beside every vault in the sidebar.
 - **Map** — roads and trade routes on the atlas.
-- **Agent access** — whether AI clients may read and write this vault.
+- **Agent access** — optional MCP permission: whether an external AI client may
+  read and write this vault. Off does not affect search, views, editing,
+  research briefs, Decisions or daily notes.
 
-## Agents (MCP)
+## Optional: connect an AI client (MCP)
 
-Cortex ships a Model Context Protocol server, so the AI client you already use
-can read the vault, create notes and rewrite sections — through the same guards
-the app enforces.
+**Skip this section for the native workflow above.** Cortex has no built-in
+model and does not need an AI client to search, collect, write briefs, refine
+ideas, use Decisions or edit notes.
+
+If you already use an AI client, Cortex ships a Model Context Protocol server,
+so that client can read the vault, create notes and rewrite sections — through
+the same guards the app enforces. This is a separate integration, not the
+engine behind research briefs or decisions.
 
 ```bash
 cortex mcp ~/Notes                    # stdio MCP server bound to one vault
@@ -337,7 +438,23 @@ and the same-origin check rather than by `--read-only`. Combined with
 `--allow-any-origin` that means anyone who can reach the server can point it at
 any folder the process can read — which is why the default is loopback-only.
 
-## Download (Windows first)
+## What 1.0 is
+
+Cortex 1.0 is the local-first version: your folder, plain Markdown, six views,
+decision trails, the MCP bridge and the Windows installer.
+
+It deliberately does **not** include a hosted sync service, a mobile app,
+real-time collaboration, a plugin runtime, a block editor or a built-in AI
+model. Use the folder with iCloud, Dropbox, Syncthing or Git if you want it on
+more than one machine. The boundary is part of the product: no account, no
+proprietary database, no telemetry.
+
+The UI still has no build step. Every screenshot in this README is a seeded
+vault rendered by the app, not a mock-up.
+
+## Get Cortex 1.0 — Find the Why
+
+**One folder. Six views. A reason for every decision.**
 
 **Installer:** `CortexSetup-<version>.exe` — per user, no admin, Start Menu
 entry, uninstaller, optional start-at-login. **Portable:**
@@ -350,10 +467,10 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | macOS (Apple silicon) | `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
-Tagged releases (`v0.9.0`) are fixed; every push to `main` also refreshes the
-rolling `latest` build. The version appears in `cortex --version`, in **Vault
-settings → About**, and on `/api/about`. `SHA256SUMS.txt` is attached to every
-release.
+Tagged releases are fixed; every push to `main` also refreshes the rolling
+`latest` build. The current release is **v1.0.0 — Find the Why**. The version
+appears in `cortex --version`, in **Vault settings → About**, and on
+`/api/about`. `SHA256SUMS.txt` is attached to every release.
 
 ### Windows says it is unsafe
 
@@ -436,6 +553,12 @@ in [`docs/research-workflows.md`](docs/research-workflows.md).
 `crates/server` is axum plus the embedded `web/` UI, which is hand-written
 WebGL2 with no build step. CI runs the checks on Linux, macOS and Windows and
 publishes the static export to GitHub Pages.
+
+## License
+
+Cortex is MIT licensed. See [LICENSE](LICENSE). Security reports follow
+[SECURITY.md](SECURITY.md), and the v1.0.0 release notes are drafted in
+[docs/releases/v1.0.0.md](docs/releases/v1.0.0.md).
 
 ## Credits
 

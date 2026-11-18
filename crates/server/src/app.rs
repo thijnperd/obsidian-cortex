@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::{watch, RwLock};
 
+use cortex_core::dates;
 use cortex_core::graph::GraphData;
 use cortex_core::layout::LayoutOptions;
 use cortex_core::registry::{self, Registry};
@@ -194,6 +195,13 @@ struct SaveResponse {
     version: String,
 }
 
+#[derive(Serialize)]
+struct DailyResponse {
+    id: String,
+    created: bool,
+    version: String,
+}
+
 #[derive(Deserialize)]
 struct SynthesizeRequest {
     title: String,
@@ -210,6 +218,12 @@ struct NoteDetail {
     created: String,
     words: usize,
     tags: Vec<String>,
+    kind: Option<String>,
+    status: Option<String>,
+    confidence: Option<u8>,
+    review_on: Option<String>,
+    supersedes: Option<NoteRef>,
+    evidence: Vec<NoteRef>,
     markdown: String,
     /// Full file (frontmatter included) for the editor. Live mode only.
     raw: Option<String>,
@@ -360,6 +374,7 @@ pub async fn serve_with(
         .route("/api/stop", post(api_stop))
         .route("/api/events", get(api_events))
         .route("/api/graph", get(api_graph))
+        .route("/api/daily", post(api_daily))
         .route("/api/note", get(api_note))
         .route("/api/search", get(api_search))
         .route("/api/version", get(api_version))
@@ -1102,6 +1117,33 @@ async fn api_note(State(state): State<AppState>, Query(query): Query<NoteQuery>)
 
     let related = related_notes(&snapshot.vault, index, 6);
 
+    let mut seen = HashSet::new();
+    let evidence = note
+        .links
+        .iter()
+        .filter_map(|link| snapshot.vault.resolve(&link.target))
+        .filter(|target| *target != index)
+        .filter(|target| seen.insert(*target))
+        .take(16)
+        .map(|target| NoteRef {
+            id: snapshot.vault.notes[target].id.clone(),
+            title: snapshot.vault.notes[target].title.clone(),
+            folder: snapshot.vault.notes[target].folder.clone(),
+            weight: 0,
+        })
+        .collect::<Vec<_>>();
+    let supersedes = note
+        .supersedes
+        .as_deref()
+        .and_then(|target| snapshot.vault.resolve(target))
+        .filter(|target| *target != index)
+        .map(|target| NoteRef {
+            id: snapshot.vault.notes[target].id.clone(),
+            title: snapshot.vault.notes[target].title.clone(),
+            folder: snapshot.vault.notes[target].folder.clone(),
+            weight: 0,
+        });
+
     // Read the raw file for editing so frontmatter survives a save.
     let root = handle.root.clone();
     let note_id = note.id.clone();
@@ -1117,6 +1159,12 @@ async fn api_note(State(state): State<AppState>, Query(query): Query<NoteQuery>)
         created: note.created.clone(),
         words: note.words,
         tags: note.tags.clone(),
+        kind: note.kind.clone(),
+        status: note.status.clone(),
+        confidence: note.confidence,
+        review_on: note.review_on.clone(),
+        supersedes,
+        evidence,
         markdown: note.body.clone(),
         raw,
         backlinks,
@@ -1234,6 +1282,66 @@ async fn throttle(state: &AppState) -> Option<Response> {
     }
     *last = Instant::now();
     None
+}
+
+/// Opens today's note, creating a plain-Markdown page in `Journal/` once.
+async fn api_daily(
+    State(state): State<AppState>,
+    Query(query): Query<VaultQuery>,
+    headers: HeaderMap,
+) -> Response {
+    if let Some(rejection) = begin_write(&state, &headers).await {
+        return rejection;
+    }
+    let Some(handle) = find_vault(&state, query.vault.as_deref()).await else {
+        return no_vault();
+    };
+    let day = dates::iso_date(dates::today_days());
+    let id = format!("Journal/{day}");
+    let snapshot = handle.current().await;
+    let exists = snapshot.vault.index_of(&id).is_some()
+        || store::note_path(&handle.root, &id)
+            .map(|path| path.exists())
+            .unwrap_or(false);
+    if exists {
+        let body = DailyResponse {
+            id,
+            created: false,
+            version: snapshot.version.clone(),
+        };
+        return json_response(
+            StatusCode::OK,
+            serde_json::to_string(&body).unwrap_or_default(),
+        );
+    }
+
+    let content = format!(
+        "---\ndate: {day}\ntype: journal\ntags: [journal]\n---\n\n# {day}\n\n## Notes\n\n## Decisions\n\n## Tomorrow\n"
+    );
+    let root = handle.root.clone();
+    let write_id = id.clone();
+    let write =
+        tokio::task::spawn_blocking(move || store::write_note(&root, &write_id, &content)).await;
+    match write {
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => return error_response(error),
+        Err(_) => return error_response(cortex_core::Error::Vault("write task failed".into())),
+    }
+
+    match rebuild(&handle).await {
+        Ok(version) => {
+            let body = DailyResponse {
+                id,
+                created: true,
+                version,
+            };
+            json_response(
+                StatusCode::OK,
+                serde_json::to_string(&body).unwrap_or_default(),
+            )
+        }
+        Err(_) => error_response(cortex_core::Error::Vault("reindex failed".into())),
+    }
 }
 
 async fn api_save(
