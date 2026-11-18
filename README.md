@@ -1,15 +1,15 @@
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.1.0">
-    <img src="docs/screenshots/v1-decision-trail.jpg" width="100%" alt="Cortex 1.1 showing a decision trail beside the Decisions board">
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.1.1">
+    <img src="docs/screenshots/v1-decision-trail.jpg" width="100%" alt="Cortex 1.1.1 showing a decision trail beside the Decisions board">
   </a>
 </p>
 
-<h1 align="center">Cortex 1.1 — The Guided Tour</h1>
+<h1 align="center">Cortex 1.1.1 — The Guided Tour</h1>
 
 <p align="center"><strong>Your notes have a shape. Cortex shows you the reason.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.1.0"><img alt="Cortex 1.1" src="https://img.shields.io/badge/version-1.1.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.1.1"><img alt="Cortex 1.1.1" src="https://img.shields.io/badge/version-1.1.1-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
   <img alt="Local-first" src="https://img.shields.io/badge/local--first-your%20folder-101216?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-101216?style=flat-square&amp;labelColor=0a0b0d">
@@ -42,7 +42,8 @@ Press **Tour** in the toolbar. Cortex checks whether your vault has the pieces
 the tour teaches — a research brief, an idea note and a decision trail. If it
 does, the tour runs in place. If not, Cortex opens a generated **Cortex Tour**
 demo and returns you to your own vault when you finish. Your notes are never
-written to or changed.
+written to or changed. Finishing changes the toolbar button to **↻ Replay**,
+remembered in this browser, so the full walkthrough is always one click away.
 
 The fifteen steps cover all six views, collecting evidence, Research brief,
 Refine idea, Decisions and the trail, plus the daily note and the shortcuts that
@@ -94,12 +95,17 @@ individual stars, draws only the strongest 5,000 links, and the atlas turns
 dense folders into light stipple. Hover or select a note for its own label.
 Click a folder title to fly into that galaxy; `All folders` flies back out.
 
+The graph is a sphere of **folder galaxies**: every folder is a local cluster of
+note dots, the strongest links stay nearby, and a large daily journal becomes a
+chronological ring around the vault instead of a blob that swallows the map.
+That is the layout in every screenshot below.
+
 ### Small — 21 notes, 35 links
 
 | | |
 | --- | --- |
 | ![Small vault: graph view](docs/screenshots/small/01-graph.jpg) | ![Small vault: brain view](docs/screenshots/small/02-brain.jpg) |
-| **Graph** — notes are stars, links are light, and the sky is a nebula. | **Brain** — the same graph inside a real cortical surface. |
+| **Graph** — folder galaxies: notes are dots, links are light, and the sky is a nebula. | **Brain** — the same graph inside a real cortical surface. |
 | ![Small vault: timeline view](docs/screenshots/small/03-timeline.jpg) | ![Small vault: atlas view](docs/screenshots/small/04-atlas.jpg) |
 | **Timeline** — the vault replayed as it was written. | **Atlas** — seven folders as countries, notes as places, links as roads. |
 | ![Small vault: bento view](docs/screenshots/small/06-bento.jpg) | ![Small vault: decisions view](docs/screenshots/small/05-decisions.jpg) |
@@ -110,7 +116,7 @@ Click a folder title to fly into that galaxy; `All folders` flies back out.
 | | |
 | --- | --- |
 | ![Medium vault: graph view](docs/screenshots/medium/01-graph.jpg) | ![Medium vault: brain view](docs/screenshots/medium/02-brain.jpg) |
-| **Graph** — the full universe; drag to orbit, scroll to zoom, `f` to reframe. | **Brain** — the same graph inside a real cortical surface, links as fibre tracts. |
+| **Graph** — folder galaxies around the journal’s orbit; drag to orbit, scroll to zoom, `f` to reframe. | **Brain** — the same graph inside a real cortical surface, links as fibre tracts. |
 | ![Medium vault: timeline view](docs/screenshots/medium/03-timeline.jpg) | ![Medium vault: atlas view](docs/screenshots/medium/04-atlas.jpg) |
 | **Timeline** — the vault replayed in the order it was written, with a scrubber. | **Atlas** — countries, towns, roads, and rivers that follow the land. |
 | ![Medium vault: bento view](docs/screenshots/medium/06-bento.jpg) | ![Medium vault: decisions view](docs/screenshots/medium/05-decisions.jpg) |
@@ -453,7 +459,7 @@ any folder the process can read — which is why the default is loopback-only.
 
 ## What 1.1 is
 
-Cortex 1.1 is the local-first version: your folder, plain Markdown, six views,
+Cortex 1.1.1 is the local-first version: your folder, plain Markdown, six views,
 decision trails, the guided tour, the MCP bridge and the Windows installer.
 
 It deliberately does **not** include a hosted sync service, a mobile app,
@@ -465,7 +471,7 @@ proprietary database, no telemetry.
 The UI still has no build step. Every screenshot in this README is a seeded
 vault rendered by the app, not a mock-up.
 
-## Get Cortex 1.1 — The Guided Tour
+## Get Cortex 1.1.1 — The Guided Tour
 
 **One folder. Six views. A reason for every decision.**
 
@@ -481,7 +487,7 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
 Tagged releases are fixed; every push to `main` also refreshes the rolling
-`latest` build. The current release is **v1.1.0 — The Guided Tour**. The version
+`latest` build. The current release is **v1.1.1 — The Guided Tour**. The version
 appears in `cortex --version`, in **Vault settings → About**, and on
 `/api/about`. `SHA256SUMS.txt` is attached to every release.
 
@@ -570,8 +576,8 @@ publishes the static export to GitHub Pages.
 ## License
 
 Cortex is MIT licensed. See [LICENSE](LICENSE). Security reports follow
-[SECURITY.md](SECURITY.md), and the v1.1.0 release notes are drafted in
-[docs/releases/v1.1.0.md](docs/releases/v1.1.0.md).
+[SECURITY.md](SECURITY.md), and the v1.1.1 release notes are drafted in
+[docs/releases/v1.1.1.md](docs/releases/v1.1.1.md).
 
 ## Credits
 

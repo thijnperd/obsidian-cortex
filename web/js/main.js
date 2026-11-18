@@ -160,6 +160,16 @@ const prefs = {
   },
 };
 
+const TOUR_COMPLETE_KEY = 'cortex.tour.completed';
+
+function syncTourButton() {
+  const complete = prefs.get(TOUR_COMPLETE_KEY, false);
+  const label = complete ? 'Replay the guided tour' : 'Take the guided tour';
+  els.tourButton.textContent = complete ? '↻ Replay' : '◎ Tour';
+  els.tourButton.title = label;
+  els.tourButton.setAttribute('aria-label', label);
+}
+
 function viewForVault(id) {
   return prefs.get(`cortex.view.${id}`, prefs.get('cortex.launchView', 'universe'));
 }
@@ -230,6 +240,7 @@ async function start() {
 }
 
 function wire() {
+  syncTourButton();
   const storedView = prefs.get('cortex.launchView', 'universe');
   const storedRadio = document.querySelector(`input[name="launch-view"][value="${storedView}"]`);
   if (storedRadio) storedRadio.checked = true;
@@ -1684,11 +1695,15 @@ async function startTour() {
   }
 }
 
-async function finishTour({ stay = false } = {}) {
+async function finishTour({ stay = false, completed = false } = {}) {
   const session = tourSession;
   tourSession = null;
   closeCompose();
   closePalette();
+  if (completed) {
+    prefs.set(TOUR_COMPLETE_KEY, true);
+    syncTourButton();
+  }
   if (!session) return;
 
   if (stay) {
@@ -1727,7 +1742,7 @@ async function finishTour({ stay = false } = {}) {
   } else {
     closePanel();
   }
-  ui.toast('Tour complete — your notes are untouched');
+  ui.toast('Tour complete — replay it from the toolbar. Your notes are untouched.');
 }
 
 /* ---------- pointer ---------- */
