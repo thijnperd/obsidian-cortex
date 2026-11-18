@@ -3,7 +3,7 @@
 
 import { escapeHtml } from './markdown.js';
 
-export function setStats(meta) {
+export function setStats(meta, overview = false) {
   const element = document.getElementById('stats');
   const items = [
     [Number(meta.note_count) || 0, 'notes'],
@@ -11,9 +11,12 @@ export function setStats(meta) {
     [Number(meta.folder_count) || 0, 'folders'],
     [Number(meta.cluster_count) || 0, 'clusters'],
   ];
+  const flag = overview
+    ? '<span class="overview-tag" title="Folder-level overview: note labels appear when you hover or select one.">overview</span>'
+    : '';
   element.innerHTML = items
     .map(([value, label]) => `<span><b>${value}</b> ${label}</span>`)
-    .join('');
+    .join('') + flag;
 }
 
 export function renderFolders(container, folders, hidden, onToggle, palette) {

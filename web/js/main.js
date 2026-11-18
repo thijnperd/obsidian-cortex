@@ -7,6 +7,7 @@ import { renderMarkdown } from './markdown.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
 import { Atlas } from './atlas.js';
+import { diaryFolders, isOverview } from './scale.js';
 
 const state = {
   graph: null,
@@ -506,7 +507,8 @@ function applyGraph(graph) {
     ? (currentVault()?.path || '')
     : 'static demo';
   els.newNote.hidden = !state.live;
-  ui.setStats(graph.meta);
+  const overview = isOverview(graph.nodes.length);
+  ui.setStats(graph.meta, overview);
   ui.renderDecisions(els.decisionsBoard, graph.structures, openDecision);
   ui.renderFolders(els.folders, graph.meta.folders, state.hidden, toggleFolder, PALETTE);
   ui.syncFolders(state.hidden);
@@ -597,10 +599,15 @@ function buildLabels() {
   state.labels = [];
   state.folderLabels = [];
 
+  const overview = isOverview(state.graph.nodes.length);
+  const diaries = state.renderer?.diaries || diaryFolders(state.graph.nodes);
+  // A large vault opens as a folder overview: individual stars are too small
+  // to label usefully, and a dozen labels only add noise. Hovering still names
+  // a note, and a selected note keeps its label.
   const ranked = [...state.graph.nodes]
     .map((node, index) => ({ node, index }))
     .sort((a, b) => b.node.pagerank - a.node.pagerank)
-    .slice(0, 16);
+    .slice(0, overview ? 0 : 16);
   if (state.selected != null && !ranked.some((entry) => entry.index === state.selected)) {
     const index = state.selected;
     ranked.unshift({ node: state.graph.nodes[index], index });
@@ -619,11 +626,13 @@ function buildLabels() {
     entry.x += node.x; entry.y += node.y; entry.z += node.z; entry.n += 1;
     centroids.set(node.folder, entry);
   }
-  for (const folder of state.graph.meta.folders) {
+  const folders = state.graph.meta.folders
+    .filter((folder) => !diaries.has(folder.name))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  const named = overview ? folders.slice(0, 18) : folders;
+  for (const folder of named) {
     const centroid = centroids.get(folder.name);
     if (!centroid || centroid.n === 0) continue;
-    // Big folders are rings: a label at their centroid would be misleading.
-    if (folder.count > 48) continue;
     const element = document.createElement('span');
     element.className = 'star-label galaxy-label';
     element.textContent = folder.name;
@@ -717,7 +726,12 @@ function updateLabels() {
   }
 
   const brain = state.brain > 0.35;
-  for (const label of state.folderLabels) {
+  const brainLimit = brain && isOverview(state.graph.nodes.length) ? 12 : Infinity;
+  for (const [rank, label] of state.folderLabels.entries()) {
+    if (rank >= brainLimit) {
+      label.element.style.opacity = '0';
+      continue;
+    }
     if (state.reveal < 0.92 || (brain && !label.brainPosition)) {
       label.element.style.opacity = '0';
       continue;
@@ -744,7 +758,7 @@ function updateLabels() {
       label.element.style.opacity = '0';
       continue;
     }
-    label.element.style.opacity = '0.5';
+    label.element.style.opacity = '0.68';
     label.element.style.left = `${point.x}px`;
     label.element.style.top = `${point.y + 30}px`;
   }

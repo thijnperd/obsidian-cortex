@@ -80,7 +80,7 @@ enum Command {
         #[arg(long)]
         off: bool,
     },
-    /// Generate a bundled demo vault: small, medium (328 notes) or large.
+    /// Generate a demo vault locally: small, medium (328 notes) or large.
     SeedDemo {
         #[arg(default_value = "demo")]
         vault: PathBuf,

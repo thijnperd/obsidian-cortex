@@ -6,6 +6,7 @@
 import { BRAIN_MESH } from './brain-mesh.js';
 import { createProgram, createTarget, destroyTarget, initGL } from './gl.js';
 import { buildAppearValues, buildBrainPositions } from './morph.js';
+import { diaryFolders, isOverview } from './scale.js';
 import { clamp, project, smoothstep } from './math.js';
 import {
   BLUR_FS,
@@ -212,17 +213,23 @@ export class Renderer {
     this.edges = graph.edges || [];
     const count = this.nodes.length;
     this.count = count;
+    this.overview = isOverview(count);
+    this.diaries = diaryFolders(this.nodes);
     // A 5,000-note vault packs the same volume as a 300-note one: keep each
     // star and fibre dim enough that the extra density cannot clip to white.
     this.density = Math.min(1, Math.sqrt(600 / Math.max(1, count)));
     // Inside the closed shell every node adds to the same pixels. Compensate
     // by count, not by square root, or a large vault becomes a white sun.
-    this.crowd = Math.min(1, 450 / Math.max(1, count));
-    this.crowdEdge = Math.min(1, 240 / Math.max(1, count));
+    this.crowd = Math.min(1, (this.overview ? 320 : 450) / Math.max(1, count));
+    this.crowdEdge = Math.min(1, (this.overview ? 180 : 240) / Math.max(1, count));
     this.texHeight = Math.max(1, Math.ceil(count / TEX_WIDTH));
     this.posData = new Float32Array(this.texWidth * this.texHeight * 4);
     this.universe = new Float32Array(count * 3);
-    const brain = buildBrainPositions(this.nodes, graph.meta.folders.map((folder) => folder.name));
+    const brain = buildBrainPositions(
+      this.nodes,
+      graph.meta.folders.map((folder) => folder.name),
+      this.diaries,
+    );
     this.brain = brain.positions;
     this.brainAnchors = brain.anchors;
     this.appear = buildAppearValues(this.nodes);
@@ -230,7 +237,20 @@ export class Renderer {
 
     const folderColor = new Map(graph.meta.folders.map((folder) => [folder.name, folder.color]));
     const nodeStatic = new Float32Array(count * 5);
-    const edgeInstances = this.edges.length * SEGMENTS;
+    // A large vault's folder overview does not need every one of 24k links:
+    // draw the strongest subset and keep the rest for hover, selection and the
+    // full note count. The cap is deterministic, so the same vault draws the
+    // same roads on every load.
+    let drawnEdges = this.edges;
+    if (this.overview && drawnEdges.length > 10000) {
+      drawnEdges = [...drawnEdges]
+        .sort((a, b) =>
+          (b.weight || 0) - (a.weight || 0)
+          || a.source - b.source
+          || a.target - b.target)
+        .slice(0, 10000);
+    }
+    const edgeInstances = drawnEdges.length * SEGMENTS;
     this.edgeInstances = edgeInstances;
     const edgeData = new Float32Array(edgeInstances * 7);
     const edgeFocus = new Float32Array(edgeInstances);
@@ -258,14 +278,13 @@ export class Renderer {
     }
 
     let cursor = 0;
-    const folderSizes = new Map(graph.meta.folders.map((folder) => [folder.name, folder.count]));
-    for (const edge of this.edges) {
+    for (const edge of drawnEdges) {
       const source = this.nodes[edge.source];
       const target = this.nodes[edge.target];
       const color = PALETTE[(folderColor.get(source.folder) ?? 0) % PALETTE.length];
       const weight = Math.min(1, edge.weight || 1);
       // Diary spokes are many; keep them whisper-quiet until hovered.
-      const spoke = (folderSizes.get(source.folder) ?? 0) > 48 || (folderSizes.get(target.folder) ?? 0) > 48;
+      const spoke = this.diaries.has(source.folder) || this.diaries.has(target.folder);
       const tint = spoke ? 0.45 : 1;
       for (let segment = 0; segment < SEGMENTS; segment += 1) {
         edgeData[cursor * 7] = edge.source;
@@ -333,14 +352,16 @@ export class Renderer {
     const entries = [];
     for (const folder of this.graph.meta.folders) {
       // The journal is a ring, not a cluster; it gets no haze.
-      if (!folder || folder.count > 48) continue;
+      if (!folder || this.diaries.has(folder.name)) continue;
       const sum = sums.get(folder.name);
       if (!sum || !sum.n) continue;
       entries.push({
         name: folder.name,
         center: [sum.x / sum.n, sum.y / sum.n, sum.z / sum.n],
         color: PALETTE[(folder.color ?? 0) % PALETTE.length],
-        radius: Math.min(0.5, 0.1 + 0.045 * Math.sqrt(folder.count)),
+        radius: this.overview
+          ? Math.min(0.18, 0.04 + 0.013 * Math.sqrt(folder.count))
+          : Math.min(0.5, 0.1 + 0.045 * Math.sqrt(folder.count)),
       });
     }
     this.hazeEntries = entries;
@@ -355,7 +376,7 @@ export class Renderer {
       this.hazeData[base + 4] = entry.color[1];
       this.hazeData[base + 5] = entry.color[2];
       this.hazeData[base + 6] = entry.radius;
-      this.hazeData[base + 7] = 1;
+      this.hazeData[base + 7] = this.overview ? 0.55 : 1;
     });
     this.hazeBuffer = this.rebuild(this.hazeBuffer, this.hazeData);
 
@@ -604,7 +625,8 @@ export class Renderer {
       gl.uniform1f(loc(gl, program, 'uTime'), time);
       gl.uniform1f(loc(gl, program, 'uReveal'), this.reveal);
       gl.uniform1f(loc(gl, program, 'uSizeScale'),
-        22.0 * (1 - 0.35 * Math.max(0, this.morph)) * Math.max(0.55, this.density));
+        22.0 * (1 - 0.35 * Math.max(0, this.morph))
+          * (this.overview ? 0.45 : Math.max(0.55, this.density)));
       gl.uniform1f(loc(gl, program, 'uDensity'), this.density);
       gl.uniform1f(loc(gl, program, 'uCrowd'), this.crowd);
       gl.uniform1f(loc(gl, program, 'uMorph'), this.morph);
