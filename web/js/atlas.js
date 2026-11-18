@@ -19,6 +19,11 @@ const INK = [52, 40, 24];
 const RUBRIC = [140, 47, 31];
 const RIVER = [72, 96, 112];
 
+// Terrain grid. 132 cells across the world is enough for rivers to meander
+// and cheap enough to rebuild on every index (about 17k cells).
+const GRID = 132;
+const CELL = WORLD / GRID;
+
 // Muted pigments, all close enough to paper to stay readable as fills.
 const PIGMENTS = [
   [146, 108, 58],
@@ -44,6 +49,133 @@ function noise2(x, y, seed = 7) {
     + Math.imul(seed, 1442695041);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+/** Smooth value noise on a lattice, seeded and deterministic. */
+function smoothNoise(x, y, seed) {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const xf = x - xi;
+  const yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const a = noise2(xi, yi, seed);
+  const b = noise2(xi + 1, yi, seed);
+  const c = noise2(xi, yi + 1, seed);
+  const d = noise2(xi + 1, yi + 1, seed);
+  return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+}
+
+function fbm(x, y, seed, octaves = 4) {
+  let sum = 0;
+  let amplitude = 0.5;
+  let frequency = 1;
+  for (let octave = 0; octave < octaves; octave += 1) {
+    sum += amplitude * smoothNoise(x * frequency, y * frequency, seed + octave * 13);
+    frequency *= 2.03;
+    amplitude *= 0.5;
+  }
+  return sum;
+}
+
+/** Ridges for mountain chains: fold the noise at its midpoint. */
+function ridged(x, y, seed, octaves) {
+  return 1 - Math.abs(2 * fbm(x, y, seed, octaves) - 1);
+}
+
+/** A last perpendicular nudge, so no river is a ruler-straight D8 run. */
+function meanderLine(points) {
+  const out = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index];
+    if (index === 0 || index === points.length - 1) {
+      out.push(point);
+      continue;
+    }
+    const before = points[index - 1];
+    const after = points[index + 1];
+    const dx = after[0] - before[0];
+    const dy = after[1] - before[1];
+    const length = Math.hypot(dx, dy) || 1;
+    const bend = (noise2(point[0], point[1], 97) - 0.5) * 2.6;
+    out.push([
+      point[0] - (dy / length) * bend,
+      point[1] + (dx / length) * bend,
+      point[2],
+    ]);
+  }
+  return out;
+}
+
+/** Chaikin corner cutting: turns a D8 staircase into a meander. */
+function chaikin(points, iterations) {
+  let current = points;
+  for (let step = 0; step < iterations; step += 1) {
+    if (current.length < 3) break;
+    const out = [current[0]];
+    for (let index = 0; index < current.length - 1; index += 1) {
+      const a = current[index];
+      const b = current[index + 1];
+      out.push([
+        a[0] * 0.75 + b[0] * 0.25,
+        a[1] * 0.75 + b[1] * 0.25,
+        a[2] * 0.75 + b[2] * 0.25,
+      ]);
+      out.push([
+        a[0] * 0.25 + b[0] * 0.75,
+        a[1] * 0.25 + b[1] * 0.75,
+        a[2] * 0.25 + b[2] * 0.75,
+      ]);
+    }
+    out.push(current[current.length - 1]);
+    current = out;
+  }
+  return current;
+}
+
+/** Minimal binary heap for the priority flood. */
+class MinHeap {
+  constructor() {
+    this.items = [];
+  }
+
+  get size() {
+    return this.items.length;
+  }
+
+  push(priority, value) {
+    const items = this.items;
+    items.push({ priority, value });
+    let index = items.length - 1;
+    while (index > 0) {
+      const parent = (index - 1) >> 1;
+      if (items[parent].priority <= items[index].priority) break;
+      [items[parent], items[index]] = [items[index], items[parent]];
+      index = parent;
+    }
+  }
+
+  pop() {
+    const items = this.items;
+    if (!items.length) return -1;
+    const top = items[0];
+    const last = items.pop();
+    if (items.length) {
+      items[0] = last;
+      let index = 0;
+      for (;;) {
+        const left = index * 2 + 1;
+        const right = left + 1;
+        let smallest = index;
+        if (left < items.length && items[left].priority < items[smallest].priority) smallest = left;
+        if (right < items.length && items[right].priority < items[smallest].priority) smallest = right;
+        if (smallest === index) break;
+        [items[index], items[smallest]] = [items[smallest], items[index]];
+        index = smallest;
+      }
+    }
+    return top.value;
+  }
 }
 
 function pointInPoly(x, y, poly) {
@@ -407,6 +539,9 @@ export class Atlas {
     this.dirty = true;
     this.paper = null;
     this.fibres = null;
+    this.riverBands = [];
+    this.lakes = [];
+    this.terrain = null;
     this.started = 0;
     this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.pointer = { down: false, moved: false, x: 0, y: 0, startX: 0, startY: 0, startView: null };
@@ -481,7 +616,6 @@ export class Atlas {
         places: [],
         walls: [],
         wilderness: null,
-        rivers: this.buildRivers(field, capitals[index], index),
         islets: this.buildIslets(cell, centre, index),
       };
     });
@@ -497,6 +631,10 @@ export class Atlas {
       });
       country.wilderness = wildernessPath(country.polygon, country.places, 100 + index * 17);
     });
+
+    // Rivers depend on the finished countries (their coastlines and towns), so
+    // the water is computed once the land exists.
+    this.buildTerrain();
 
     const position = new Map();
     this.places = [];
@@ -673,6 +811,7 @@ export class Atlas {
         x: point.x,
         y: point.y,
         r: (2.4 + relative * 5.2) * density,
+        stipple: count > 120,
         title: node.title,
         folder: node.folder,
         degree: node.degree || 0,
@@ -696,25 +835,464 @@ export class Atlas {
     return [origin.x + (x - origin.x) * t, origin.y + (y - origin.y) * t];
   }
 
-  buildRivers(polygon, capital, index) {
-    if (!polygon.length) return [];
-    const random = mulberry(1000 + index * 37);
-    const rivers = [];
-    const count = 1 + (index % 2);
-    for (let river = 0; river < count; river++) {
-      const vertex = polygon[Math.floor(random() * polygon.length)];
-      const wobble = 60 + random() * 90;
-      const mid = [
-        (capital.x + vertex[0]) / 2 + (random() - 0.5) * wobble,
-        (capital.y + vertex[1]) / 2 + (random() - 0.5) * wobble,
-      ];
-      rivers.push([
-        [capital.x + (random() - 0.5) * 30, capital.y + (random() - 0.5) * 30],
-        mid,
-        vertex,
-      ]);
+  /**
+   * Real hydrology, not decorative squiggles.
+   *
+   * 1. Rasterise the land into a 132×132 grid.
+   * 2. Measure the distance to the sea and build an elevation model: low at
+   *    the coast, ridged inland (mountains), plus fine noise.
+   * 3. Fill closed basins with a priority flood, so every drop can find a path
+   *    downhill instead of pooling in a one-cell pit.
+   * 4. Route one unit of rain downhill (D8, steepest slope) and accumulate it.
+   *    Cells that gather enough water become streams; tracing downhill from
+   *    each spring gives rivers that only ever join, widen and reach the sea.
+   */
+  buildTerrain() {
+    const n = GRID;
+    const total = n * n;
+    if (!this.countries.length) return;
+    const land = new Uint8Array(total);
+    const owner = new Int16Array(total).fill(-1);
+
+    this.countries.forEach((country, index) => {
+      if (!country.cell.length) return;
+      let lowX = Infinity;
+      let lowY = Infinity;
+      let highX = -Infinity;
+      let highY = -Infinity;
+      for (const [x, y] of country.cell) {
+        lowX = Math.min(lowX, x);
+        lowY = Math.min(lowY, y);
+        highX = Math.max(highX, x);
+        highY = Math.max(highY, y);
+      }
+      const x0 = clamp(Math.floor(lowX / CELL) - 1, 0, n - 1);
+      const y0 = clamp(Math.floor(lowY / CELL) - 1, 0, n - 1);
+      const x1 = clamp(Math.ceil(highX / CELL) + 1, 0, n - 1);
+      const y1 = clamp(Math.ceil(highY / CELL) + 1, 0, n - 1);
+      for (let gy = y0; gy <= y1; gy += 1) {
+        for (let gx = x0; gx <= x1; gx += 1) {
+          const id = gy * n + gx;
+          if (land[id]) continue;
+          if (pointInPoly((gx + 0.5) * CELL, (gy + 0.5) * CELL, country.cell)) {
+            land[id] = 1;
+            owner[id] = index;
+          }
+        }
+      }
+    });
+
+    // Chamfer distance to the sea: two sweeps are enough for this resolution.
+    const dist = new Float32Array(total);
+    for (let index = 0; index < total; index += 1) dist[index] = land[index] ? 1e6 : 0;
+    const around = [
+      [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
+      [1, 1, 1.4142], [1, -1, 1.4142], [-1, 1, 1.4142], [-1, -1, 1.4142],
+    ];
+    for (let gy = 0; gy < n; gy += 1) {
+      for (let gx = 0; gx < n; gx += 1) {
+        const id = gy * n + gx;
+        if (!land[id]) continue;
+        let best = dist[id];
+        for (const [dx, dy, cost] of around) {
+          const x = gx + dx;
+          const y = gy + dy;
+          if (x < 0 || y < 0 || x >= n || y >= n) continue;
+          best = Math.min(best, dist[y * n + x] + cost);
+        }
+        dist[id] = best;
+      }
     }
-    return rivers;
+    for (let gy = n - 1; gy >= 0; gy -= 1) {
+      for (let gx = n - 1; gx >= 0; gx -= 1) {
+        const id = gy * n + gx;
+        if (!land[id]) continue;
+        let best = dist[id];
+        for (const [dx, dy, cost] of around) {
+          const x = gx + dx;
+          const y = gy + dy;
+          if (x < 0 || y < 0 || x >= n || y >= n) continue;
+          best = Math.min(best, dist[y * n + x] + cost);
+        }
+        dist[id] = best;
+      }
+    }
+
+    const elev = new Float32Array(total);
+    for (let gy = 0; gy < n; gy += 1) {
+      for (let gx = 0; gx < n; gx += 1) {
+        const id = gy * n + gx;
+        if (!land[id]) continue;
+        const x = (gx + 0.5) * CELL;
+        const y = (gy + 0.5) * CELL;
+        // Broad ranges and valleys decide where watersheds sit; the coast
+        // ramp only pulls the land down near the sea. Without this, every
+        // river ran straight to the nearest coast in parallel.
+        const inland = clamp(dist[id] / 7, 0, 1);
+        const macro = fbm(x * 0.0052, y * 0.0052, 37, 5);
+        const ridge = ridged(x * 0.0095, y * 0.0095, 53, 3);
+        const detail = fbm(x * 0.026, y * 0.026, 11, 3);
+        elev[id] = 0.02 + (0.10 + 0.74 * macro + 0.24 * ridge * Math.pow(macro, 1.5))
+          * Math.pow(inland, 0.72)
+          + (detail - 0.5) * 0.025;
+      }
+    }
+
+    // Priority flood: raise every closed basin to its spill point.
+    const filled = Float32Array.from(elev);
+    const visited = new Uint8Array(total);
+    const heap = new MinHeap();
+    for (let index = 0; index < total; index += 1) {
+      if (!land[index]) heap.push(0, index);
+    }
+    while (heap.size) {
+      const id = heap.pop();
+      if (visited[id]) continue;
+      visited[id] = 1;
+      const gx = id % n;
+      const gy = Math.floor(id / n);
+      for (const [dx, dy] of around) {
+        const x = gx + dx;
+        const y = gy + dy;
+        if (x < 0 || y < 0 || x >= n || y >= n) continue;
+        const next = y * n + x;
+        if (!land[next] || visited[next]) continue;
+        filled[next] = Math.max(filled[next], filled[id] + 0.0006);
+        heap.push(filled[next], next);
+      }
+    }
+
+    // D8 flow: every cell drains to its steepest lower neighbour.
+    const flow = new Int32Array(total).fill(-1);
+    for (let gy = 0; gy < n; gy += 1) {
+      for (let gx = 0; gx < n; gx += 1) {
+        const id = gy * n + gx;
+        if (!land[id]) continue;
+        let best = -1;
+        let steepest = 0;
+        for (const [dx, dy, cost] of around) {
+          const x = gx + dx;
+          const y = gy + dy;
+          if (x < 0 || y < 0 || x >= n || y >= n) continue;
+          const next = y * n + x;
+          const drop = filled[id] - filled[next];
+          if (drop <= 0) continue;
+          const slope = drop / cost;
+          if (slope > steepest) {
+            steepest = slope;
+            best = next;
+          }
+        }
+        flow[id] = best;
+      }
+    }
+
+    // Rain: one unit per land cell, accumulated downstream.
+    const rain = new Float32Array(total);
+    const order = [];
+    for (let index = 0; index < total; index += 1) {
+      if (!land[index]) continue;
+      rain[index] = 1;
+      order.push(index);
+    }
+    order.sort((a, b) => filled[b] - filled[a]);
+    for (const id of order) {
+      const next = flow[id];
+      if (next >= 0) rain[next] += rain[id];
+    }
+
+    const threshold = 50;
+    const bands = new Map();
+    const lakes = [];
+    const addSegment = (a, b, width) => {
+      const key = Math.round(width * 4) / 4;
+      let path = bands.get(key);
+      if (!path) {
+        path = new Path2D();
+        bands.set(key, path);
+      }
+      path.moveTo(a[0], a[1]);
+      path.lineTo(b[0], b[1]);
+    };
+    const hasUpstream = (id, gx, gy) => {
+      for (const [dx, dy] of around) {
+        const x = gx + dx;
+        const y = gy + dy;
+        if (x < 0 || y < 0 || x >= n || y >= n) continue;
+        const next = y * n + x;
+        if (land[next] && flow[next] === id && rain[next] >= threshold) return true;
+      }
+      return false;
+    };
+
+    for (let gy = 0; gy < n; gy += 1) {
+      for (let gx = 0; gx < n; gx += 1) {
+        const id = gy * n + gx;
+        if (!land[id] || rain[id] < threshold || filled[id] < 0.2) continue;
+        if (hasUpstream(id, gx, gy)) continue;
+        const raw = [];
+        let cursor = id;
+        for (let step = 0; step < 600; step += 1) {
+          const width = 0.45 + Math.min(2.0, Math.sqrt(rain[cursor] / threshold) * 0.34);
+          raw.push([(cursor % n + 0.5) * CELL, (Math.floor(cursor / n) + 0.5) * CELL, width]);
+          const next = flow[cursor];
+          if (next < 0) break;
+          if (!land[next]) {
+            raw.push([(next % n + 0.5) * CELL, (Math.floor(next / n) + 0.5) * CELL, width]);
+            break;
+          }
+          cursor = next;
+        }
+        if (raw.length < 7) continue;
+        const points = meanderLine(chaikin(raw, 2));
+        for (let index = 1; index < points.length; index += 1) {
+          const a = points[index - 1];
+          const b = points[index];
+          addSegment([a[0], a[1]], [b[0], b[1]], (a[2] + b[2]) / 2);
+        }
+      }
+    }
+
+    // Lakes: basins that never found a lower neighbour but gather real water.
+    for (let gy = 0; gy < n; gy += 1) {
+      for (let gx = 0; gx < n; gx += 1) {
+        const id = gy * n + gx;
+        if (!land[id] || flow[id] !== -1 || rain[id] < 90) continue;
+        const x = (gx + 0.5) * CELL;
+        const y = (gy + 0.5) * CELL;
+        if (lakes.some((lake) => Math.hypot(lake.x - x, lake.y - y) < CELL * 2.5)) continue;
+        lakes.push({ x, y, r: clamp(Math.sqrt(rain[id] / 48) * CELL * 0.55, 3.5, 13) });
+      }
+    }
+
+    this.riverBands = [...bands].map(([width, path]) => ({ width, path }));
+    this.lakes = lakes;
+    this.terrain = { land, owner, elev: filled, mountains: [], forests: [] };
+    this.terrain.relief = this.buildRelief(filled, land);
+    this.terrain.contours = this.buildContours(filled, land);
+    this.buildTerrainMarks();
+  }
+
+  /** A soft height wash with a north-west light, drawn under the map marks. */
+  buildRelief(filled, land) {
+    const n = GRID;
+    const canvas = document.createElement('canvas');
+    canvas.width = n;
+    canvas.height = n;
+    const ctx = canvas.getContext('2d');
+    const image = ctx.createImageData(n, n);
+    for (let gy = 0; gy < n; gy += 1) {
+      for (let gx = 0; gx < n; gx += 1) {
+        const id = gy * n + gx;
+        if (!land[id]) continue;
+        const height = clamp(filled[id], 0, 1.05);
+        const left = gx > 0 ? filled[id - 1] : height;
+        const right = gx < n - 1 ? filled[id + 1] : height;
+        const up = gy > 0 ? filled[id - n] : height;
+        const down = gy < n - 1 ? filled[id + n] : height;
+        const slope = (right - left) * 13 + (down - up) * 13;
+        const shade = clamp(0.92 - slope, 0.66, 1.18);
+        let red = 168;
+        let green = 160;
+        let blue = 112;
+        if (height > 0.4) {
+          const t = clamp((height - 0.4) / 0.32, 0, 1);
+          red = 168 - 12 * t;
+          green = 160 - 16 * t;
+          blue = 112 + 3 * t;
+        }
+        if (height > 0.72) {
+          const t = clamp((height - 0.72) / 0.3, 0, 1);
+          red += 10 * t;
+          green += 13 * t;
+          blue += 22 * t;
+        }
+        const offset = id * 4;
+        image.data[offset] = clamp(red * shade, 0, 255);
+        image.data[offset + 1] = clamp(green * shade, 0, 255);
+        image.data[offset + 2] = clamp(blue * shade, 0, 255);
+        image.data[offset + 3] = 235;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+    return canvas;
+  }
+
+  /** Iso-hypsometric lines: the engraved contour layer under the relief. */
+  buildContours(filled, land) {
+    const n = GRID;
+    const path = new Path2D();
+    const levelAt = (a, b, level) => (level - a) / (b - a || 1e-6);
+    for (let level = 0.18; level < 0.98; level += 0.09) {
+      for (let gy = 0; gy < n - 1; gy += 1) {
+        for (let gx = 0; gx < n - 1; gx += 1) {
+          const id = gy * n + gx;
+          if (!land[id] || !land[id + 1] || !land[id + n] || !land[id + n + 1]) continue;
+          const v00 = filled[id];
+          const v10 = filled[id + 1];
+          const v01 = filled[id + n];
+          const v11 = filled[id + n + 1];
+          if (level < Math.min(v00, v10, v01, v11) || level > Math.max(v00, v10, v01, v11)) continue;
+          const x0 = gx * CELL;
+          const y0 = gy * CELL;
+          const points = [];
+          if ((v00 < level) !== (v10 < level)) points.push([x0 + levelAt(v00, v10, level) * CELL, y0]);
+          if ((v10 < level) !== (v11 < level)) points.push([x0 + CELL, y0 + levelAt(v10, v11, level) * CELL]);
+          if ((v01 < level) !== (v11 < level)) points.push([x0 + levelAt(v01, v11, level) * CELL, y0 + CELL]);
+          if ((v00 < level) !== (v01 < level)) points.push([x0, y0 + levelAt(v00, v01, level) * CELL]);
+          if (points.length < 2) continue;
+          path.moveTo(points[0][0], points[0][1]);
+          path.lineTo(points[1][0], points[1][1]);
+          if (points.length === 4) {
+            path.moveTo(points[2][0], points[2][1]);
+            path.lineTo(points[3][0], points[3][1]);
+          }
+        }
+      }
+    }
+    return path;
+  }
+
+  /** Mountains and woods, sampled on a stride so the land never turns to noise. */
+  buildTerrainMarks() {
+    const n = GRID;
+    const { elev, land, owner, mountains, forests } = this.terrain;
+    const nearPlace = (x, y) => this.places.some((place) => Math.hypot(place.x - x, place.y - y) < 24);
+    for (let gy = 2; gy < n - 2; gy += 2) {
+      for (let gx = 2; gx < n - 2; gx += 2) {
+        const id = gy * n + gx;
+        if (!land[id] || owner[id] < 0) continue;
+        const x = (gx + 0.5) * CELL + (noise2(gx, gy, 17) - 0.5) * CELL * 1.6;
+        const y = (gy + 0.5) * CELL + (noise2(gx, gy, 29) - 0.5) * CELL * 1.6;
+        const height = elev[id];
+        if (height > 0.46
+          && height >= elev[id - 1] && height >= elev[id + 1]
+          && height >= elev[id - n] && height >= elev[id + n]
+          && noise2(gx, gy, 41) > 0.12
+          && !nearPlace(x, y)
+          && mountains.length < 280) {
+          mountains.push({
+            x,
+            y,
+            s: 10 + height * 14,
+            tilt: (noise2(gx, gy, 53) - 0.5) * 0.35,
+            country: owner[id],
+          });
+        } else if (height > 0.12 && height < 0.46
+          && fbm(x * 0.02, y * 0.02, 211, 3) > 0.48
+          && noise2(gx, gy, 67) > 0.2
+          && !nearPlace(x, y)
+          && forests.length < 340) {
+          forests.push({
+            x,
+            y,
+            s: 4.6 + noise2(gx, gy, 71) * 3.6,
+            conifer: noise2(gx, gy, 83) > 0.45,
+            country: owner[id],
+          });
+        }
+      }
+    }
+  }
+
+  drawRelief(country) {
+    const relief = this.terrain?.relief;
+    if (!relief) return;
+    const { ctx } = this;
+    ctx.save();
+    ctx.clip(country.path);
+    ctx.globalAlpha = 0.24;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(relief, 0, 0, WORLD, WORLD);
+    const contours = this.terrain.contours;
+    if (contours) {
+      ctx.globalAlpha = 0.16;
+      ctx.strokeStyle = rgba(INK, 0.7);
+      ctx.lineWidth = 0.55;
+      ctx.stroke(contours);
+    }
+    ctx.restore();
+  }
+
+  drawTerrainMarks(country) {
+    const terrain = this.terrain;
+    if (!terrain) return;
+    const index = this.countries.indexOf(country);
+    const { ctx } = this;
+    for (const mountain of terrain.mountains) {
+      if (mountain.country === index) this.drawMountain(mountain);
+    }
+    for (const forest of terrain.forests) {
+      if (forest.country === index) this.drawTree(forest);
+    }
+  }
+
+  /** A peak with two smaller shoulders, so a ridge reads as a range. */
+  drawMountain({ x, y, s, tilt }) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(tilt);
+    ctx.strokeStyle = rgba(INK, 0.5);
+    ctx.lineWidth = 0.65;
+    const shoulder = (cx, cy, size, flip) => {
+      const w = size * 0.56;
+      ctx.beginPath();
+      ctx.moveTo(cx - w * flip, cy + size * 0.42);
+      ctx.lineTo(cx, cy - size * 0.55);
+      ctx.lineTo(cx + w * flip, cy + size * 0.42);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(247, 238, 216, 0.5)';
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - size * 0.55);
+      ctx.lineTo(cx + w * flip, cy + size * 0.42);
+      ctx.lineTo(cx + w * 0.08, cy + size * 0.42);
+      ctx.closePath();
+      ctx.fillStyle = rgba(INK, 0.22);
+      ctx.fill();
+    };
+    shoulder(-s * 0.46, s * 0.06, s * 0.62, 1);
+    shoulder(s * 0.5, s * 0.1, s * 0.52, 1);
+    shoulder(0, 0, s, 1);
+    ctx.restore();
+  }
+
+  drawTree({ x, y, s, conifer }) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.strokeStyle = rgba(INK, 0.34);
+    ctx.lineWidth = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(x, y + s * 0.6);
+    ctx.lineTo(x, y - s * 0.5);
+    ctx.stroke();
+    if (conifer) {
+      for (let tier = 0; tier < 3; tier += 1) {
+        const top = y - s * 0.9 + tier * s * 0.42;
+        ctx.beginPath();
+        ctx.moveTo(x - s * (0.55 - tier * 0.12), top + s * 0.5);
+        ctx.lineTo(x, top);
+        ctx.lineTo(x + s * (0.55 - tier * 0.12), top + s * 0.5);
+        ctx.stroke();
+      }
+    } else {
+      ctx.fillStyle = 'rgba(104, 116, 72, 0.22)';
+      ctx.beginPath();
+      ctx.arc(x, y - s * 0.62, s * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x - s * 0.36, y - s * 0.34, s * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x + s * 0.36, y - s * 0.3, s * 0.34, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, y - s * 0.62, s * 0.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   setHidden(hidden) {
@@ -953,6 +1531,7 @@ export class Atlas {
     this.drawSea();
     this.drawIslets();
     this.drawCountries();
+    this.drawLakes();
     this.drawRivers();
     this.drawRoutes();
     this.drawRoads();
@@ -1034,9 +1613,9 @@ export class Atlas {
     const inset = EDGE - 28;
     const size = WORLD - inset * 2;
     ctx.save();
-    ctx.fillStyle = 'rgba(96, 118, 116, 0.12)';
+    ctx.fillStyle = 'rgba(92, 122, 124, 0.22)';
     ctx.fillRect(inset, inset, size, size);
-    ctx.strokeStyle = 'rgba(64, 92, 92, 0.13)';
+    ctx.strokeStyle = 'rgba(64, 92, 92, 0.2)';
     ctx.lineWidth = 0.7;
     ctx.beginPath();
     for (let y = inset + 3; y < WORLD - inset; y += 4.5) {
@@ -1093,6 +1672,11 @@ export class Atlas {
         ctx.stroke();
         ctx.restore();
 
+        // Height shading: lowlands pale, ridges inked. Clipped to the country
+        // so a hidden folder takes its relief with it.
+        this.drawRelief(country);
+        this.drawTerrainMarks(country);
+
         // Wilderness fills the land nobody settled.
         if (country.wilderness) {
           ctx.save();
@@ -1107,8 +1691,21 @@ export class Atlas {
         for (const wall of country.walls) {
           ctx.save();
           ctx.clip(country.path);
-          ctx.fillStyle = 'rgba(243, 232, 205, 0.4)';
+          ctx.fillStyle = `rgba(243, 232, 205, ${country.count > 120 ? 0.16 : 0.4})`;
           ctx.fill(wall);
+          // Ploughed fields: fine furrows inside the walls, so a settlement
+          // reads as worked land instead of a blank chip.
+          ctx.save();
+          ctx.clip(wall);
+          ctx.strokeStyle = rgba(INK, 0.075);
+          ctx.lineWidth = 0.55;
+          ctx.beginPath();
+          for (let row = -220; row < 220; row += 4.5) {
+            ctx.moveTo(row, -220);
+            ctx.lineTo(row + 150, 220);
+          }
+          ctx.stroke();
+          ctx.restore();
           ctx.strokeStyle = rgba(INK, 0.5);
           ctx.lineWidth = 0.9;
           ctx.setLineDash([3.5, 2.4]);
@@ -1128,22 +1725,43 @@ export class Atlas {
     }
   }
 
-  drawRivers() {
+  drawLakes() {
+    if (!this.lakes.length) return;
     const { ctx } = this;
-    for (const country of this.countries) {
-      if (this.hidden.has(country.name)) continue;
-      for (const [start, control, end] of country.rivers) {
-        ctx.beginPath();
-        ctx.moveTo(start[0], start[1]);
-        ctx.quadraticCurveTo(control[0], control[1], end[0], end[1]);
-        ctx.strokeStyle = rgba(RIVER, 0.16);
-        ctx.lineWidth = 3.4;
-        ctx.stroke();
-        ctx.strokeStyle = rgba(RIVER, 0.5);
-        ctx.lineWidth = 1.1;
-        ctx.stroke();
-      }
+    for (const lake of this.lakes) {
+      ctx.beginPath();
+      ctx.arc(lake.x, lake.y, lake.r, 0, Math.PI * 2);
+      ctx.fillStyle = rgba(RIVER, 0.22);
+      ctx.fill();
+      ctx.strokeStyle = rgba(RIVER, 0.5);
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
     }
+  }
+
+  /** Water first a pale casing, then the river itself, then a highlight. */
+  drawRivers() {
+    if (!this.riverBands.length) return;
+    const { ctx } = this;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(247, 238, 216, 0.34)';
+    for (const band of this.riverBands) {
+      ctx.lineWidth = band.width + 1.2;
+      ctx.stroke(band.path);
+    }
+    ctx.strokeStyle = rgba(RIVER, 0.68);
+    for (const band of this.riverBands) {
+      ctx.lineWidth = band.width * 1.1;
+      ctx.stroke(band.path);
+    }
+    ctx.strokeStyle = 'rgba(154, 180, 190, 0.42)';
+    for (const band of this.riverBands) {
+      ctx.lineWidth = Math.max(0.35, band.width * 0.32);
+      ctx.stroke(band.path);
+    }
+    ctx.restore();
   }
 
   drawRoutes() {
@@ -1200,6 +1818,17 @@ export class Atlas {
         ctx.strokeStyle = rgba(RUBRIC, selected ? 0.9 : 0.45);
         ctx.lineWidth = 1.2;
         ctx.stroke();
+      }
+
+      if (place.stipple) {
+        // A 240-note folder is a field, not a wall of badges: solid ink dots
+        // read as stipple, and the old white discs stopped swallowing the land.
+        ctx.beginPath();
+        ctx.arc(place.x, place.y, Math.max(0.85, place.r * 0.72), 0, Math.PI * 2);
+        ctx.fillStyle = rgba(ink, 0.48);
+        ctx.fill();
+        ctx.restore();
+        continue;
       }
 
       ctx.beginPath();
