@@ -8,6 +8,7 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { Atlas } from './atlas.js';
 import { attachEditor } from './editor.js';
+import { Tutorial } from './tutorial.js';
 import { diaryFolders, isOverview } from './scale.js';
 
 const state = {
@@ -102,6 +103,7 @@ const els = {
   vaultList: document.getElementById('vault-list'),
   addVault: document.getElementById('add-vault'),
   searchButton: document.getElementById('search-button'),
+  tourButton: document.getElementById('tour-button'),
   newNote: document.getElementById('new-note'),
   panel: document.getElementById('panel'),
   panelBody: document.getElementById('panel-body'),
@@ -135,6 +137,9 @@ const els = {
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const tour = new Tutorial();
+let tourSession = null;
 
 // Local only, and optional: a private-mode browser just loses the memory.
 const prefs = {
@@ -271,6 +276,7 @@ function wire() {
     if (event.target === els.palette) closePalette();
   });
   els.searchButton.addEventListener('click', openPalette);
+  els.tourButton.addEventListener('click', startTour);
   els.settingsButton.addEventListener('click', openSettings);
   els.settingsClose.addEventListener('click', closeSettings);
   els.settings.addEventListener('click', (event) => {
@@ -357,6 +363,7 @@ async function refreshVaults() {
 
 function showLaunch(message) {
   state.launching = true;
+  els.tourButton.hidden = true;
   els.launch.hidden = false;
   els.sidebar.hidden = true;
   document.body.classList.remove('has-sidebar');
@@ -375,6 +382,7 @@ function showLaunchError(message) {
 function hideLaunch() {
   state.launching = false;
   els.launch.hidden = true;
+  els.tourButton.hidden = !state.live || !state.graph;
   showLaunchError(null);
 }
 
@@ -456,6 +464,7 @@ function showApp() {
 }
 
 function resetVaultState() {
+  els.tourButton.hidden = true;
   state.cache.clear();
   state.selection.clear();
   state.history = { items: [], index: -1 };
@@ -531,6 +540,7 @@ function applyGraph(graph) {
     : 'static demo';
   els.newNote.hidden = !state.live;
   els.todayNote.hidden = !state.live;
+  els.tourButton.hidden = !state.live;
   const overview = isOverview(graph.nodes.length);
   ui.setStats(graph.meta, overview);
   ui.renderDecisions(els.decisionsBoard, graph.structures, openDecision);
@@ -1270,6 +1280,456 @@ function closeSettings() {
   els.settingsButton.focus();
 }
 
+/* ---------- guided tour ---------- */
+
+function hasTourTrail(card) {
+  return Boolean(card && (card.confidence !== null && card.confidence !== undefined
+    || card.review_on
+    || card.supersedes));
+}
+
+/** The tour needs real examples for every step it promises to teach. */
+function tourReadiness(graph) {
+  const cards = graph?.structures?.cards || [];
+  const research = cards.find(
+    (card) => card.kind === 'research' && (card.evidence || []).length >= 2,
+  );
+  const idea = cards.find((card) => card.kind === 'idea' && (card.evidence || []).length >= 2);
+  const trail = cards.find((card) => hasTourTrail(card) && card.supersedes)
+    || cards.find(hasTourTrail);
+
+  if (!graph?.nodes || graph.nodes.length < 2) {
+    return {
+      ok: false,
+      reason: 'The tour collects at least two notes as evidence, so it needs a vault with two or more notes.',
+    };
+  }
+  if (!research || !idea) {
+    return {
+      ok: false,
+      reason: 'The tour needs one research brief and one idea note so Decisions and the trail are real examples, not a mock-up.',
+    };
+  }
+  if (!trail) {
+    return {
+      ok: false,
+      reason: 'The tour needs a decision with confidence, a review date, or a superseded note so it can show the decision trail.',
+    };
+  }
+  return { ok: true, research, idea, trail };
+}
+
+function openTourCompose(template, example) {
+  closeCompose();
+  openCompose(template);
+  if (els.compose.hidden) return;
+  els.composeTitle.value = example;
+  updateComposeState();
+}
+
+function collectTourEvidence(ids) {
+  closePanel();
+  state.selection.clear();
+  for (const id of ids) {
+    if (nodeIndex(id) >= 0) state.selection.add(id);
+  }
+  syncSelection();
+}
+
+async function openTourDecision(id) {
+  const index = nodeIndex(id);
+  if (index < 0) return;
+  setMode('decisions', { persist: false, animate: false });
+  await openNote(index, { record: false });
+  const trail = document.getElementById('decision-trail');
+  if (trail) trail.scrollIntoView({ block: 'center', behavior: 'auto' });
+}
+
+function buildTourSteps({ usedDemo, demoReason }) {
+  const readiness = tourReadiness(state.graph);
+  const research = readiness.research;
+  const idea = readiness.idea;
+  const trail = readiness.trail || readiness.research || readiness.idea;
+  const sourceIds = [];
+  for (const source of [...(research?.evidence || []), ...(idea?.evidence || [])]) {
+    if (!sourceIds.includes(source.id)) sourceIds.push(source.id);
+    if (sourceIds.length === 3) break;
+  }
+  const featuredId = sourceIds[0] || research?.id || state.graph.nodes[0]?.id;
+  const vaultName = currentVault()?.name || state.meta?.title || 'this vault';
+  const trailTitle = trail?.title || 'this decision';
+
+  const intro = [
+    'This is a working vault, not a slideshow: I will walk through the six views, then the loop that makes Cortex different — collect evidence, write a research brief or an idea refinement, and keep the decision trail.',
+    usedDemo
+      ? `You are in the generated Cortex Tour demo because your own vault does not yet have every piece this tour teaches. ${demoReason} Your notes have not been read or changed.`
+      : `You are in your own vault, ${vaultName}. The tour only moves around; it does not write a note.`,
+  ];
+
+  return [
+    {
+      title: 'A guided tour of Cortex',
+      body: intro,
+      hint: 'Next moves forward. Esc exits and puts your view back.',
+      nextLabel: 'Start the tour',
+      enter: () => closeCompose(),
+    },
+    {
+      title: 'Graph — the shape of your notes',
+      body: [
+        'Every star is a note and every line is a link. The graph is not decoration: it is how you spot the cluster you forgot, the bridge between two projects, and the note that connects nothing.',
+      ],
+      points: [
+        'Drag to orbit, scroll to zoom, and click a star to read it.',
+        'Click a folder title to fly into that section; `f` reframes the whole camera.',
+        '`l` narrows the graph to the open note’s local neighbourhood.',
+      ],
+      target: '.views [data-mode="universe"]',
+      placement: 'bottom',
+      enter: () => {
+        closeCompose();
+        closePanel();
+        setMode('universe', { persist: false, animate: false });
+      },
+    },
+    {
+      title: 'The note panel — read without losing the map',
+      body: [
+        'I opened a source note from the research brief. The panel keeps the graph behind it, so following one idea does not erase the context around it.',
+      ],
+      points: [
+        'Backlinks are notes that link here; Linked sources appear on research briefs and idea notes.',
+        'Related finds notes that share neighbours. Local graph (`l`) isolates that neighbourhood.',
+        'Edit opens the raw Markdown; Collect puts this note in the evidence tray.',
+      ],
+      target: '#panel',
+      placement: 'left',
+      enter: async () => {
+        closeCompose();
+        setMode('universe', { persist: false, animate: false });
+        const index = nodeIndex(featuredId);
+        if (index >= 0) await openNote(index, { record: false });
+      },
+    },
+    {
+      title: 'Search — find a phrase, not just a title',
+      body: [
+        'Press `Ctrl K` / `⌘K` anywhere, or `/`, and type part of a title, a tag, a folder or a sentence. Results always come from the vault you are looking at.',
+      ],
+      hint: 'The tour blocks app shortcuts until it ends. Afterwards, `/` and `Ctrl K` both open search.',
+      target: '#search-button',
+      placement: 'bottom',
+      enter: () => closeCompose(),
+    },
+    {
+      title: 'Collect evidence — the tray is the handoff',
+      body: [
+        'A decision needs sources. Select notes with `Ctrl`/`⌘`/`Shift`-click, or press `c` on the open note. The Collected tray appears on the left.',
+      ],
+      points: [
+        'I collected sources for you. Collection lives in memory until you create a structure note, and the tour restores your own collection when it closes.',
+        'With two or more collected notes, Research brief and Refine idea become active.',
+        'Clear empties the tray without touching the notes themselves.',
+      ],
+      target: '#selection',
+      placement: 'right',
+      enter: () => {
+        closeCompose();
+        collectTourEvidence(sourceIds);
+      },
+    },
+    {
+      title: 'Research brief — from sources to an answer',
+      body: [
+        'Research brief asks one question and writes a normal note at `Synthesis/<question>.md`. Cortex builds the scaffold from the collected notes; you write the thinking.',
+      ],
+      points: [
+        'Question, what the sources say, tensions, synthesis and open questions.',
+        'The evidence list is made of `[[wikilinks]]` back to every source, not copies.',
+        'No prompt, API key or model is involved. This is a local Markdown write.',
+      ],
+      hint: 'The tour shows the form but does not create the note. In your own workflow, this is the Create note button.',
+      target: '.compose-box',
+      placement: 'left',
+      enter: () => {
+        closePanel();
+        openTourCompose('research', 'How does attention shape deep work?');
+      },
+    },
+    {
+      title: 'Refine idea — make the decision explicit',
+      body: [
+        'Refine idea writes a `type: idea` note with the scaffolding a real decision needs. This is the part most note tools leave out: they help you collect and connect, then stop before a conclusion exists.',
+      ],
+      points: [
+        'Situation, and the assumptions that are load-bearing versus cosmetic.',
+        'Options A and B, each with effort, risk and reversibility.',
+        'A recommendation, and the evidence that would change your mind.',
+        'Both templates become Decisions cards from frontmatter; `status` stays yours to edit.',
+      ],
+      hint: 'Again, the tour is only showing the form. Nothing is written to this vault.',
+      target: '.compose-box',
+      placement: 'left',
+      enter: () => openTourCompose('idea', 'Should this be one product or two?'),
+    },
+    {
+      title: 'Decisions — what you concluded, and on what',
+      body: [
+        'Press `5`. Every note with `type: research` or `type: idea` becomes a card under its `status`. This is not a second database: the board is built from the same Markdown scan as the graph.',
+      ],
+      points: [
+        '`open` and `refining` are the default columns; any other status becomes its own column.',
+        'Cards show the folder, date, source count, evidence chips and any links that point nowhere.',
+        'The board is read-only on purpose. Edit `status` or the trail fields in any editor.',
+      ],
+      target: '.decisions-head',
+      placement: 'bottom',
+      enter: () => {
+        closeCompose();
+        closePanel();
+        setMode('decisions', { persist: false, animate: false });
+        els.decisions.scrollTop = 0;
+      },
+    },
+    {
+      title: 'The decision trail — the “why” layer',
+      body: [
+        `I opened “${trailTitle}”. The trail keeps the judgment around the conclusion: how sure you were, when to revisit it, and what it replaced.`,
+      ],
+      points: [
+        'Status, confidence, review date and supersession sit above the prose.',
+        'A review date in the past is marked Review due, so a decision cannot quietly go stale.',
+        'Linked sources below the note are one click from the evidence. Press `y` to jump back to the trail.',
+        'The fields are optional. Add `confidence`, `review_on` and `supersedes` to any research brief or idea note.',
+      ],
+      target: '#decision-trail',
+      placement: 'left',
+      enter: () => trail ? openTourDecision(trail.id) : undefined,
+    },
+    {
+      title: 'Brain — the same graph, inside a cortex',
+      body: [
+        'Press `2`. Notes sit on a folded cortical surface and links become fibre tracts. It is the same vault as Graph, arranged for a different kind of spatial memory.',
+      ],
+      points: [
+        'Folder titles still fly you into a region.',
+        'Drag and scroll behave like Graph; `f` resets the view.',
+        'Nothing new is stored: this is one graph with another lens.',
+      ],
+      target: '.views [data-mode="brain"]',
+      placement: 'bottom',
+      enter: () => {
+        closePanel();
+        setMode('brain', { persist: false, animate: false });
+      },
+    },
+    {
+      title: 'Timeline — replay how the vault was written',
+      body: [
+        'Press `3`. Play or scrub the timeline and notes appear in creation order. It answers “what was I thinking then?” without opening a folder tree.',
+      ],
+      points: [
+        'The date stamp above the scrubber follows the reveal.',
+        'Play replays the vault; drag the scrubber to inspect a moment.',
+        'Notes without dates are called out instead of inventing a history.',
+      ],
+      target: '.views [data-mode="replay"]',
+      placement: 'bottom',
+      enter: () => {
+        closePanel();
+        setMode('replay', { persist: false, animate: true });
+      },
+    },
+    {
+      title: 'Atlas — folders as countries',
+      body: [
+        'Press `4`. Folders become countries sized by note count, notes become places, and links become roads. Geography is deterministic, so a place stays where you learned it.',
+      ],
+      points: [
+        'Drag to pan; scroll or `+`/`-` to zoom; `0` fits the whole map.',
+        'Dense folders become stipple, not a wall of black badges.',
+        'Click a place to read it; click a folder in the sidebar to hide or show its country.',
+      ],
+      target: '.views [data-mode="atlas"]',
+      placement: 'bottom',
+      enter: () => {
+        closePanel();
+        setMode('atlas', { persist: false, animate: false });
+      },
+    },
+    {
+      title: 'Bento — what is even in here?',
+      body: [
+        'Press `6`. Every folder becomes a box sized by how much of the vault it holds, with its strongest notes inside. It is the fastest overview of a vault you have not opened in a while.',
+      ],
+      points: [
+        'Click a note to read it without leaving the board.',
+        'Open in graph flies to that folder’s section.',
+        'Big folders earn big tiles; the layout is deterministic and costs no WebGL frame.',
+      ],
+      target: '.bento-header',
+      placement: 'bottom',
+      enter: () => {
+        closePanel();
+        setMode('bento', { persist: false, animate: false });
+      },
+    },
+    {
+      title: 'The daily loop, and the keys that keep it fast',
+      body: [
+        'The sun button, or `t`, opens today’s note at `Journal/YYYY-MM-DD.md`; an existing note is opened, never overwritten.',
+      ],
+      points: [
+        '`n` creates a note. Edit opens plain Markdown; `Ctrl S` / `⌘S` saves and `Esc` cancels.',
+        '`1`–`6` switch views, `f` resets the camera, and `y` jumps to a decision trail.',
+        'Vault settings holds the opening view, map roads and optional AI client access. Every native workflow here works without MCP.',
+      ],
+      target: '#today-note',
+      placement: 'bottom',
+      enter: () => {
+        closeCompose();
+        closePanel();
+        setMode('universe', { persist: false, animate: false });
+      },
+    },
+    {
+      title: 'That is the loop',
+      body: [
+        'Collect → Research brief or Refine idea → Decisions → review the trail. One folder, six views, and a reason for every important conclusion.',
+        'Your notes stay plain Markdown. No account, no database, no model, no lock-in.',
+      ],
+      hint: usedDemo
+        ? 'Finish returns to your vault. Stay in demo keeps this generated vault open.'
+        : 'Finish returns your view and collection to where they were before the tour.',
+      nextLabel: 'Finish tour',
+      secondary: usedDemo ? { label: 'Stay in demo' } : undefined,
+      enter: () => {
+        closeCompose();
+        closePanel();
+        setMode('decisions', { persist: false, animate: false });
+      },
+    },
+  ];
+}
+
+async function startTour() {
+  if (tour.active) return;
+  if (!state.graph || !state.live) {
+    ui.toast('Open a folder first');
+    return;
+  }
+  if (state.editing) {
+    ui.toast('Save or cancel your draft before starting the tour');
+    return;
+  }
+
+  const previous = {
+    vaultId: state.vaultId,
+    mode: state.mode,
+    selection: new Set(state.selection),
+    detailId: state.detail?.id || null,
+    panelOpen: !els.panel.hidden,
+  };
+  const readiness = tourReadiness(state.graph);
+  let usedDemo = false;
+  const demoReason = readiness.ok ? '' : readiness.reason;
+
+  if (!readiness.ok) {
+    if (state.readOnly) {
+      ui.toast('The tour demo cannot be created while this folder is read-only');
+      return;
+    }
+    els.tourButton.disabled = true;
+    try {
+      ui.toast('Opening the Cortex Tour demo…');
+      const demo = await api.tutorialVault();
+      if (!demo?.id) throw new Error('The tour demo did not open');
+      await switchVault(demo.id, 'universe');
+      usedDemo = true;
+    } catch (error) {
+      ui.toast(error.message || 'Could not open the tour demo');
+      return;
+    } finally {
+      els.tourButton.disabled = false;
+    }
+    const activeReadiness = tourReadiness(state.graph);
+    if (!activeReadiness.ok) {
+      tourSession = null;
+      try {
+        await switchVault(previous.vaultId, previous.mode);
+      } catch {
+        /* the demo is still usable; do not hide the real error */
+      }
+      ui.toast('The tour demo is incomplete — remove it from the vault list and try again');
+      return;
+    }
+  }
+
+  closeCompose();
+  closePalette();
+  if (!els.settings.hidden) els.settings.hidden = true;
+  const steps = buildTourSteps({ usedDemo, demoReason });
+  tourSession = { previous, usedDemo };
+  try {
+    await tour.start(steps, {
+      context: usedDemo
+        ? 'Generated demo · your notes untouched'
+        : `Your vault · ${currentVault()?.name || state.meta.title}`,
+      reason: demoReason,
+      onExit: finishTour,
+    });
+  } catch (error) {
+    tourSession = null;
+    ui.toast(error.message || 'Could not start the tour');
+  }
+}
+
+async function finishTour({ stay = false } = {}) {
+  const session = tourSession;
+  tourSession = null;
+  closeCompose();
+  closePalette();
+  if (!session) return;
+
+  if (stay) {
+    ui.toast(session.usedDemo
+      ? 'Demo vault open — switch back from the vault list when you are ready'
+      : 'Tour closed');
+    return;
+  }
+
+  if (session.usedDemo && session.previous.vaultId) {
+    try {
+      await switchVault(session.previous.vaultId, session.previous.mode);
+    } catch (error) {
+      ui.toast(error.message || 'Could not return to your vault');
+      return;
+    }
+    state.selection = new Set(session.previous.selection);
+    syncSelection();
+    setMode(session.previous.mode, { persist: false, animate: false });
+    if (session.previous.panelOpen && session.previous.detailId) {
+      const index = nodeIndex(session.previous.detailId);
+      if (index >= 0) await openNote(index, { record: false });
+    } else {
+      closePanel();
+    }
+    ui.toast('Back in your vault — nothing changed');
+    return;
+  }
+
+  state.selection = new Set(session.previous.selection);
+  syncSelection();
+  setMode(session.previous.mode, { persist: false, animate: false });
+  if (session.previous.panelOpen && session.previous.detailId) {
+    const index = nodeIndex(session.previous.detailId);
+    if (index >= 0) await openNote(index, { record: false });
+  } else {
+    closePanel();
+  }
+  ui.toast('Tour complete — your notes are untouched');
+}
+
 /* ---------- pointer ---------- */
 
 function setHover(index) {
@@ -1367,6 +1827,10 @@ function isTyping() {
 }
 
 function onKeyDown(event) {
+  if (tour.active) {
+    tour.handleKey(event);
+    return;
+  }
   const typing = isTyping();
   const mod = event.metaKey || event.ctrlKey;
 

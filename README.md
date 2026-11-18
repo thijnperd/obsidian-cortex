@@ -1,15 +1,15 @@
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.0.0">
-    <img src="docs/screenshots/v1-decision-trail.jpg" width="100%" alt="Cortex 1.0 showing a decision trail beside the Decisions board">
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.1.0">
+    <img src="docs/screenshots/v1-decision-trail.jpg" width="100%" alt="Cortex 1.1 showing a decision trail beside the Decisions board">
   </a>
 </p>
 
-<h1 align="center">Cortex 1.0 — Find the Why</h1>
+<h1 align="center">Cortex 1.1 — The Guided Tour</h1>
 
 <p align="center"><strong>Your notes have a shape. Cortex shows you the reason.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.0.0"><img alt="Cortex 1.0" src="https://img.shields.io/badge/version-1.0.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.1.0"><img alt="Cortex 1.1" src="https://img.shields.io/badge/version-1.1.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
   <img alt="Local-first" src="https://img.shields.io/badge/local--first-your%20folder-101216?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-101216?style=flat-square&amp;labelColor=0a0b0d">
@@ -35,6 +35,19 @@ that earns its place, and a memory for judgment.
 - **Find the why.** Decisions carry confidence, a review date and the note they
   supersede. Past-due reviews surface on the board; the trail shows exactly what
   the conclusion rests on.
+
+### New here? Take the tour
+
+Press **Tour** in the toolbar. Cortex checks whether your vault has the pieces
+the tour teaches — a research brief, an idea note and a decision trail. If it
+does, the tour runs in place. If not, Cortex opens a generated **Cortex Tour**
+demo and returns you to your own vault when you finish. Your notes are never
+written to or changed.
+
+The fifteen steps cover all six views, collecting evidence, Research brief,
+Refine idea, Decisions and the trail, plus the daily note and the shortcuts that
+keep the loop fast. It is the shortest path from “I have notes” to “I know why I
+decided this.”
 
 ### The reasoning trail
 
@@ -438,10 +451,10 @@ and the same-origin check rather than by `--read-only`. Combined with
 `--allow-any-origin` that means anyone who can reach the server can point it at
 any folder the process can read — which is why the default is loopback-only.
 
-## What 1.0 is
+## What 1.1 is
 
-Cortex 1.0 is the local-first version: your folder, plain Markdown, six views,
-decision trails, the MCP bridge and the Windows installer.
+Cortex 1.1 is the local-first version: your folder, plain Markdown, six views,
+decision trails, the guided tour, the MCP bridge and the Windows installer.
 
 It deliberately does **not** include a hosted sync service, a mobile app,
 real-time collaboration, a plugin runtime, a block editor or a built-in AI
@@ -452,7 +465,7 @@ proprietary database, no telemetry.
 The UI still has no build step. Every screenshot in this README is a seeded
 vault rendered by the app, not a mock-up.
 
-## Get Cortex 1.0 — Find the Why
+## Get Cortex 1.1 — The Guided Tour
 
 **One folder. Six views. A reason for every decision.**
 
@@ -468,7 +481,7 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
 Tagged releases are fixed; every push to `main` also refreshes the rolling
-`latest` build. The current release is **v1.0.0 — Find the Why**. The version
+`latest` build. The current release is **v1.1.0 — The Guided Tour**. The version
 appears in `cortex --version`, in **Vault settings → About**, and on
 `/api/about`. `SHA256SUMS.txt` is attached to every release.
 
@@ -557,8 +570,8 @@ publishes the static export to GitHub Pages.
 ## License
 
 Cortex is MIT licensed. See [LICENSE](LICENSE). Security reports follow
-[SECURITY.md](SECURITY.md), and the v1.0.0 release notes are drafted in
-[docs/releases/v1.0.0.md](docs/releases/v1.0.0.md).
+[SECURITY.md](SECURITY.md), and the v1.1.0 release notes are drafted in
+[docs/releases/v1.1.0.md](docs/releases/v1.1.0.md).
 
 ## Credits
 

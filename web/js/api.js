@@ -63,6 +63,16 @@ export async function addVault(path) {
   return readJson(response);
 }
 
+/// Creates (or reopens) the generated vault used by the guided tour.
+export async function tutorialVault() {
+  const response = await fetch('./api/tutorial', {
+    method: 'POST',
+    headers: WRITE_HEADERS,
+    body: '{}',
+  });
+  return readJson(response);
+}
+
 export async function forgetVault(id) {
   const response = await fetch('./api/vaults/forget', {
     method: 'POST',

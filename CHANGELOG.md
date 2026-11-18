@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.1.0 — The Guided Tour
+
+### Guided tour
+
+- **Tour** in the toolbar starts a fifteen-step walkthrough of all six views,
+  collection, Research brief, Refine idea, Decisions and the decision trail.
+- The tour uses your own vault when it contains a research brief, an idea note
+  and a decision trail; otherwise it generates a small **Cortex Tour** demo in
+  the config folder. Finishing returns you to the vault you started in.
+- The tour is a focus mode: it blocks app shortcuts, never submits a form, and
+  restores your view and collection when it closes.
+
+### Demo
+
+- The small demo now ships with confidence, review dates, a due review and a
+  superseded decision, so Decisions and the trail have something real to show.
+
+### Release
+
+- Version 1.1.0 across the binary, installer and About panel.
+
 ## 1.0.0 — Find the Why
 
 The first public release.
