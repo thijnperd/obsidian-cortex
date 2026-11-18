@@ -16,21 +16,50 @@ works as-is. No account, no cloud, no database.
 
 ## The five views
 
-The seeded demo vault, 328 notes — same graph, five ways to ask about it.
+The same app at three vault sizes. The small demo is a first-run taste, the
+medium one is the full tour, and the giant one is the stress test: **5,523
+notes, 24,151 links, 41 folders, zero unresolved links.** Every screenshot
+below is a different seeded vault, not a mock-up.
+
+### Small — 21 notes, 35 links
 
 | | |
 | --- | --- |
-| ![Graph view: a 3D universe of notes](docs/screenshots/01-graph.jpg) | ![Brain view: the same graph folded into hemispheres](docs/screenshots/02-brain.jpg) |
-| **Graph** — notes are stars, links are light, and the sky is a nebula. Drag to orbit, scroll to zoom, `f` to reframe. | **Brain** — the same graph inside a real cortical surface, its links drawn as fibre tracts. |
-| ![Timeline view: the vault replayed in the order it was written](docs/screenshots/03-timeline.jpg) | ![Atlas view: folders as countries on a parchment map](docs/screenshots/04-atlas.jpg) |
-| **Timeline** — the vault replayed in the order it was written, with a scrubber that goes anywhere. | **Atlas** — folders as countries, notes as places, links as roads, on a map that never moves. |
-| ![Decisions view: research briefs and ideas grouped by status](docs/screenshots/05-decisions.jpg) | |
-| **Decisions** — research briefs and idea refinements, grouped by `status`, with the notes each one cites. | Read-only on purpose: `status` stays your frontmatter, editable in Obsidian or by an agent. |
+| ![Small vault: graph view](docs/screenshots/small/01-graph.jpg) | ![Small vault: brain view](docs/screenshots/small/02-brain.jpg) |
+| **Graph** — notes are stars, links are light, and the sky is a nebula. | **Brain** — the same graph inside a real cortical surface. |
+| ![Small vault: timeline view](docs/screenshots/small/03-timeline.jpg) | ![Small vault: atlas view](docs/screenshots/small/04-atlas.jpg) |
+| **Timeline** — the vault replayed as it was written. | **Atlas** — seven folders as countries, notes as places, links as roads. |
+| ![Small vault: decisions view](docs/screenshots/small/05-decisions.jpg) | |
+| **Decisions** — two starter briefs, grouped by `status`, with their sources. | |
+
+### Medium — 328 notes, 557 links
+
+| | |
+| --- | --- |
+| ![Medium vault: graph view](docs/screenshots/medium/01-graph.jpg) | ![Medium vault: brain view](docs/screenshots/medium/02-brain.jpg) |
+| **Graph** — the full universe; drag to orbit, scroll to zoom, `f` to reframe. | **Brain** — the same graph inside a real cortical surface, links as fibre tracts. |
+| ![Medium vault: timeline view](docs/screenshots/medium/03-timeline.jpg) | ![Medium vault: atlas view](docs/screenshots/medium/04-atlas.jpg) |
+| **Timeline** — the vault replayed in the order it was written, with a scrubber. | **Atlas** — countries, towns, roads, and rivers that follow the land. |
+| ![Medium vault: decisions view](docs/screenshots/medium/05-decisions.jpg) | |
+| **Decisions** — research briefs and idea refinements, grouped by `status`. | Read-only on purpose: `status` stays your frontmatter. |
+
+### Giant — 5,523 notes, 24,151 links
+
+| | |
+| --- | --- |
+| ![Giant vault: graph view](docs/screenshots/giant/01-graph.jpg) | ![Giant vault: brain view](docs/screenshots/giant/02-brain.jpg) |
+| **Graph** — 36 topic galaxies plus a three-year daily journal ring. | **Brain** — every note inside the cortex; brightness compensates for density. |
+| ![Giant vault: timeline view](docs/screenshots/giant/03-timeline.jpg) | ![Giant vault: atlas view](docs/screenshots/giant/04-atlas.jpg) |
+| **Timeline** — four years of entries replayed. | **Atlas** — 41 countries; dense folders become stippled provinces. |
+| ![Giant vault: decisions view](docs/screenshots/giant/05-decisions.jpg) | |
+| **Decisions** — 26 cards across open and refining, each with real sources. | |
 
 ```bash
-cargo run -p cortex                       # reopens the last vault, or offers a picker
-cargo run -p cortex -- seed-demo demo     # optional: a 328-note example vault
-cargo run -p cortex -- serve demo         # open one folder directly
+cargo run -p cortex                                    # reopens the last vault, or offers a picker
+cargo run -p cortex -- seed-demo demo --size small     # 21 notes
+cargo run -p cortex -- seed-demo demo --size medium    # 328 notes (default)
+cargo run -p cortex -- seed-demo demo --size large     # 5,523 notes
+cargo run -p cortex -- serve demo                      # open one folder directly
 ```
 
 ## Opening a folder
@@ -265,7 +294,7 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | macOS (Apple silicon) | `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
-Tagged releases (`v0.5.0`) are fixed; every push to `main` also refreshes the
+Tagged releases (`v0.6.0`) are fixed; every push to `main` also refreshes the
 rolling `latest` build. The version appears in `cortex --version`, in **Vault
 settings → About**, and on `/api/about`. `SHA256SUMS.txt` is attached to every
 release.
