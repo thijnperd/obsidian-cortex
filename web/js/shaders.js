@@ -37,17 +37,48 @@ float fbm(vec2 p) {
   return value;
 }
 
+float ridged(vec2 p) {
+  return 1.0 - abs(2.0 * fbm(p) - 1.0);
+}
+
 void main() {
   vec2 uv = vUv;
-  vec2 p = uv * 2.4;
-  float n1 = fbm(p);
-  float n2 = fbm(p * 1.9 + vec2(3.7, 1.3));
-  float cloud = smoothstep(0.34, 0.92, n1 * 0.85 + n2 * 0.35);
-  vec3 base = mix(vec3(0.010, 0.014, 0.028), vec3(0.034, 0.048, 0.094), n1);
-  vec3 tint = mix(vec3(0.16, 0.05, 0.34), vec3(0.02, 0.20, 0.28), n2);
-  vec3 color = base + tint * cloud * 0.52;
+  vec2 p = uv * 3.0;
+
+  // Domain warp: clouds fold into filaments instead of reading as fog.
+  float warp = fbm(p * 0.62 + vec2(1.7, 9.2));
+  float n1 = fbm(p + warp * 1.35);
+  float n2 = fbm(p * 1.9 - warp * 0.8 + vec2(3.7, 1.3));
+  float filaments = ridged(p * 1.25 + n1 * 0.9);
+  float cloud = smoothstep(0.36, 0.94, n1 * 0.9 + n2 * 0.34);
+
+  // A diagonal galactic band, with dust lanes cut through the bright side.
+  float band = exp(-pow((uv.x + uv.y - 1.0) * 2.4, 2.0));
+  float dust = smoothstep(0.34, 0.78, fbm(p * 3.2 + 13.0));
+
+  vec3 base = mix(vec3(0.007, 0.011, 0.024), vec3(0.030, 0.044, 0.100), n1);
+  vec3 tint = mix(vec3(0.22, 0.055, 0.40), vec3(0.02, 0.22, 0.31), n2);
+  vec3 color = base + tint * cloud * 0.48;
+  color += vec3(0.11, 0.09, 0.22) * band * (0.26 + n2 * 0.34);
+  color += vec3(0.30, 0.42, 0.86) * pow(filaments, 5.0) * cloud * 0.28;
+  color *= 1.0 - dust * band * 0.42;
+
+  // Distant stars: two sizes of pinprick, so depth reads even zoomed out.
+  vec2 grid = uv * vec2(190.0, 119.0);
+  vec2 id = floor(grid);
+  vec2 cell = fract(grid) - 0.5;
+  float pick = hash(id);
+  float point = smoothstep(0.35, 0.0, length(cell));
+  float faint = step(0.9975, pick) * point;
+  vec2 grid2 = uv * vec2(96.0, 60.0);
+  vec2 id2 = floor(grid2);
+  vec2 cell2 = fract(grid2) - 0.5;
+  float bright = step(0.9985, hash(id2 + 41.0)) * smoothstep(0.28, 0.0, length(cell2));
+  color += vec3(0.62, 0.70, 0.95) * faint * 0.55;
+  color += vec3(0.92, 0.94, 1.0) * bright * 0.9;
+
   vec2 q = uv - 0.5;
-  color *= 1.0 - dot(q, q) * 1.15;
+  color *= 1.0 - dot(q, q) * 1.05;
   fragColor = vec4(color, 1.0);
 }`;
 
@@ -107,10 +138,10 @@ void main() {
   if (r2 > 1.0) discard;
   float r = sqrt(r2);
   float core = pow(max(0.0, 1.0 - r), 6.0);
-  float halo = pow(max(0.0, 1.0 - r), 2.8) * 0.18;
-  float flare = exp(-abs(vUv.y) * 26.0) * pow(max(0.0, 1.0 - abs(vUv.x)), 4.0)
-              + exp(-abs(vUv.x) * 26.0) * pow(max(0.0, 1.0 - abs(vUv.y)), 4.0);
-  vec3 color = vColor * (core * 1.9 + halo) + vec3(1.0, 0.97, 0.92) * flare * 0.18;
+  float halo = pow(max(0.0, 1.0 - r), 2.2) * 0.30;
+  float flare = exp(-abs(vUv.y) * 17.0) * pow(max(0.0, 1.0 - abs(vUv.x)), 3.0)
+              + exp(-abs(vUv.x) * 17.0) * pow(max(0.0, 1.0 - abs(vUv.y)), 3.0);
+  vec3 color = vColor * (core * 2.15 + halo) + vec3(1.0, 0.96, 0.90) * flare * 0.27;
   fragColor = vec4(color, vAlpha);
 }`;
 
@@ -274,7 +305,7 @@ uniform sampler2D uScene;
 void main() {
   vec3 color = texture(uScene, vUv).rgb;
   float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
-  float weight = smoothstep(0.26, 0.92, luminance);
+  float weight = smoothstep(0.20, 0.86, luminance);
   fragColor = vec4(color * weight, 1.0);
 }`;
 
@@ -285,13 +316,15 @@ in vec2 vUv;
 out vec4 fragColor;
 uniform sampler2D uTexture;
 uniform vec2 uDirection;
+uniform float uScale;
 
 void main() {
+  vec2 delta = uDirection * uScale;
   vec3 sum = texture(uTexture, vUv).rgb * 0.227027;
-  sum += (texture(uTexture, vUv + uDirection * 1.3846).rgb
-        + texture(uTexture, vUv - uDirection * 1.3846).rgb) * 0.316216;
-  sum += (texture(uTexture, vUv + uDirection * 3.2308).rgb
-        + texture(uTexture, vUv - uDirection * 3.2308).rgb) * 0.070270;
+  sum += (texture(uTexture, vUv + delta * 1.3846).rgb
+        + texture(uTexture, vUv - delta * 1.3846).rgb) * 0.316216;
+  sum += (texture(uTexture, vUv + delta * 3.2308).rgb
+        + texture(uTexture, vUv - delta * 3.2308).rgb) * 0.070270;
   fragColor = vec4(sum, 1.0);
 }`;
 
@@ -315,7 +348,7 @@ void main() {
   vec3 background = texture(uBackground, clamp(uv + uParallax * 0.03, 0.001, 0.999)).rgb * mix(1.0, 0.14, uBrain);
   vec3 scene = texture(uScene, uv).rgb;
   vec3 bloom = texture(uBloom, uv).rgb;
-  vec3 color = background + scene + bloom * mix(0.5, 0.9, uBrain);
+  vec3 color = background + scene + bloom * mix(0.62, 0.82, uBrain);
 
   // Gentle filmic curve keeps the hubs from clipping to white.
   color = color / (color + vec3(0.74)) * 1.24;
@@ -360,8 +393,9 @@ void main() {
   float fresnel = pow(1.0 - facing, 1.7);
   // A raking light picks out the gyri; the rim marks the silhouette.
   float diffuse = clamp(dot(normal, normalize(vec3(-0.5, 0.72, 0.48))), 0.0, 1.0);
-  float alpha = (0.018 + 0.06 * diffuse + 0.15 * fresnel) * uOpacity;
-  vec3 pale = vec3(0.2, 0.27, 0.38) + vec3(0.16, 0.2, 0.24) * diffuse;
+  // Deliberately thin: the cortex is the setting, the notes are the subject.
+  float alpha = (0.015 + 0.052 * diffuse + 0.135 * fresnel) * uOpacity;
+  vec3 pale = vec3(0.15, 0.21, 0.32) + vec3(0.12, 0.16, 0.21) * diffuse;
   vec3 rim = vec3(0.78, 0.87, 1.0);
   fragColor = vec4(mix(pale, rim, fresnel), alpha);
 }`;

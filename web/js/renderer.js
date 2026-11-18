@@ -593,7 +593,7 @@ export class Renderer {
       gl.uniform2f(loc(gl, program, 'uViewport'), this.cssWidth, this.cssHeight);
       gl.uniform1f(loc(gl, program, 'uTime'), time);
       gl.uniform1f(loc(gl, program, 'uReveal'), this.reveal);
-      gl.uniform1f(loc(gl, program, 'uSizeScale'), 20.0 * (1 - 0.35 * Math.max(0, this.morph)));
+      gl.uniform1f(loc(gl, program, 'uSizeScale'), 22.0 * (1 - 0.35 * Math.max(0, this.morph)));
       gl.bindVertexArray(this.nodeVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.count);
     }
@@ -615,12 +615,30 @@ export class Renderer {
     gl.bindTexture(gl.TEXTURE_2D, targets.bright.texture);
     gl.uniform1i(loc(gl, this.programs.blur, 'uTexture'), 0);
     gl.uniform2f(loc(gl, this.programs.blur, 'uDirection'), 1 / targets.bright.width, 0);
+    gl.uniform1f(loc(gl, this.programs.blur, 'uScale'), 1);
     this.drawFullscreen();
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, targets.bright.framebuffer);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, targets.blur.texture);
     gl.uniform2f(loc(gl, this.programs.blur, 'uDirection'), 0, 1 / targets.bright.height);
+    gl.uniform1f(loc(gl, this.programs.blur, 'uScale'), 1);
+    this.drawFullscreen();
+
+    // A second, wider blur gives stars the soft atmospheric halo of a photo
+    // rather than the hard edge of a sprite.
+    gl.bindFramebuffer(gl.FRAMEBUFFER, targets.blur.framebuffer);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, targets.bright.texture);
+    gl.uniform2f(loc(gl, this.programs.blur, 'uDirection'), 1 / targets.bright.width, 0);
+    gl.uniform1f(loc(gl, this.programs.blur, 'uScale'), 2.8);
+    this.drawFullscreen();
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, targets.bright.framebuffer);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, targets.blur.texture);
+    gl.uniform2f(loc(gl, this.programs.blur, 'uDirection'), 0, 1 / targets.bright.height);
+    gl.uniform1f(loc(gl, this.programs.blur, 'uScale'), 2.8);
     this.drawFullscreen();
 
     // Composite over the nebula.
