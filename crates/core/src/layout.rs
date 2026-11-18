@@ -50,9 +50,11 @@ pub fn compute(
         if list.is_empty() {
             continue;
         }
-        // Very large folders (a daily journal) become a ring of time around
-        // the rest of the vault instead of a blob that swallows the map.
-        if list.len() > RING_THRESHOLD {
+        // Very large folders that are diaries (a daily journal) become a ring
+        // of time around the rest of the vault instead of a blob that swallows
+        // the map. A 120-note topic folder is not a diary, even though it is
+        // large, so density of dates decides.
+        if looks_like_journal(list, times) {
             let ring = layout_ring(list, times, opts.seed ^ (group as u64));
             for (slot, node) in list.iter().enumerate() {
                 positions[*node] = ring[slot];
@@ -83,6 +85,31 @@ pub fn compute(
 }
 
 const RING_THRESHOLD: usize = 48;
+
+/// Is this folder a diary? Large is not enough: a 120-note topic folder is
+/// large too. A diary has many distinct dates, a long span, and little more
+/// than a day or three between entries.
+fn looks_like_journal(list: &[usize], times: &[i64]) -> bool {
+    if list.len() <= RING_THRESHOLD {
+        return false;
+    }
+    let mut days: Vec<i64> = list
+        .iter()
+        .map(|node| times.get(*node).copied().unwrap_or(0))
+        .collect();
+    days.sort_unstable();
+    days.dedup();
+    if days.len() < 48 {
+        return false;
+    }
+    let span = days[days.len() - 1] - days[0];
+    if span < 180 {
+        return false;
+    }
+    let mut gaps: Vec<i64> = days.windows(2).map(|pair| pair[1] - pair[0]).collect();
+    gaps.sort_unstable();
+    gaps[gaps.len() / 2] <= 3
+}
 
 /// Chronological ring for large, diary-like folders.
 fn layout_ring(list: &[usize], times: &[i64], seed: u64) -> Vec<[f64; 3]> {
@@ -506,7 +533,7 @@ mod tests {
 
     #[test]
     fn large_groups_become_a_ring() {
-        let count = 60;
+        let count = 240;
         let groups = vec![0; count];
         let times: Vec<i64> = (0..count as i64).collect();
         let positions = compute(count, &[], &groups, 1, &times, &LayoutOptions::default());
