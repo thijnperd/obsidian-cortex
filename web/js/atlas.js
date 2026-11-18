@@ -286,7 +286,10 @@ function layoutCapitals(folders) {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const distance = Math.hypot(dx, dy) || 1;
-        const minimum = 96 + 28 * Math.min(3, (a.weight + b.weight) / 2);
+        // Packing limit: with forty-odd countries the old minimum could not
+        // fit on the page, and capitals piled up on top of each other.
+        const packing = Math.sqrt(((WORLD - EDGE * 2) ** 2) / Math.max(1, count)) * 0.72;
+        const minimum = Math.min(96 + 28 * Math.min(3, (a.weight + b.weight) / 2), Math.max(52, packing));
         if (distance < minimum) {
           const push = ((minimum - distance) / distance) * 0.5;
           a.x -= dx * push;
@@ -682,6 +685,7 @@ export class Atlas {
       else bucket.set(key, path);
     };
 
+    const candidates = [];
     for (const edge of this.graph?.edges || []) {
       const from = this.position?.get(edge.source);
       const to = this.position?.get(edge.target);
@@ -689,12 +693,26 @@ export class Atlas {
       if (this.hidden.has(nodes[edge.source]?.folder) || this.hidden.has(nodes[edge.target]?.folder)) {
         continue;
       }
-      const weight = Math.max(1, edge.weight || 1);
       // Links inside one settlement are streets: at country scale they turn a
       // tight clump of notes into a sunburst. The clump already reads as a town.
       if (from.cluster && from.cluster === to.cluster) continue;
+      candidates.push({ edge, from, to, weight: Math.max(1, edge.weight || 1) });
+    }
+    // A 20,000-link vault would otherwise draw a hairball. Keep the strongest
+    // roads, deterministically, and let the graph view carry every link.
+    if (candidates.length > 12000) {
+      candidates.sort((a, b) =>
+        b.weight - a.weight
+        || a.edge.source - b.edge.source
+        || a.edge.target - b.edge.target);
+      candidates.length = 12000;
+    }
+    let routesDrawn = 0;
+    for (const { edge, from, to, weight } of candidates) {
       const path = smoothOpen(meander(from, to, edge.source * 31 + edge.target * 7));
       if (from.country !== to.country) {
+        if (routesDrawn >= 2500) continue;
+        routesDrawn += 1;
         add(routes, 1 + Math.log2(1 + weight) * 0.35, path);
       } else {
         add(roads, 0.8 + Math.log2(1 + weight) * 0.55, path);
@@ -717,9 +735,9 @@ export class Atlas {
     // sit on a ring inside the border and each town gets its share of notes.
     const towns = count > 48 ? Math.min(12, Math.ceil(count / 24)) : 1;
     const perTown = Math.ceil(count / towns);
-    const townSpread = towns > 1 ? radius * 0.72 : 0;
+    const townSpread = towns > 1 ? radius * 0.8 : 0;
     const townRadius = towns > 1
-      ? Math.min(radius * 0.26, Math.max(16, Math.sqrt(perTown) * 7))
+      ? Math.min(radius * 0.16, Math.max(10, Math.sqrt(perTown) * 4.5))
       : radius;
     const random = mulberry(country.name.length * 131 + count);
     const townCentres = Array.from({ length: towns }, (_, town) => {
@@ -751,6 +769,38 @@ export class Atlas {
       const b = local.get(edge.target);
       if (a === undefined || b === undefined || a === b) continue;
       springs.push([a, b]);
+    }
+
+    const density = count > 800 ? 0.3 : count > 240 ? 0.42 : count > 120 ? 0.58 : 1;
+    const finish = () => points.map((point) => {
+      const node = this.graph.nodes[point.index];
+      const relative = Math.sqrt((node.degree || 0) / maxDegree);
+      return {
+        index: point.index,
+        x: point.x,
+        y: point.y,
+        r: (2.4 + relative * 5.2) * density,
+        stipple: count > 64,
+        folderCount: count,
+        title: node.title,
+        folder: node.folder,
+        degree: node.degree || 0,
+        pagerank: node.pagerank || 0,
+      };
+    });
+
+    // A daily journal of 1,300 entries is 1.7 million pairwise checks *per
+    // pass*: the town spiral is already even, so skip the physics and let the
+    // stipple carry the density.
+    if (count > 800) {
+      for (const point of points) {
+        if (!pointInPoly(point.x, point.y, polygon)) {
+          const inside = this.nearestInside(point.x, point.y, polygon, capital);
+          point.x = inside[0];
+          point.y = inside[1];
+        }
+      }
+      return finish();
     }
 
     const spacing = clamp(21 - Math.log2(count + 2) * 2.2, 8, 18);
@@ -800,24 +850,7 @@ export class Atlas {
       }
     }
 
-    // A journal of 250 notes at full marker size is a field of bubbles. Dense
-    // folders get smaller marks, so the country reads as stipple with hubs.
-    const density = count > 240 ? 0.42 : count > 120 ? 0.58 : 1;
-    return points.map((point) => {
-      const node = this.graph.nodes[point.index];
-      const relative = Math.sqrt((node.degree || 0) / maxDegree);
-      return {
-        index: point.index,
-        x: point.x,
-        y: point.y,
-        r: (2.4 + relative * 5.2) * density,
-        stipple: count > 120,
-        title: node.title,
-        folder: node.folder,
-        degree: node.degree || 0,
-        pagerank: node.pagerank || 0,
-      };
-    });
+    return finish();
   }
 
   nearestInside(x, y, polygon, origin) {
@@ -1691,7 +1724,7 @@ export class Atlas {
         for (const wall of country.walls) {
           ctx.save();
           ctx.clip(country.path);
-          ctx.fillStyle = `rgba(243, 232, 205, ${country.count > 120 ? 0.16 : 0.4})`;
+          ctx.fillStyle = `rgba(243, 232, 205, ${country.count > 64 ? 0.16 : 0.4})`;
           ctx.fill(wall);
           // Ploughed fields: fine furrows inside the walls, so a settlement
           // reads as worked land instead of a blank chip.
@@ -1824,8 +1857,8 @@ export class Atlas {
         // A 240-note folder is a field, not a wall of badges: solid ink dots
         // read as stipple, and the old white discs stopped swallowing the land.
         ctx.beginPath();
-        ctx.arc(place.x, place.y, Math.max(0.85, place.r * 0.72), 0, Math.PI * 2);
-        ctx.fillStyle = rgba(ink, 0.48);
+        ctx.arc(place.x, place.y, Math.max(0.7, place.r * (place.folderCount > 240 ? 0.55 : 0.6)), 0, Math.PI * 2);
+        ctx.fillStyle = rgba(ink, place.folderCount > 240 ? 0.34 : 0.4);
         ctx.fill();
         ctx.restore();
         continue;
@@ -1871,8 +1904,10 @@ export class Atlas {
     const { ctx } = this;
     const placed = [];
     const scale = this.scale();
-    // Country names first: they anchor the map.
-    for (const country of this.countries) {
+    // Country names first: they anchor the map. Big countries win a collision
+    // with a small neighbour, or a 40-country map becomes a word cloud.
+    const named = [...this.countries].sort((a, b) => b.count - a.count);
+    for (const country of named) {
       if (!country.polygon.length || !country.label) continue;
       const [x, y] = this.toScreen(country.label.x, country.label.y);
       const text = country.name.toUpperCase();
@@ -1883,10 +1918,15 @@ export class Atlas {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const width = ctx.measureText(text).width;
+      const box = { x: x - width / 2 - 4, y: y - size, w: width + 8, h: size * 2 };
+      if (placed.some((other) => overlaps(box, other))) {
+        ctx.restore();
+        continue;
+      }
       ctx.globalAlpha = this.hidden.has(country.name) ? 0.3 : 0.78;
       this.inkedText(text, x, y);
       ctx.restore();
-      placed.push({ x: x - width / 2 - 4, y: y - size, w: width + 8, h: size * 2 });
+      placed.push(box);
     }
 
     const candidates = this.places

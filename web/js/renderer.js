@@ -212,6 +212,13 @@ export class Renderer {
     this.edges = graph.edges || [];
     const count = this.nodes.length;
     this.count = count;
+    // A 5,000-note vault packs the same volume as a 300-note one: keep each
+    // star and fibre dim enough that the extra density cannot clip to white.
+    this.density = Math.min(1, Math.sqrt(600 / Math.max(1, count)));
+    // Inside the closed shell every node adds to the same pixels. Compensate
+    // by count, not by square root, or a large vault becomes a white sun.
+    this.crowd = Math.min(1, 450 / Math.max(1, count));
+    this.crowdEdge = Math.min(1, 240 / Math.max(1, count));
     this.texHeight = Math.max(1, Math.ceil(count / TEX_WIDTH));
     this.posData = new Float32Array(this.texWidth * this.texHeight * 4);
     this.universe = new Float32Array(count * 3);
@@ -578,6 +585,9 @@ export class Renderer {
       gl.uniform1f(loc(gl, program, 'uReveal'), this.reveal);
       gl.uniform1f(loc(gl, program, 'uThickness'), 1.0);
       gl.uniform1f(loc(gl, program, 'uMorph'), this.morph);
+      gl.uniform1f(loc(gl, program, 'uDensity'), this.density);
+      gl.uniform1f(loc(gl, program, 'uCrowd'), this.crowd);
+      gl.uniform1f(loc(gl, program, 'uCrowdEdge'), this.crowdEdge);
       gl.bindVertexArray(this.edgeVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.edgeInstances);
     }
@@ -593,7 +603,11 @@ export class Renderer {
       gl.uniform2f(loc(gl, program, 'uViewport'), this.cssWidth, this.cssHeight);
       gl.uniform1f(loc(gl, program, 'uTime'), time);
       gl.uniform1f(loc(gl, program, 'uReveal'), this.reveal);
-      gl.uniform1f(loc(gl, program, 'uSizeScale'), 22.0 * (1 - 0.35 * Math.max(0, this.morph)));
+      gl.uniform1f(loc(gl, program, 'uSizeScale'),
+        22.0 * (1 - 0.35 * Math.max(0, this.morph)) * Math.max(0.55, this.density));
+      gl.uniform1f(loc(gl, program, 'uDensity'), this.density);
+      gl.uniform1f(loc(gl, program, 'uCrowd'), this.crowd);
+      gl.uniform1f(loc(gl, program, 'uMorph'), this.morph);
       gl.bindVertexArray(this.nodeVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.count);
     }

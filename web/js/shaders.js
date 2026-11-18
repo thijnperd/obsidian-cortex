@@ -98,6 +98,9 @@ uniform vec2 uViewport;
 uniform float uTime;
 uniform float uReveal;
 uniform float uSizeScale;
+uniform float uDensity;
+uniform float uCrowd;
+uniform float uMorph;
 
 out vec2 vUv;
 out vec3 vColor;
@@ -122,7 +125,7 @@ void main() {
   gl_Position = clip;
   gl_Position.xy += offset * clip.w;
   float twinkle = 0.82 + 0.18 * sin(uTime * 1.6 + aSeed * 6.2831);
-  vAlpha = born * aFocus * twinkle;
+  vAlpha = born * aFocus * twinkle * mix(uDensity, uCrowd, uMorph);
 }`;
 
 export const STAR_FS = `#version 300 es
@@ -164,6 +167,9 @@ uniform float uTime;
 uniform float uReveal;
 uniform float uThickness;
 uniform float uMorph;
+uniform float uDensity;
+uniform float uCrowd;
+uniform float uCrowdEdge;
 
 out float vSide;
 out float vT;
@@ -226,7 +232,8 @@ void main() {
   float spanFade = clamp(0.55 / (0.35 + length3), 0.18, 1.0);
   spanFade = mix(spanFade, 1.0, uMorph * 0.7);
   float fibreGain = mix(1.0, 1.75, uMorph);
-  vAlpha = born * (0.05 + 0.11 * aWeight) * depthFade * spanFade * aFocus * fibreGain;
+  vAlpha = born * (0.05 + 0.11 * aWeight) * depthFade * spanFade * aFocus * fibreGain
+    * mix(uDensity, uCrowdEdge, uMorph);
 }`;
 
 export const EDGE_FS = `#version 300 es
