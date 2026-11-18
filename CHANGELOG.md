@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.1.1 — The Guided Tour
+
+### Guided tour
+
+- A finished tour is remembered in this browser. The toolbar button changes from
+  **Tour** to **Replay**, so the fifteen-step walkthrough can be started again
+  in one click.
+- Closing the tour early does not mark it complete.
+
+### Documentation
+
+- The README graph screenshots now show the current folder-galaxy layout: local
+  clusters of note dots on a sphere, plus a chronological ring for a large
+  journal. The renderer already used this layout; the images were stale.
+- The README now describes that layout directly instead of leaving readers to
+  infer it from the old barrel-and-rings screenshots.
+
+### Release
+
+- Version 1.1.1 across the binary, installer and About panel.
+
 ## 1.1.0 — The Guided Tour
 
 ### Guided tour
