@@ -4,9 +4,9 @@ Cortex turns a folder of Markdown notes into a navigable 3D universe — and the
 gives that view a job: collect notes, read their local graph, and turn the
 selection into a research brief or an idea decision.
 
-Four views share one graph: a 3D **universe**, a **brain**, a **timeline**, and
-an **atlas** that draws folders as countries on a parchment map and links as
-roads. Same notes, different question: where does this live, and what connects
+Four spatial views share one graph: a 3D **universe**, a **brain**, a
+**timeline**, and an **atlas** that draws folders as countries on a parchment
+map and links as roads. Same notes, different question: where does this live, and what connects
 to it? A fifth, **Decisions**, steps out of the graph: it lists the research
 briefs and idea refinements you have written, grouped by status, with the notes
 each one cites.
@@ -21,7 +21,7 @@ The seeded demo vault, 328 notes — same graph, five ways to ask about it.
 | | |
 | --- | --- |
 | ![Graph view: a 3D universe of notes](docs/screenshots/01-graph.jpg) | ![Brain view: the same graph folded into hemispheres](docs/screenshots/02-brain.jpg) |
-| **Graph** — notes are stars, links are light. Drag to orbit, scroll to zoom, `f` to reframe. | **Brain** — the same graph laid out as two hemispheres, for seeing clusters instead of single notes. |
+| **Graph** — notes are stars, links are light, and the sky is a nebula. Drag to orbit, scroll to zoom, `f` to reframe. | **Brain** — the same graph inside a real cortical surface, its links drawn as fibre tracts. |
 | ![Timeline view: the vault replayed in the order it was written](docs/screenshots/03-timeline.jpg) | ![Atlas view: folders as countries on a parchment map](docs/screenshots/04-atlas.jpg) |
 | **Timeline** — the vault replayed in the order it was written, with a scrubber that goes anywhere. | **Atlas** — folders as countries, notes as places, links as roads, on a map that never moves. |
 | ![Decisions view: research briefs and ideas grouped by status](docs/screenshots/05-decisions.jpg) | |
@@ -102,8 +102,16 @@ countries, notes become places inside them, links become roads.
   folder centres and roughened with noise keyed to the *unordered* endpoints of
   each border segment, so two neighbouring countries displace their shared
   border to the same line instead of leaving a seam.
+- **Water follows the land.** Rivers are not drawn by hand: a 132×132 height
+  model (ridges inland, sea at the coast) is sink-filled and drained by
+  steepest descent, and one unit of rain per cell accumulates into streams
+  that join, widen and reach the sea.
+- **Terrain is engraved, not stamped.** Contour lines, hill shading, mountain
+  ranges and woods are all sampled from that same height model, so ranges sit
+  where the rivers rise and forests fill the low ground between them.
 - **Wilderness is the default.** Land nobody settled is stippled with grass;
   each clump of notes gets a walled enclosure with cleared ground inside it.
+  A folder of 240 notes becomes stipple, not a wall of discs.
 - **Roads carry weight.** Every link draws a road. A note with more links draws
   a wider road, and a link that crosses a border becomes a dashed trade route.
 - **Sea, islands, compass.** The land is pulled in from the frame, ringed with
@@ -257,7 +265,7 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | macOS (Apple silicon) | `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
-Tagged releases (`v0.4.0`) are fixed; every push to `main` also refreshes the
+Tagged releases (`v0.5.0`) are fixed; every push to `main` also refreshes the
 rolling `latest` build. The version appears in `cortex --version`, in **Vault
 settings → About**, and on `/api/about`. `SHA256SUMS.txt` is attached to every
 release.
