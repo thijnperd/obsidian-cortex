@@ -8,6 +8,7 @@ mod mcp;
 mod mcp_setup;
 #[cfg(any(windows, target_os = "macos"))]
 mod tray;
+mod update;
 mod version;
 
 use std::fs;

@@ -154,6 +154,22 @@ export async function about() {
   return readJson(response);
 }
 
+/** The newest stable release; the server asks GitHub and caches the answer. */
+export async function updateInfo() {
+  const response = await fetch('./api/update', { cache: 'no-store' });
+  return readJson(response);
+}
+
+/** Download, verify and run the Windows installer. */
+export async function installUpdate() {
+  const response = await fetch('./api/update', {
+    method: 'POST',
+    headers: WRITE_HEADERS,
+    body: '{}',
+  });
+  return readJson(response);
+}
+
 /**
  * Long poll: resolves when the vault version differs from `version`, or after
  * the server's 25 s timeout. Rejects with AbortError when the caller cancels.

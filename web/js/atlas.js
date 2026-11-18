@@ -242,8 +242,17 @@ function clipHalfPlane(poly, keep) {
   return out;
 }
 
-/** Voronoi cell for one capital, clipped out of the map rectangle. */
-function voronoiCell(index, points) {
+/**
+ * Power cell for one capital, clipped out of the map rectangle.
+ *
+ * Plain Voronoi gives every folder the same patch of land, so a forty-note
+ * folder and a four-hundred-note folder are drawn as equals. A power diagram
+ * moves the shared border by the difference of the two weights instead:
+ * `|x-pi|^2 - wi <= |x-pj|^2 - wj`, which is still a straight line and still
+ * welds shared borders to the same curve. That is what lets country area track
+ * note count without giving up the campaign-map shape.
+ */
+function powerCell(index, points) {
   let poly = [
     [EDGE, EDGE],
     [WORLD - EDGE, EDGE],
@@ -254,44 +263,74 @@ function voronoiCell(index, points) {
   for (let other = 0; other < points.length; other++) {
     if (other === index) continue;
     const target = points[other];
-    const mx = (origin.x + target.x) / 2;
-    const my = (origin.y + target.y) / 2;
     const nx = target.x - origin.x;
     const ny = target.y - origin.y;
-    poly = clipHalfPlane(poly, ([x, y]) => (x - mx) * nx + (y - my) * ny <= 0);
+    if (nx === 0 && ny === 0) continue;
+    const mx = (origin.x + target.x) / 2;
+    const my = (origin.y + target.y) / 2;
+    const shift = ((origin.weight || 0) - (target.weight || 0)) / 2;
+
+    poly = clipHalfPlane(poly, ([x, y]) => (x - mx) * nx + (y - my) * ny <= shift);
     if (poly.length === 0) break;
   }
   return poly;
 }
 
 /**
- * Capitals: golden-angle spiral by size, then a few passes of separation so
- * large countries get room. No randomness, so the map is stable across loads.
+ * Capitals: sized by note count, packed from the largest outward, then relaxed
+ * until the discs stop overlapping. No randomness, so the map is stable.
  */
 function layoutCapitals(folders) {
   const count = folders.length;
-  if (count === 1) return [{ x: WORLD / 2, y: WORLD / 2, weight: 1 }];
+  const inner = WORLD - EDGE * 2;
+  if (count === 1) {
+    return [{ x: WORLD / 2, y: WORLD / 2, area: inner * inner, radius: inner / 2, weight: inner * inner }];
+  }
+
+  const total = folders.reduce((sum, folder) => sum + Math.max(1, folder.count), 0);
+  // Cells tile the whole inner square, so that is the area budget. The radius
+  // is slightly smaller than the area-equivalent disc: discs leave gaps and the
+  // power diagram fills them, while packing at 100% would force overlaps.
+  const land = inner * inner;
   const points = folders.map((folder, index) => {
-    const angle = index * GOLDEN;
-    const radius = (0.12 + 0.36 * Math.sqrt((index + 0.5) / count)) * WORLD;
+    const area = (land * Math.max(1, folder.count)) / total;
     return {
-      x: WORLD / 2 + Math.cos(angle) * radius,
-      y: WORLD / 2 + Math.sin(angle) * radius,
-      weight: Math.sqrt(folder.count + 1),
+      x: WORLD / 2,
+      y: WORLD / 2,
+      area,
+      radius: Math.sqrt(area / Math.PI) * 0.86,
+      weight: area,
+      index,
     };
   });
-  for (let step = 0; step < 140; step++) {
-    for (let i = 0; i < count; i++) {
-      for (let j = i + 1; j < count; j++) {
+
+  // Largest at the centre, then a golden-angle spiral. Sorting first means the
+  // big countries get the room they need instead of whatever index they had.
+  const order = [...points.keys()].sort(
+    (a, b) => folders[b].count - folders[a].count || a - b,
+  );
+  let placed = 0;
+  order.forEach((index, rank) => {
+    const point = points[index];
+    if (rank === 0) return;
+    placed += point.area;
+    const angle = rank * GOLDEN;
+    const radius = Math.sqrt(placed / Math.PI) * 0.94;
+    point.x = WORLD / 2 + Math.cos(angle) * radius;
+    point.y = WORLD / 2 + Math.sin(angle) * radius;
+  });
+
+  // Relax unequal discs. The minimum distance is the sum of their radii, so the
+  // shape of the map follows the data instead of a fixed packing grid.
+  for (let step = 0; step < 220; step += 1) {
+    for (let i = 0; i < count; i += 1) {
+      for (let j = i + 1; j < count; j += 1) {
         const a = points[i];
         const b = points[j];
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const distance = Math.hypot(dx, dy) || 1;
-        // Packing limit: with forty-odd countries the old minimum could not
-        // fit on the page, and capitals piled up on top of each other.
-        const packing = Math.sqrt(((WORLD - EDGE * 2) ** 2) / Math.max(1, count)) * 0.72;
-        const minimum = Math.min(96 + 28 * Math.min(3, (a.weight + b.weight) / 2), Math.max(52, packing));
+        const minimum = (a.radius + b.radius) * 0.93;
         if (distance < minimum) {
           const push = ((minimum - distance) / distance) * 0.5;
           a.x -= dx * push;
@@ -302,13 +341,58 @@ function layoutCapitals(folders) {
       }
     }
     for (const point of points) {
-      point.x += (WORLD / 2 - point.x) * 0.004;
-      point.y += (WORLD / 2 - point.y) * 0.004;
-      point.x = clamp(point.x, EDGE + 60, WORLD - EDGE - 60);
-      point.y = clamp(point.y, EDGE + 60, WORLD - EDGE - 60);
+      point.x += (WORLD / 2 - point.x) * 0.003;
+      point.y += (WORLD / 2 - point.y) * 0.003;
+      const inset = EDGE + clamp(point.radius * 0.62, 28, 96);
+      point.x = clamp(point.x, inset, WORLD - inset);
+      point.y = clamp(point.y, inset, WORLD - inset);
     }
   }
   return points;
+}
+
+/**
+ * Tune the power weights until each cell's area is proportional to its folder.
+ *
+ * Weights start equal (which gives an ordinary Voronoi) and move by the area
+ * error each pass. The best valid state is kept: a weight that is too extreme
+ * can make a small country degenerate to a line, and that state is never drawn.
+ * Plain Voronoi remains the last resort, but it is no longer the first answer.
+ */
+function balancedCells(points) {
+  if (points.length < 2) return points.map((_, index) => powerCell(index, points));
+  const totalTarget = points.reduce((sum, point) => sum + point.area, 0) || 1;
+  const shares = points.map((point) => point.area / totalTarget);
+  for (const point of points) point.weight = 0;
+
+  let best = null;
+  for (let step = 0; step < 30; step += 1) {
+    const cells = points.map((_, index) => powerCell(index, points));
+    if (cells.some((cell) => cell.length < 3)) break;
+    const areas = cells.map((cell) => Math.abs(polygonArea(cell)));
+    const total = areas.reduce((sum, area) => sum + area, 0) || 1;
+    let error = 0;
+    for (let index = 0; index < points.length; index += 1) {
+      error += Math.abs(areas[index] / total - shares[index]);
+    }
+    if (!best || error < best.error) {
+      best = { error, cells, weights: points.map((point) => point.weight) };
+    }
+    if (error < 0.02) break;
+    for (let index = 0; index < points.length; index += 1) {
+      const actual = areas[index] / total;
+      points[index].weight += (shares[index] - actual) * total * 0.28;
+    }
+  }
+
+  if (best) {
+    points.forEach((point, index) => {
+      point.weight = best.weights[index];
+    });
+    return best.cells;
+  }
+  for (const point of points) point.weight = 0;
+  return points.map((_, index) => powerCell(index, points));
 }
 
 /**
@@ -594,11 +678,16 @@ export class Atlas {
     });
 
     const capitals = layoutCapitals(folders);
-    const cells = folders.map((_, index) => voronoiCell(index, capitals));
+    const cells = balancedCells(capitals);
 
     this.countries = folders.map((folder, index) => {
       const cell = cells[index].length >= 3 ? cells[index] : [];
       const centre = cell.length ? centroid(cell) : [WORLD / 2, WORLD / 2];
+      // Tuned weights can move a border past its own capital; a capital outside
+      // its country would place that folder's notes in a neighbour.
+      const capital = cell.length && !pointInPoly(capitals[index].x, capitals[index].y, cell)
+        ? { x: centre[0], y: centre[1] }
+        : capitals[index];
       // The cell decides membership; the roughened outline decides the coast.
       // Land is pulled in slightly so notes sit inside their own borders.
       const field = cell.map(([x, y]) => [
@@ -613,7 +702,7 @@ export class Atlas {
         count: folder.count,
         colour: folder.color ?? index,
         ink: PIGMENTS[(folder.color ?? index) % PIGMENTS.length],
-        capital: capitals[index],
+        capital,
         cell,
         polygon: field,
         hatch: (index * 0.73) % Math.PI,

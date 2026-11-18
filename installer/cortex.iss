@@ -1,10 +1,10 @@
 ; Cortex, per-user install. No admin, no service: a Start Menu entry, an
 ; uninstaller, an optional login entry, and App Paths so `cortex` resolves.
 ;
-; CI passes the version: ISCC.exe /DAppVersion=0.7.0 installer\cortex.iss
+; CI passes the version: ISCC.exe /DAppVersion=0.8.0 installer\cortex.iss
 
 #ifndef AppVersion
-  #define AppVersion "0.7.0"
+  #define AppVersion "0.8.0"
 #endif
 
 [Setup]
@@ -21,6 +21,10 @@ OutputBaseFilename=CortexSetup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; The in-app updater closes Cortex before it runs the installer; Restart Manager
+; covers the case where it did not (a console `cortex serve` is still running).
+CloseApplications=yes
+RestartApplications=no
 UninstallDisplayIcon={app}\cortex.exe
 ; The binary is unsigned, so the installer is too. The docs say so.
 
@@ -41,3 +45,6 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\cortex.
 
 [Run]
 Filename: "{app}\cortex.exe"; Parameters: "app"; Description: "Start Cortex"; Flags: nowait postinstall skipifsilent
+; A silent install is the updater: reopen Cortex when it is done, without the
+; wizard and without asking a second time.
+Filename: "{app}\cortex.exe"; Parameters: "app"; Flags: nowait; Check: WizardSilent
