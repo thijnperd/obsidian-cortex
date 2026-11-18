@@ -59,6 +59,7 @@
       <button class="search-button" id="search-button" type="button">
         <span>Search</span><kbd>⌘K</kbd>
       </button>
+      <button class="tour-button" id="tour-button" type="button" title="Take the guided tour" aria-haspopup="dialog" hidden>◎ Tour</button>
       <button class="icon-button" id="settings-button" type="button" title="Vault settings" aria-label="Vault settings">⚙</button>
       <button class="icon-button" id="today-note" type="button" title="Today's note (t)" aria-label="Today's note" hidden>☀</button>
       <button class="icon-button" id="new-note" type="button" title="New note" hidden>＋</button>
@@ -244,6 +245,31 @@
       <p class="launch-foot">Or start it directly: <code>cortex serve ~/Notes</code></p>
     </div>
   </div>
+
+  <section class="tour" id="tour" hidden aria-labelledby="tour-title">
+    <div class="tour-shade" aria-hidden="true"></div>
+    <div class="tour-spot" id="tour-spot" aria-hidden="true" hidden></div>
+    <article class="tour-card" id="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-title" tabindex="-1">
+      <header class="tour-head">
+        <div class="tour-labels">
+          <p class="tour-kicker" id="tour-kicker">Guided tour</p>
+          <span class="tour-context" id="tour-context" hidden></span>
+        </div>
+        <button class="icon-button" id="tour-close" type="button" aria-label="Exit the guided tour">×</button>
+      </header>
+      <div class="tour-progress" aria-hidden="true"><span id="tour-progress-bar"></span></div>
+      <h2 class="tour-title" id="tour-title"></h2>
+      <div class="tour-body" id="tour-body"></div>
+      <p class="tour-hint" id="tour-hint"></p>
+      <footer class="tour-actions">
+        <button class="text-button" id="tour-back" type="button">Back</button>
+        <div class="tour-nav">
+          <button class="btn" id="tour-secondary" type="button" hidden></button>
+          <button class="btn btn-primary" id="tour-next" type="button">Next</button>
+        </div>
+      </footer>
+    </article>
+  </section>
 
   <div class="toast" id="toast" hidden role="status"></div>
 

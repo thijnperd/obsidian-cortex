@@ -1074,6 +1074,24 @@ fn seed_medium(root: &Path) -> std::io::Result<usize> {
     Ok(written)
 }
 
+/// Adds the optional decision-trail fields to a structure note. The demo is the
+/// tour's teaching vault, so its two decisions carry real metadata instead of
+/// explaining fields that are absent from every card.
+fn with_demo_trail(
+    markdown: String,
+    status: &str,
+    confidence: &str,
+    review_on: &str,
+    supersedes: Option<&str>,
+) -> String {
+    let anchor = format!("status: {status}\n");
+    let mut extra = format!("confidence: {confidence}\nreview_on: {review_on}\n");
+    if let Some(target) = supersedes {
+        extra.push_str(&format!("supersedes: \"[[{target}]]\"\n"));
+    }
+    markdown.replacen(&anchor, &format!("{anchor}{extra}"), 1)
+}
+
 /// A small first-run vault: twelve concept notes, two maps, a short journal and
 /// one of each decision card. Every link is filtered to a title that exists.
 fn seed_small(root: &Path) -> std::io::Result<usize> {
@@ -1118,14 +1136,34 @@ fn seed_small(root: &Path) -> std::io::Result<usize> {
             excerpt: seed.lede.to_string(),
         })
         .collect();
-    for (template, question) in [
-        (Template::Research, "What makes a small vault useful?"),
+    let research_question = "What makes a small vault useful?";
+    let idea_question = "Should a first vault start with three folders or ten?";
+    let review_due = dates::iso_date(today - 2);
+    let review_later = dates::iso_date(today + 30);
+    let briefs = [
+        (
+            Template::Research,
+            research_question,
+            "0.78",
+            review_later.as_str(),
+            None,
+        ),
         (
             Template::Idea,
-            "Should a first vault start with three folders or ten?",
+            idea_question,
+            "0.62",
+            review_due.as_str(),
+            Some(research_question),
         ),
-    ] {
-        let body = synthesis::build(template, question, &evidence);
+    ];
+    for (template, question, confidence, review_on, supersedes) in briefs {
+        let body = with_demo_trail(
+            synthesis::build(template, question, &evidence),
+            template.status(),
+            confidence,
+            review_on,
+            supersedes,
+        );
         let id = format!("Synthesis/{}", store::slugify(question));
         store::write_note(root, &id, &body).map_err(|err| Error::other(err.to_string()))?;
         written += 1;
@@ -1631,6 +1669,33 @@ mod tests {
         assert!(vault.edges.len() >= 10);
         let board = crate::structures::board(&vault);
         assert_eq!(board.total, 2);
+        assert_eq!(
+            board
+                .cards
+                .iter()
+                .filter(|card| card.kind == "research")
+                .count(),
+            1
+        );
+        assert_eq!(
+            board
+                .cards
+                .iter()
+                .filter(|card| card.kind == "idea")
+                .count(),
+            1
+        );
+        assert!(
+            board
+                .cards
+                .iter()
+                .any(|card| card.review_on.is_some() && card.confidence.is_some()),
+            "the tour demo needs a decision trail to teach"
+        );
+        assert!(
+            board.cards.iter().any(|card| card.supersedes.is_some()),
+            "the tour demo needs a supersession to show"
+        );
     }
 
     #[test]

@@ -30,6 +30,7 @@ use serde_json::json;
 use tokio::sync::{watch, RwLock};
 
 use cortex_core::dates;
+use cortex_core::demo::{self, DemoSize};
 use cortex_core::graph::GraphData;
 use cortex_core::layout::LayoutOptions;
 use cortex_core::registry::{self, Registry};
@@ -363,6 +364,7 @@ pub async fn serve_with(
 
     let app = Router::new()
         .route("/api/vaults", get(api_vaults).post(api_add_vault))
+        .route("/api/tutorial", post(api_tutorial_vault))
         .route("/api/vaults/forget", post(api_forget_vault))
         .route("/api/vaults/agents", post(api_vault_agents))
         .route("/api/reveal", post(api_reveal))
@@ -695,23 +697,22 @@ async fn api_vaults(State(state): State<AppState>) -> Response {
     )
 }
 
-async fn api_add_vault(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<AddVaultRequest>,
-) -> Response {
-    if let Some(rejection) = begin_admin(&state, &headers).await {
-        return rejection;
-    }
-    let Some(path) = registry::expand(&payload.path) else {
-        return bad_request("enter a folder path");
-    };
+struct RegisteredVault {
+    id: String,
+    name: String,
+    path: String,
+    notes: usize,
+}
+
+/// Adds a folder to the registry and (if needed) opens it. Used by both the
+/// folder picker and the guided tour, so the two paths cannot drift.
+async fn register_vault(state: &AppState, path: PathBuf) -> Result<RegisteredVault, Box<Response>> {
     let root = match std::fs::canonicalize(&path) {
         Ok(root) => root,
-        Err(_) => return bad_request("that folder does not exist"),
+        Err(_) => return Err(Box::new(bad_request("that folder does not exist"))),
     };
     if !root.is_dir() {
-        return bad_request("that path is not a folder");
+        return Err(Box::new(bad_request("that path is not a folder")));
     }
 
     let id = vault_id(&root);
@@ -733,23 +734,19 @@ async fn api_add_vault(
     *state.active.write().await = Some(id.clone());
 
     if let Some(handle) = existing {
-        return json_response(
-            StatusCode::OK,
-            serde_json::json!({
-                "id": id,
-                "name": handle.name,
-                "path": handle.root.display().to_string(),
-                "notes": handle.current().await.vault.notes.len(),
-            })
-            .to_string(),
-        );
+        return Ok(RegisteredVault {
+            id,
+            name: handle.name.clone(),
+            path: handle.root.display().to_string(),
+            notes: handle.current().await.vault.notes.len(),
+        });
     }
 
     let snapshot = match open_vault(&root, &name, None).await {
         Ok(snapshot) => snapshot,
         Err(error) => {
             eprintln!("[cortex] could not open {}: {error}", root.display());
-            return bad_request("Cortex could not read that folder");
+            return Err(Box::new(bad_request("Cortex could not read that folder")));
         }
     };
     let notes = snapshot.vault.notes.len();
@@ -764,16 +761,87 @@ async fn api_add_vault(
     tokio::spawn(watch(handle.clone(), state.revision.clone()));
     println!("[cortex] opened {} ({notes} notes)", handle.root.display());
 
-    json_response(
-        StatusCode::OK,
-        serde_json::json!({
-            "id": id,
-            "name": handle.name,
-            "path": handle.root.display().to_string(),
-            "notes": notes,
+    Ok(RegisteredVault {
+        id,
+        name: handle.name.clone(),
+        path: handle.root.display().to_string(),
+        notes,
+    })
+}
+
+async fn api_add_vault(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<AddVaultRequest>,
+) -> Response {
+    if let Some(rejection) = begin_admin(&state, &headers).await {
+        return rejection;
+    }
+    let Some(path) = registry::expand(&payload.path) else {
+        return bad_request("enter a folder path");
+    };
+    match register_vault(&state, path).await {
+        Ok(vault) => json_response(
+            StatusCode::OK,
+            serde_json::json!({
+                "id": vault.id,
+                "name": vault.name,
+                "path": vault.path,
+                "notes": vault.notes,
+            })
+            .to_string(),
+        ),
+        Err(response) => *response,
+    }
+}
+
+/// The guided tour needs a complete example even when the user's vault is not
+/// there yet. This generates the small demo inside Cortex's config directory;
+/// it never writes into the vault the user is currently reading.
+async fn api_tutorial_vault(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Some(rejection) = begin_admin(&state, &headers).await {
+        return rejection;
+    }
+    if state.config.read_only {
+        return forbidden();
+    }
+    let Some(config) = instance::config_dir() else {
+        return json_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            r#"{"error":"Cortex could not find its config folder","code":"no_config"}"#.to_string(),
+        );
+    };
+    let root = config.join("Cortex Tour");
+    let created = !root.join(".cortex-demo").exists();
+    if created {
+        let seed_root = root.clone();
+        let seeded = tokio::task::spawn_blocking(move || {
+            demo::seed_with(&seed_root, false, DemoSize::Small)
         })
-        .to_string(),
-    )
+        .await;
+        match seeded {
+            Ok(Ok(_)) => {}
+            Ok(Err(error)) => {
+                return bad_request(&format!("could not create the tour demo: {error}"));
+            }
+            Err(_) => return bad_request("the tour demo task stopped unexpectedly"),
+        }
+    }
+
+    match register_vault(&state, root).await {
+        Ok(vault) => json_response(
+            StatusCode::OK,
+            serde_json::json!({
+                "id": vault.id,
+                "name": vault.name,
+                "path": vault.path,
+                "notes": vault.notes,
+                "created": created,
+            })
+            .to_string(),
+        ),
+        Err(response) => *response,
+    }
 }
 
 async fn api_forget_vault(
