@@ -1203,6 +1203,57 @@ body.mode-atlas .note-title { letter-spacing: 0; }
 }
 .decision-source:hover { border-color: var(--line-strong); color: var(--ink); }
 .decision-missing { margin: 0; font-size: 12px; color: var(--danger); }
+.decision-card.is-due { border-color: var(--danger); }
+.decision-review { margin: 0; font-size: 12px; color: var(--danger); }
+.decision-supersedes {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font-family: var(--sans);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.decision-supersedes:hover { color: var(--accent); }
+
+/* The decision trail in the note panel: the why layer, not another graph. */
+.decision-trail {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s3) 0 var(--s4);
+  padding: var(--s3);
+  border-left: 2px solid var(--accent);
+  background: var(--surface-2);
+}
+.decision-trail.is-due { border-left-color: var(--danger); }
+.trail-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
+.trail-kicker { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.trail-flag { font-size: 12px; color: var(--danger); }
+.trail-facts { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.trail-fact { font-size: 12px; color: var(--ink-3); }
+.trail-fact strong { color: var(--ink-2); font-weight: 500; }
+.trail-review strong { color: var(--danger); }
+.trail-supersedes {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-family: var(--sans);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.trail-supersedes:hover { color: var(--accent); }
+.trail-help { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.decision-trail.is-flash { animation: trail-flash 1.2s var(--ease); }
+@keyframes trail-flash {
+  0%, 100% { background: var(--surface-2); }
+  35% { background: var(--surface-3); }
+}
 .decisions-empty { grid-column: 1 / -1; max-width: 520px; margin: 0 auto; padding: var(--s6) 0; }
 .decisions-empty h2 {
   margin: 0 0 var(--s2);

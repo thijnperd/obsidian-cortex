@@ -669,7 +669,7 @@ dependencies = [
 
 [[package]]
 name = "cortex"
-version = "0.9.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -687,7 +687,7 @@ dependencies = [
 
 [[package]]
 name = "cortex-core"
-version = "0.9.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",

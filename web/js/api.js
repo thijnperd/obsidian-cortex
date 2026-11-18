@@ -93,6 +93,16 @@ export async function saveNote(payload, vault) {
   return readJson(response);
 }
 
+/** Opens today's note, creating Journal/YYYY-MM-DD.md when it is missing. */
+export async function openDaily(vault) {
+  const response = await fetch(withVault('./api/daily', vault), {
+    method: 'POST',
+    headers: WRITE_HEADERS,
+    body: '{}',
+  });
+  return readJson(response);
+}
+
 export async function synthesize(payload, vault) {
   const response = await fetch(withVault('./api/synthesize', vault), {
     method: 'POST',

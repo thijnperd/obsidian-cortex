@@ -74,6 +74,7 @@ const els = {
   bentoBoard: document.getElementById('bento-board'),
   settings: document.getElementById('settings'),
   settingsButton: document.getElementById('settings-button'),
+  todayNote: document.getElementById('today-note'),
   settingsClose: document.getElementById('settings-close'),
   settingsName: document.getElementById('settings-name'),
   settingsPath: document.getElementById('settings-path'),
@@ -256,6 +257,7 @@ function wire() {
   els.replayRange.addEventListener('input', onScrub);
   els.replayPlay.addEventListener('click', startReplay);
   els.newNote.addEventListener('click', createNote);
+  els.todayNote.addEventListener('click', openDaily);
   els.paletteInput.addEventListener('input', () => {
     state.palette.query = els.paletteInput.value;
     scheduleSearch();
@@ -528,6 +530,7 @@ function applyGraph(graph) {
     ? (currentVault()?.path || '')
     : 'static demo';
   els.newNote.hidden = !state.live;
+  els.todayNote.hidden = !state.live;
   const overview = isOverview(graph.nodes.length);
   ui.setStats(graph.meta, overview);
   ui.renderDecisions(els.decisionsBoard, graph.structures, openDecision);
@@ -1420,6 +1423,8 @@ function onKeyDown(event) {
     if (state.local) clearLocalGraph();
     else showLocalGraph(state.selected);
   } else if (event.key.toLowerCase() === 'n' && state.live) createNote();
+  else if (event.key.toLowerCase() === 't' && state.live) openDaily();
+  else if (event.key.toLowerCase() === 'y' && state.detail) focusDecisionTrail();
   else if (event.key.toLowerCase() === 'c' && state.selected != null) {
     toggleSelection(state.selected);
     if (state.detail) renderPanel(state.detail);
@@ -1511,6 +1516,7 @@ async function getDetail(node) {
 }
 
 function localDetail(node) {
+  const card = state.graph.structures?.cards?.find((item) => item.id === node.id);
   const backlinks = (state.incoming.get(node.id) || [])
     .map(({ source, weight }) => ({
       id: state.graph.nodes[source].id,
@@ -1532,6 +1538,12 @@ function localDetail(node) {
     backlinks,
     mentions: [],
     related,
+    kind: card?.kind,
+    status: card?.status,
+    confidence: card?.confidence,
+    review_on: card?.review_on,
+    supersedes: card?.supersedes,
+    evidence: card?.evidence,
   };
 }
 
@@ -1641,6 +1653,18 @@ function renderPanel(detail) {
   });
 }
 
+function focusDecisionTrail() {
+  const trail = document.getElementById('decision-trail');
+  if (!trail) {
+    ui.toast('Open a research brief or idea note to see its decision trail');
+    return;
+  }
+  trail.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  trail.classList.remove('is-flash');
+  void trail.offsetWidth;
+  trail.classList.add('is-flash');
+}
+
 function closePanel() {
   if (els.panel.hidden) return;
   if (state.local) clearLocalGraph({ resetCamera: true, rerender: false });
@@ -1727,6 +1751,28 @@ async function createNote() {
     }
   } catch (error) {
     ui.toast(error.message || 'Could not create a note');
+  }
+}
+
+async function openDaily() {
+  if (!state.live) {
+    ui.toast('The static demo cannot write notes');
+    return;
+  }
+  try {
+    const result = await api.openDaily(state.vaultId);
+    state.version = result.version;
+    await refreshGraph();
+    const index = nodeIndex(result.id);
+    if (index < 0) {
+      ui.toast('Today’s note was written, but the vault has not picked it up yet');
+      return;
+    }
+    await openNote(index);
+    ui.toast(result.created ? 'Today’s note ready' : 'Today’s note');
+    if (result.created) requestEdit();
+  } catch (error) {
+    ui.toast(error.message || 'Could not open today’s note');
   }
 }
 

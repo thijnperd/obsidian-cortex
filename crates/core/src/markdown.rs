@@ -26,6 +26,12 @@ pub struct Frontmatter {
     pub kind: Option<String>,
     /// Frontmatter `status`: the column a structure note sits in.
     pub status: Option<String>,
+    /// Frontmatter `confidence`, normalised to a 0–100 percentage.
+    pub confidence: Option<u8>,
+    /// Frontmatter `review_on`: the date a decision should be looked at again.
+    pub review_on: Option<String>,
+    /// Frontmatter `supersedes`: the note this decision replaces.
+    pub supersedes: Option<String>,
     #[serde(default)]
     pub extra: BTreeMap<String, String>,
 }
@@ -187,6 +193,14 @@ fn parse_frontmatter(block: &str) -> Frontmatter {
             }
             "type" | "kind" => fm.kind = items.first().and_then(|value| label(value)),
             "status" | "state" => fm.status = items.first().and_then(|value| label(value)),
+            "confidence" => fm.confidence = items.first().and_then(|value| confidence(value)),
+            "review_on" | "review" => {
+                fm.review_on = items.first().and_then(|value| review_date(value))
+            }
+            "supersedes" => {
+                fm.supersedes =
+                    note_target(value).or_else(|| items.first().and_then(|v| note_target(v)))
+            }
             _ => {
                 fm.extra.insert(key, truncate_chars(value, 300));
             }
@@ -222,6 +236,45 @@ fn label(value: &str) -> Option<String> {
         None
     } else {
         Some(text)
+    }
+}
+
+/// Accepts `0.7`, `70` or `70%` and stores a bounded whole percentage.
+fn confidence(value: &str) -> Option<u8> {
+    let raw = value.trim().trim_end_matches('%').trim();
+    let parsed = raw.parse::<f32>().ok()?;
+    let percent = if parsed <= 1.0 {
+        parsed * 100.0
+    } else {
+        parsed
+    };
+    if percent.is_finite() && (0.0..=100.0).contains(&percent) {
+        Some(percent.round() as u8)
+    } else {
+        None
+    }
+}
+
+/// Keeps an ISO review date and ignores prose or timestamps.
+fn review_date(value: &str) -> Option<String> {
+    let text = unquote(value.trim());
+    let date = text.get(..10)?;
+    crate::dates::parse_iso_date(date)?;
+    Some(date.to_string())
+}
+
+/// `[[Note|alias]]`, `Note#heading` and plain ids all become a resolvable target.
+fn note_target(value: &str) -> Option<String> {
+    let text = unquote(value.trim());
+    let text = text
+        .strip_prefix("[[")
+        .and_then(|inner| inner.strip_suffix("]]"))
+        .unwrap_or(&text);
+    let target = text.split(['|', '#', '^']).next()?.trim();
+    if target.is_empty() {
+        None
+    } else {
+        Some(truncate_chars(target, 200))
     }
 }
 
@@ -463,6 +516,36 @@ mod tests {
         let missing = parse("# X");
         assert!(missing.frontmatter.kind.is_none());
         assert!(missing.frontmatter.status.is_none());
+    }
+
+    #[test]
+    fn reads_decision_confidence_review_and_supersession() {
+        let parsed = parse(
+            "---\ntype: idea\nconfidence: 0.7\nreview_on: 2026-12-01\nsupersedes: \"[[Decision - Use SQLite]]\"\n---\n# X",
+        );
+        assert_eq!(parsed.frontmatter.confidence, Some(70));
+        assert_eq!(parsed.frontmatter.review_on.as_deref(), Some("2026-12-01"));
+        assert_eq!(
+            parsed.frontmatter.supersedes.as_deref(),
+            Some("Decision - Use SQLite")
+        );
+        assert_eq!(
+            parse("---\nsupersedes: '[[Plain target]]'\n---\n# X")
+                .frontmatter
+                .supersedes
+                .as_deref(),
+            Some("Plain target")
+        );
+        assert_eq!(
+            parse("---\nconfidence: 140\n---\n# X")
+                .frontmatter
+                .confidence,
+            None
+        );
+        assert!(parse("review_on: next month\n")
+            .frontmatter
+            .review_on
+            .is_none());
     }
 
     #[test]
