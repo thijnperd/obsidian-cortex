@@ -190,7 +190,8 @@ export function editorHtml(detail, draft) {
   return `
     <p class="note-crumb">Editing · ${escapeHtml(detail.folder)}</p>
     <h1 class="note-title">${escapeHtml(detail.title)}</h1>
-    <textarea class="editor" id="note-editor" spellcheck="false" aria-label="Note source">${escapeHtml(draft)}</textarea>
+    <textarea class="editor" id="note-editor" spellcheck="false" aria-label="Note source" aria-describedby="editor-hint">${escapeHtml(draft)}</textarea>
+    <p class="editor-hint" id="editor-hint">Ctrl/⌘ B bold · I italic · K wikilink · E code · 1–3 heading · Shift 7/8/9 list · S save · Esc cancel</p>
   `;
 }
 
@@ -425,9 +426,6 @@ export function renderBento(container, graph, hidden, { onOpen, onFolder, palett
     cell.className = 'bento-cell';
     cell.dataset.folder = folder.name;
     if (hidden.has(folder.name)) cell.classList.add('is-off');
-    // A handful of folders get a true bento rhythm; a vault with forty folders
-    // stays a dense grid of equal cards instead of two giant boxes and a sea
-    // of slivers.
     // One anchor tile and two wide tiles per board: a readable hierarchy that
     // does not turn a seven-folder vault into seven identical cards.
     if (rank === 0) cell.classList.add('is-large');
@@ -455,10 +453,9 @@ export function renderBento(container, graph, hidden, { onOpen, onFolder, palett
 
     const meta = document.createElement('p');
     meta.className = 'bento-meta';
-    const top = notes[0];
-    meta.textContent = top
-      ? `${Math.round(share * 100)}% of the vault · ${top.title}`
-      : `${Math.round(share * 100)}% of the vault`;
+    // The notes below already carry their titles; repeating the first one here
+    // only added a truncated line to every small box.
+    meta.textContent = `${Math.round(share * 100)}% of the vault`;
     cell.appendChild(meta);
 
     const list = document.createElement('div');

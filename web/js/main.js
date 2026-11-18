@@ -7,6 +7,7 @@ import { renderMarkdown } from './markdown.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
 import { Atlas } from './atlas.js';
+import { attachEditor } from './editor.js';
 import { diaryFolders, isOverview } from './scale.js';
 
 const state = {
@@ -1367,6 +1368,8 @@ function onKeyDown(event) {
   const mod = event.metaKey || event.ctrlKey;
 
   if (mod && event.key.toLowerCase() === 'k') {
+    // The note editor owns Ctrl/⌘K while it is focused: it writes a wikilink.
+    if (typing) return;
     event.preventDefault();
     if (state.palette.open) closePalette();
     else openPalette();
@@ -1650,6 +1653,13 @@ function closePanel() {
   if (state.atlas) state.atlas.setFocus(null);
 }
 
+function cancelEdit() {
+  if (!state.detail) return;
+  state.editing = false;
+  state.draft = null;
+  renderPanel(state.detail);
+}
+
 function requestEdit() {
   if (!state.detail || !state.live) return;
   state.editing = true;
@@ -1665,22 +1675,17 @@ function requestEdit() {
   cancel.type = 'button';
   cancel.className = 'btn';
   cancel.textContent = 'Cancel';
-  cancel.addEventListener('click', () => {
-    state.editing = false;
-    renderPanel(state.detail);
-  });
+  cancel.addEventListener('click', cancelEdit);
   els.panelActions.append(save, cancel);
   const textarea = document.getElementById('note-editor');
   if (textarea) {
     textarea.focus();
-    textarea.addEventListener('input', () => {
-      state.draft = textarea.value;
-    });
-    textarea.addEventListener('keydown', (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-        event.preventDefault();
-        saveEdits();
-      }
+    attachEditor(textarea, {
+      onChange: () => {
+        state.draft = textarea.value;
+      },
+      onSave: saveEdits,
+      onCancel: cancelEdit,
     });
   }
 }
