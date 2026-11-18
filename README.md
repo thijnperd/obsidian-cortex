@@ -21,6 +21,11 @@ medium one is the full tour, and the giant one is the stress test: **5,523
 notes, 24,151 links, 41 folders, zero unresolved links.** Every screenshot
 below is a different seeded vault, not a mock-up.
 
+Above 1,200 notes Cortex switches to a folder-level **overview**: notes keep
+their real positions, but the graph labels folders instead of a dozen
+individual stars, draws only the strongest 10,000 links, and the atlas turns
+dense folders into light stipple. Hover or select a note for its own label.
+
 ### Small — 21 notes, 35 links
 
 | | |
@@ -48,9 +53,9 @@ below is a different seeded vault, not a mock-up.
 | | |
 | --- | --- |
 | ![Giant vault: graph view](docs/screenshots/giant/01-graph.jpg) | ![Giant vault: brain view](docs/screenshots/giant/02-brain.jpg) |
-| **Graph** — 36 topic galaxies plus a three-year daily journal ring. | **Brain** — every note inside the cortex; brightness compensates for density. |
+| **Graph** — 36 labelled topic galaxies over a sphere, plus a three-year daily journal ring. | **Brain** — topic folders on the cortex; diary entries form the core. |
 | ![Giant vault: timeline view](docs/screenshots/giant/03-timeline.jpg) | ![Giant vault: atlas view](docs/screenshots/giant/04-atlas.jpg) |
-| **Timeline** — four years of entries replayed. | **Atlas** — 41 countries; dense folders become stippled provinces. |
+| **Timeline** — four years of entries replayed. | **Atlas** — 41 countries; dense folders are stipple, not a wall of black badges. |
 | ![Giant vault: decisions view](docs/screenshots/giant/05-decisions.jpg) | |
 | **Decisions** — 26 cards across open and refining, each with real sources. | |
 
@@ -61,6 +66,9 @@ cargo run -p cortex -- seed-demo demo --size medium    # 328 notes (default)
 cargo run -p cortex -- seed-demo demo --size large     # 5,523 notes
 cargo run -p cortex -- serve demo                      # open one folder directly
 ```
+
+All three vaults are written by `seed-demo` from the binary itself. No demo
+vault is downloaded, and nothing is fetched from GitHub at startup.
 
 ## Opening a folder
 
@@ -294,7 +302,7 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | macOS (Apple silicon) | `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
-Tagged releases (`v0.6.0`) are fixed; every push to `main` also refreshes the
+Tagged releases (`v0.6.1`) are fixed; every push to `main` also refreshes the
 rolling `latest` build. The version appears in `cortex --version`, in **Vault
 settings → About**, and on `/api/about`. `SHA256SUMS.txt` is attached to every
 release.
