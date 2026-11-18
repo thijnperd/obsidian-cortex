@@ -24,7 +24,7 @@ import {
   THRESHOLD_FS,
 } from './shaders.js';
 
-const SEGMENTS = 10;
+const SEGMENTS = 8;
 const TEX_WIDTH = 1024;
 export const PALETTE = [
   [0.38, 0.86, 1.0],
@@ -97,12 +97,16 @@ export class Renderer {
     this.hiddenFolders = new Set();
     this.selection = new Set();
     this.focusIndex = null;
+    this.folderFocus = null;
+    this.localNodes = null;
+    this.localFolders = new Set();
     this.screen = new Float32Array(0);
     this.width = 0;
     this.height = 0;
     this.cssWidth = 1;
     this.cssHeight = 1;
     this.dpr = 1;
+    this.dprCap = 2;
     this.time = 0;
     this.targets = null;
     this.bgTarget = null;
@@ -166,7 +170,7 @@ export class Renderer {
 
   resize() {
     const rect = this.canvas.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, this.dprCap);
     const width = Math.max(1, Math.round((rect.width || 1) * dpr));
     const height = Math.max(1, Math.round((rect.height || 1) * dpr));
     if (this.targets && width === this.width && height === this.height) return;
@@ -215,12 +219,24 @@ export class Renderer {
     this.count = count;
     this.overview = isOverview(count);
     this.diaries = diaryFolders(this.nodes);
+    // A 5,000-note vault does not need a 2x Retina buffer and four bloom
+    // passes to stay legible; the lower pixel cap is the single largest win.
+    const dprCap = this.overview ? 1.25 : 2;
+    if (dprCap !== this.dprCap) {
+      this.dprCap = dprCap;
+      this.resize();
+    }
+    this.localNodes = null;
+    this.localFolders = new Set();
     // A 5,000-note vault packs the same volume as a 300-note one: keep each
     // star and fibre dim enough that the extra density cannot clip to white.
     this.density = Math.min(1, Math.sqrt(600 / Math.max(1, count)));
     // Inside the closed shell every node adds to the same pixels. Compensate
     // by count, not by square root, or a large vault becomes a white sun.
     this.crowd = Math.min(1, (this.overview ? 320 : 450) / Math.max(1, count));
+    // The brain spreads notes through a volume instead of stacking them on a
+    // shell, so it can afford brighter stars than the graph without clipping.
+    this.brainCrowd = Math.min(1, (this.overview ? 1050 : 850) / Math.max(1, count));
     this.crowdEdge = Math.min(1, (this.overview ? 180 : 240) / Math.max(1, count));
     this.texHeight = Math.max(1, Math.ceil(count / TEX_WIDTH));
     this.posData = new Float32Array(this.texWidth * this.texHeight * 4);
@@ -242,14 +258,18 @@ export class Renderer {
     // full note count. The cap is deterministic, so the same vault draws the
     // same roads on every load.
     let drawnEdges = this.edges;
-    if (this.overview && drawnEdges.length > 10000) {
+    if (this.overview && drawnEdges.length > 5000) {
       drawnEdges = [...drawnEdges]
         .sort((a, b) =>
           (b.weight || 0) - (a.weight || 0)
           || a.source - b.source
           || a.target - b.target)
-        .slice(0, 10000);
+        .slice(0, 5000);
     }
+    // Keep the drawn subset: focus values are written per instance, so using
+    // the full edge list here would leave the overview's highlighted roads
+    // pointing at the wrong places.
+    this.drawnEdges = drawnEdges;
     const edgeInstances = drawnEdges.length * SEGMENTS;
     this.edgeInstances = edgeInstances;
     const edgeData = new Float32Array(edgeInstances * 7);
@@ -504,6 +524,28 @@ export class Renderer {
     this.updateFocus();
   }
 
+  /// Dim every folder except one. The camera flies to the same folder in
+  /// main.js; this keeps the zoomed section legible instead of showing the
+  /// whole vault at the same brightness.
+  setFolderFocus(name) {
+    this.folderFocus = name || null;
+    this.updateFocus();
+  }
+
+  /// Keep only a note's neighbourhood at full strength. The rest of the vault
+  /// stays as faint context, which is the local graph the global view lacks.
+  setLocalNodes(indices) {
+    this.localNodes = indices ? new Set(indices) : null;
+    this.localFolders = new Set();
+    if (this.localNodes) {
+      for (const index of this.localNodes) {
+        const node = this.nodes[index];
+        if (node) this.localFolders.add(node.folder);
+      }
+    }
+    this.updateFocus();
+  }
+
   updateFocus() {
     const gl = this.gl;
     if (!this.count) return;
@@ -511,13 +553,33 @@ export class Renderer {
     for (let index = 0; index < this.count; index += 1) {
       focus[index] = this.hiddenFolders.has(this.nodes[index].folder) ? 0.03 : 1;
     }
-    if (this.focusIndex != null) {
+    if (this.folderFocus) {
       for (let index = 0; index < this.count; index += 1) {
-        focus[index] = Math.min(focus[index], 0.07);
+        if (this.hiddenFolders.has(this.nodes[index].folder)) continue;
+        focus[index] = this.nodes[index].folder === this.folderFocus ? 1.5 : 0.12;
       }
-      focus[this.focusIndex] = 2.4;
-      for (const other of this.neighbors[this.focusIndex] || []) {
-        focus[other] = Math.max(focus[other], 1.3);
+    }
+    if (this.localNodes) {
+      for (let index = 0; index < this.count; index += 1) {
+        if (!this.hiddenFolders.has(this.nodes[index].folder)) {
+          focus[index] = this.localNodes.has(index) ? 1.25 : 0.015;
+        }
+      }
+    }
+    if (this.focusIndex != null) {
+      if (this.localNodes) {
+        focus[this.focusIndex] = 2.4;
+        for (const other of this.neighbors[this.focusIndex] || []) {
+          if (this.localNodes.has(other)) focus[other] = Math.max(focus[other], 1.5);
+        }
+      } else {
+        for (let index = 0; index < this.count; index += 1) {
+          focus[index] = Math.min(focus[index], 0.07);
+        }
+        focus[this.focusIndex] = 2.4;
+        for (const other of this.neighbors[this.focusIndex] || []) {
+          focus[other] = Math.max(focus[other], 1.3);
+        }
       }
     }
     // Collected notes stay legible even while a focus node dims everything else.
@@ -529,11 +591,21 @@ export class Renderer {
 
     const edgeFocus = this.edgeFocus;
     let cursor = 0;
-    for (const edge of this.edges) {
+    for (const edge of this.drawnEdges || this.edges) {
       const visible = !this.hiddenFolders.has(this.nodes[edge.source].folder)
         && !this.hiddenFolders.has(this.nodes[edge.target].folder);
       let value = visible ? 1 : 0.02;
-      if (this.focusIndex != null) {
+      if (this.folderFocus) {
+        const inside = this.nodes[edge.source].folder === this.folderFocus
+          && this.nodes[edge.target].folder === this.folderFocus;
+        value = inside ? (visible ? 1.8 : 0.1) : (visible ? 0.05 : 0.008);
+      }
+      if (this.localNodes) {
+        const from = this.localNodes.has(edge.source);
+        const to = this.localNodes.has(edge.target);
+        value = from && to ? (visible ? 1.6 : 0.1) : from || to ? (visible ? 0.14 : 0.01) : 0.004;
+      }
+      if (this.focusIndex != null && !this.localNodes) {
         const connected = edge.source === this.focusIndex || edge.target === this.focusIndex;
         value = connected ? (visible ? 2.4 : 0.12) : (visible ? 0.08 : 0.008);
       }
@@ -547,7 +619,12 @@ export class Renderer {
 
     if (this.hazeEntries && this.hazeData) {
       this.hazeEntries.forEach((entry, index) => {
-        this.hazeData[index * 8 + 7] = this.hiddenFolders.has(entry.name) ? 0 : 1;
+        const base = this.overview ? 0.55 : 1;
+        const outside = (this.folderFocus && entry.name !== this.folderFocus)
+          || (this.localNodes && !this.localFolders.has(entry.name));
+        this.hazeData[index * 8 + 7] = this.hiddenFolders.has(entry.name)
+          ? 0
+          : outside ? base * 0.18 : base;
       });
       gl.bindBuffer(gl.ARRAY_BUFFER, this.hazeBuffer);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.hazeData);
@@ -625,10 +702,11 @@ export class Renderer {
       gl.uniform1f(loc(gl, program, 'uTime'), time);
       gl.uniform1f(loc(gl, program, 'uReveal'), this.reveal);
       gl.uniform1f(loc(gl, program, 'uSizeScale'),
-        22.0 * (1 - 0.35 * Math.max(0, this.morph))
+        22.0 * (1 - 0.22 * Math.max(0, this.morph))
           * (this.overview ? 0.45 : Math.max(0.55, this.density)));
       gl.uniform1f(loc(gl, program, 'uDensity'), this.density);
       gl.uniform1f(loc(gl, program, 'uCrowd'), this.crowd);
+      gl.uniform1f(loc(gl, program, 'uBrainCrowd'), this.brainCrowd);
       gl.uniform1f(loc(gl, program, 'uMorph'), this.morph);
       gl.bindVertexArray(this.nodeVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.count);
@@ -662,20 +740,23 @@ export class Renderer {
     this.drawFullscreen();
 
     // A second, wider blur gives stars the soft atmospheric halo of a photo
-    // rather than the hard edge of a sprite.
-    gl.bindFramebuffer(gl.FRAMEBUFFER, targets.blur.framebuffer);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, targets.bright.texture);
-    gl.uniform2f(loc(gl, this.programs.blur, 'uDirection'), 1 / targets.bright.width, 0);
-    gl.uniform1f(loc(gl, this.programs.blur, 'uScale'), 2.8);
-    this.drawFullscreen();
+    // rather than the hard edge of a sprite. Large vaults skip it: the tight
+    // bloom still reads, and two half-resolution passes are real GPU time.
+    if (!this.overview) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, targets.blur.framebuffer);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, targets.bright.texture);
+      gl.uniform2f(loc(gl, this.programs.blur, 'uDirection'), 1 / targets.bright.width, 0);
+      gl.uniform1f(loc(gl, this.programs.blur, 'uScale'), 2.8);
+      this.drawFullscreen();
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, targets.bright.framebuffer);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, targets.blur.texture);
-    gl.uniform2f(loc(gl, this.programs.blur, 'uDirection'), 0, 1 / targets.bright.height);
-    gl.uniform1f(loc(gl, this.programs.blur, 'uScale'), 2.8);
-    this.drawFullscreen();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, targets.bright.framebuffer);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, targets.blur.texture);
+      gl.uniform2f(loc(gl, this.programs.blur, 'uDirection'), 0, 1 / targets.bright.height);
+      gl.uniform1f(loc(gl, this.programs.blur, 'uScale'), 2.8);
+      this.drawFullscreen();
+    }
 
     // Composite over the nebula.
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);

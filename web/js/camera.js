@@ -11,6 +11,8 @@ export class Camera {
     this.distance = 2.4;
     this.desiredDistance = 2.4;
     this.target = [0, 0, 0];
+    this.desiredTarget = [0, 0, 0];
+    this.sectionFocus = false;
     this.velocityYaw = 0;
     this.velocityPitch = 0;
     this.idle = 10;
@@ -34,13 +36,26 @@ export class Camera {
   }
 
   zoom(delta) {
-    this.desiredDistance = clamp(this.desiredDistance * Math.exp(delta * 0.0011), 1.6, 8.5);
+    // A section needs closer framing than the whole vault; the old 1.6 floor
+    // stopped the camera before a single galaxy filled the view.
+    this.desiredDistance = clamp(this.desiredDistance * Math.exp(delta * 0.0011), 0.45, 8.5);
     this.zoomHold = 1.2;
     this.idle = 0;
   }
 
+  focusOn(target, distance) {
+    this.desiredTarget = [...target];
+    this.desiredDistance = clamp(distance, 0.45, 3.4);
+    this.sectionFocus = true;
+    this.zoomHold = 0;
+    this.idle = 0;
+  }
+
   frame(mode) {
+    this.desiredTarget = [0, 0, 0];
     this.desiredDistance = mode === 'brain' ? 2.05 : 2.4;
+    this.sectionFocus = false;
+    this.zoomHold = 0;
     this.idle = 0;
   }
 
@@ -53,9 +68,16 @@ export class Camera {
       this.velocityYaw *= 0.92;
       this.velocityPitch *= 0.92;
       this.idle += dt;
-      if (this.autoRotate && this.idle > 5) {
+      // A section title pins the view to that folder: drifting away from it
+      // after five seconds makes the camera feel like it ignored the click.
+      if (this.autoRotate && !this.sectionFocus && this.idle > 5) {
         this.yaw += dt * 0.035;
       }
+    }
+
+    const follow = 1 - Math.exp(-dt * 5);
+    for (let axis = 0; axis < 3; axis += 1) {
+      this.target[axis] += (this.desiredTarget[axis] - this.target[axis]) * follow;
     }
 
     if (this.zoomHold > 0) this.zoomHold = Math.max(0, this.zoomHold - dt);

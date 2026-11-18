@@ -88,11 +88,37 @@ export function buildBrainPositions(nodes, folderNames, diaries = new Set()) {
     ry /= length;
     rz /= length;
 
-    // Scatter inside the lobe: a thick volume of tissue, not a hollow shell.
-    const spread = 0.16;
-    let dx = (anchor[0] + rx * spread - center[0]) / RADII[0];
-    let dy = (anchor[1] + ry * spread - center[1]) / RADII[1];
-    let dz = (anchor[2] + rz * spread - center[2]) / RADII[2];
+    // A folder used to become one narrow ray from the lobe centre to the
+    // surface, which left most of the brain empty between folders. Spread its
+    // notes through a cone around that ray so the lobe has tissue in depth.
+    const lateral = (0.26 + 0.34 * pseudoRandom(index + 37))
+      * Math.sqrt(pseudoRandom(index + 101));
+    const around = pseudoRandom(index + 203) * Math.PI * 2;
+    const up = Math.abs(direction[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+    let sideA = [
+      direction[1] * up[2] - direction[2] * up[1],
+      direction[2] * up[0] - direction[0] * up[2],
+      direction[0] * up[1] - direction[1] * up[0],
+    ];
+    const sideLength = Math.hypot(sideA[0], sideA[1], sideA[2]) || 1;
+    sideA = sideA.map((value) => value / sideLength);
+    const sideB = [
+      direction[1] * sideA[2] - direction[2] * sideA[1],
+      direction[2] * sideA[0] - direction[0] * sideA[2],
+      direction[0] * sideA[1] - direction[1] * sideA[0],
+    ];
+    let dx = direction[0]
+      + sideA[0] * Math.cos(around) * lateral
+      + sideB[0] * Math.sin(around) * lateral
+      + rx * 0.08;
+    let dy = direction[1]
+      + sideA[1] * Math.cos(around) * lateral
+      + sideB[1] * Math.sin(around) * lateral
+      + ry * 0.08;
+    let dz = direction[2]
+      + sideA[2] * Math.cos(around) * lateral
+      + sideB[2] * Math.sin(around) * lateral
+      + rz * 0.08;
     const units = Math.hypot(dx, dy, dz) || 1;
     dx /= units;
     dy /= units;
@@ -100,7 +126,9 @@ export function buildBrainPositions(nodes, folderNames, diaries = new Set()) {
 
     // Gyri: small folds so the outer notes are not a perfect ellipsoid.
     const fold = 1 + 0.05 * Math.sin(dx * 11 + dz * 7) + 0.03 * Math.sin(dy * 13 + dx * 4);
-    const seeded = 0.62 + 0.38 * pseudoRandom(index);
+    // Fill the lobe, not just its rind. A cube root gives a uniform volume
+    // distribution; the old 0.62–1.0 band left the middle of the brain empty.
+    const seeded = 0.16 + 0.82 * Math.cbrt(pseudoRandom(index));
 
     brain[index * 3] = center[0] + dx * RADII[0] * fold * seeded;
     brain[index * 3 + 1] = clamp(center[1] + dy * RADII[1] * fold * seeded, -0.44, 0.54);

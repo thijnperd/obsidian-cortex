@@ -23,8 +23,9 @@ below is a different seeded vault, not a mock-up.
 
 Above 1,200 notes Cortex switches to a folder-level **overview**: notes keep
 their real positions, but the graph labels folders instead of a dozen
-individual stars, draws only the strongest 10,000 links, and the atlas turns
+individual stars, draws only the strongest 5,000 links, and the atlas turns
 dense folders into light stipple. Hover or select a note for its own label.
+Click a folder title to fly into that galaxy; `All folders` flies back out.
 
 ### Small — 21 notes, 35 links
 
@@ -106,8 +107,9 @@ replacing your draft.
 
 1. **Collect evidence.** ⌘-click (or shift-click) stars, or press `Collect` in a
    note panel. Collected stars stay bright while everything else dims.
-2. **Read the neighbourhood.** Opening a note focuses its local graph: only the
-   note, its backlinks and its direct neighbours keep their labels.
+2. **Read the neighbourhood.** Opening a note dims the rest of the vault. Press
+   `Local graph` in the panel (or `l`) to isolate its two-hop neighbourhood —
+   the note, its backlinks and nearby notes — without the global hairball.
 3. **Make the structure note.** `Research brief` asks for the question and writes
    `Synthesis/<question>.md` with frontmatter, a linked evidence list (title,
    folder, excerpt) and sections for what the sources say, tensions, synthesis
@@ -191,7 +193,9 @@ payload rather than a second index.
 | Search every note | `Ctrl K` / `⌘K`, or `/` |
 | Back / forward through opened notes | `Ctrl [` / `Ctrl ]` (`⌘[` / `⌘]`), or `‹` `›` in the panel |
 | Collect / uncollect a note | `Ctrl` / `⌘` / `Shift` + click, or `c` |
-| Focus a note | click it (local graph only) |
+| Focus a note | click it |
+| Local neighbourhood | `Local graph` in the note panel, or `l` |
+| Fly to a folder / back out | click its title, or `All folders` |
 | Views | `1` graph, `2` brain, `3` timeline, `4` atlas, `5` decisions |
 | Reset camera | `f` |
 | New note / edit | `n`, or `Edit` in the panel |
@@ -302,7 +306,7 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | macOS (Apple silicon) | `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
-Tagged releases (`v0.6.1`) are fixed; every push to `main` also refreshes the
+Tagged releases (`v0.7.0`) are fixed; every push to `main` also refreshes the
 rolling `latest` build. The version appears in `cortex --version`, in **Vault
 settings → About**, and on `/api/about`. `SHA256SUMS.txt` is attached to every
 release.

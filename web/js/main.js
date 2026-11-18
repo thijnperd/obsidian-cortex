@@ -36,6 +36,9 @@ const state = {
   cache: new Map(),
   labels: [],
   folderLabels: [],
+  folderFocus: null,
+  local: null,
+  lastPick: 0,
   palette: { open: false, hits: [], active: 0, timer: null, query: '' },
   replay: { min: 0, max: 1, playing: false, startedAt: 0, undated: false },
   history: { items: [], index: -1 },
@@ -55,6 +58,9 @@ const state = {
 const els = {
   canvas: document.getElementById('stage'),
   labels: document.getElementById('labels'),
+  sectionFocus: document.getElementById('section-focus'),
+  sectionFocusName: document.getElementById('section-focus-name'),
+  sectionFocusExit: document.getElementById('section-focus-exit'),
   atlas: document.getElementById('atlas'),
   decisions: document.getElementById('decisions'),
   decisionsBoard: document.getElementById('decisions-board'),
@@ -222,6 +228,7 @@ function wire() {
   document.querySelectorAll('.view[data-mode]').forEach((button) => {
     button.addEventListener('click', () => setMode(button.dataset.mode));
   });
+  els.sectionFocusExit.addEventListener('click', () => clearFolderFocus());
   els.panelClose.addEventListener('click', closePanel);
   els.panelBack.addEventListener('click', goBack);
   els.panelForward.addEventListener('click', goForward);
@@ -443,6 +450,8 @@ function resetVaultState() {
   state.editing = false;
   state.selected = null;
   state.hidden.clear();
+  state.folderFocus = null;
+  state.local = null;
   state.version = null;
   openToken += 1;
   if (state.events) state.events.abort();
@@ -451,6 +460,7 @@ function resetVaultState() {
   els.selection.hidden = true;
   els.settings.hidden = true;
   if (state.atlas) state.atlas.reset();
+  syncFolderFocus();
   syncHistory();
 }
 
@@ -521,6 +531,11 @@ function applyGraph(graph) {
   }
   state.renderer.setGraph(graph);
   state.renderer.setFolderFilter(state.hidden);
+  if (state.folderFocus && !graph.meta.folders.some((folder) => folder.name === state.folderFocus)) {
+    state.folderFocus = null;
+  }
+  state.renderer.setFolderFocus(state.folderFocus);
+  state.renderer.setLocalNodes(state.local?.nodes || null);
   if (state.brain > 0) state.renderer.setMorph(state.brain);
   if (state.detail) {
     const index = nodeIndex(state.detail.id);
@@ -528,6 +543,7 @@ function applyGraph(graph) {
   }
   computeTimeline();
   buildLabels();
+  syncFolderFocus();
   syncSelection();
   syncAtlas();
   if (state.selected != null) state.renderer.setFocus(state.selected);
@@ -615,31 +631,68 @@ function buildLabels() {
   for (const entry of ranked) {
     const element = document.createElement('span');
     element.className = 'star-label';
+    element.setAttribute('aria-hidden', 'true');
     element.textContent = entry.node.title;
     els.labels.appendChild(element);
     state.labels.push({ index: entry.index, element });
   }
 
-  const centroids = new Map();
+  // Section titles are folder names, just as Atlas names its countries. They
+  // are placed first in updateLabels so note labels yield to them instead of
+  // the other way around.
+  const sections = new Map();
   for (const node of state.graph.nodes) {
-    const entry = centroids.get(node.folder) || { x: 0, y: 0, z: 0, n: 0 };
+    const entry = sections.get(node.folder) || { x: 0, y: 0, z: 0, n: 0, radius: 0, ringNode: null };
     entry.x += node.x; entry.y += node.y; entry.z += node.z; entry.n += 1;
-    centroids.set(node.folder, entry);
+    if (!entry.ringNode || node.pagerank > entry.ringNode.pagerank) entry.ringNode = node;
+    sections.set(node.folder, entry);
   }
-  const folders = state.graph.meta.folders
-    .filter((folder) => !diaries.has(folder.name))
+  for (const entry of sections.values()) {
+    entry.cx = entry.x / entry.n;
+    entry.cy = entry.y / entry.n;
+    entry.cz = entry.z / entry.n;
+  }
+  for (const node of state.graph.nodes) {
+    const entry = sections.get(node.folder);
+    if (!entry) continue;
+    const distance = Math.hypot(node.x - entry.cx, node.y - entry.cy, node.z - entry.cz);
+    if (distance > entry.radius) entry.radius = distance;
+  }
+
+  const folders = [...state.graph.meta.folders]
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  const named = overview ? folders.slice(0, 18) : folders;
+  // Atlas caps permanent country names at 26 in overview; section titles use
+  // the same limit instead of showing a title for only half the galaxies.
+  const named = overview ? folders.slice(0, 26) : folders;
   for (const folder of named) {
-    const centroid = centroids.get(folder.name);
-    if (!centroid || centroid.n === 0) continue;
-    const element = document.createElement('span');
+    const section = sections.get(folder.name);
+    if (!section || section.n === 0) continue;
+    const diary = diaries.has(folder.name);
+    const focusPosition = diary
+      ? [0, 0, 0]
+      : [section.cx, section.cy, section.cz];
+    const ringNode = section.ringNode;
+    const position = diary && ringNode
+      ? [ringNode.x, ringNode.y, ringNode.z]
+      : focusPosition;
+    const radius = diary ? 2.35 : Math.max(0.08, section.radius);
+    const focusDistance = diary ? 2.9 : clamp(radius * 3 + 0.35, 0.55, 2.4);
+
+    const element = document.createElement('button');
+    element.type = 'button';
     element.className = 'star-label galaxy-label';
     element.textContent = folder.name;
+    element.title = `Zoom to ${folder.name}`;
+    element.setAttribute('aria-label', `Zoom to ${folder.name}`);
+    element.addEventListener('click', () => focusFolder(folder.name));
     els.labels.appendChild(element);
     state.folderLabels.push({
+      name: folder.name,
       element,
-      position: [centroid.x / centroid.n, centroid.y / centroid.n, centroid.z / centroid.n],
+      diary,
+      position,
+      focusPosition,
+      focusDistance,
       brainPosition: state.renderer.brainAnchors.get(folder.name) || null,
     });
   }
@@ -658,6 +711,10 @@ function loop(now) {
   const dt = Math.min(0.05, (now - (loop.last || now)) / 1000);
   loop.last = now;
   if (!state.renderer) return;
+  // A 30 fps cap is invisible while orbiting a folder overview and halves
+  // the per-frame label, projection and GPU work on a large vault.
+  if (state.renderer.overview && now - (loop.drawn || 0) < 1000 / 30) return;
+  loop.drawn = now;
   if (state.mode === 'atlas') {
     if (state.atlas) state.atlas.tick(now);
     return;
@@ -700,13 +757,57 @@ function updateLabels() {
     : null;
   const width = els.canvas.clientWidth || 1;
   const height = els.canvas.clientHeight || 1;
+  const brain = state.brain > 0.35;
 
-  // Greedy de-overlap: a label only appears when it has room to breathe.
+  // Folder titles are the map's anchor, exactly as country names are in the
+  // Atlas: place them first, strongest folders first, and let note labels yield.
+  for (const label of state.folderLabels) {
+    const position = brain ? label.brainPosition : label.position;
+    let visible = state.reveal >= 0.92
+      && Boolean(position)
+      && !state.hidden.has(label.name);
+    let point = null;
+    if (visible) {
+      point = project(
+        camera.viewProjection,
+        position[0],
+        position[1],
+        position[2],
+        width,
+        height,
+      );
+      if (!point || point.x < 24 || point.x > width - 24 || point.y < 24 || point.y > height - 36) {
+        visible = false;
+      }
+    }
+    if (visible) {
+      const half = Math.min(116, 18 + label.element.textContent.length * 3.3);
+      for (const other of placed) {
+        if (Math.abs(other.x - point.x) < half + other.half && Math.abs(other.y - point.y) < 42) {
+          visible = false;
+          break;
+        }
+      }
+    }
+    if (visible) placed.push({ x: point.x, y: point.y, half: Math.min(116, 18 + label.element.textContent.length * 3.3) });
+    label.element.style.visibility = visible ? 'visible' : 'hidden';
+    label.element.style.opacity = visible
+      ? String(state.folderFocus && state.folderFocus !== label.name ? 0.32 : 0.86)
+      : '0';
+    if (point && visible) {
+      label.element.style.left = `${point.x}px`;
+      label.element.style.top = `${point.y}px`;
+    }
+  }
+
+  // Greedy de-overlap: a note label only appears when it has room to breathe.
   for (const label of state.labels) {
     const screen = state.renderer.screenOf(label.index);
     const node = state.graph.nodes[label.index];
     const focused = state.hover === label.index || state.selected === label.index;
     let visible = screen.alpha > 0.5 && !state.hidden.has(node.folder)
+      && (!state.folderFocus || node.folder === state.folderFocus || state.selected === label.index)
+      && (!state.local || state.local.nodes.has(label.index))
       && screen.x > 40 && screen.x < width - 40 && screen.y > 24 && screen.y < height - 40;
     if (visible && focusSet && !focusSet.has(label.index)) visible = false;
     if (visible && !focused) {
@@ -717,51 +818,105 @@ function updateLabels() {
         }
       }
     }
+    label.element.style.visibility = visible ? 'visible' : 'hidden';
     label.element.style.opacity = visible ? String(clamp(1.35 - screen.depth * 0.16, 0.28, 0.95)) : '0';
     if (visible) {
-      placed.push({ x: screen.x, y: screen.y });
+      placed.push({ x: screen.x, y: screen.y, half: 85 });
       label.element.style.left = `${screen.x}px`;
       label.element.style.top = `${screen.y}px`;
     }
   }
+}
 
-  const brain = state.brain > 0.35;
-  const brainLimit = brain && isOverview(state.graph.nodes.length) ? 12 : Infinity;
-  for (const [rank, label] of state.folderLabels.entries()) {
-    if (rank >= brainLimit) {
-      label.element.style.opacity = '0';
-      continue;
+/// A two-hop neighbourhood: the video's useful local graph, not the whole
+/// vault. Direct neighbours always fit; second-hop notes are ranked by
+/// pagerank so a hub cannot turn the local view into the global one again.
+function localAround(index) {
+  const neighbours = state.renderer?.neighbors || [];
+  const direct = [...new Set(neighbours[index] || [])].filter((other) => other !== index);
+  const second = new Set();
+  for (const other of direct) {
+    for (const next of neighbours[other] || []) {
+      if (next !== index && !direct.includes(next)) second.add(next);
     }
-    if (state.reveal < 0.92 || (brain && !label.brainPosition)) {
-      label.element.style.opacity = '0';
-      continue;
-    }
-    const position = brain ? label.brainPosition : label.position;
-    const point = project(
-      camera.viewProjection,
-      position[0],
-      position[1],
-      position[2],
-      width,
-      height,
-    );
-    let visible = Boolean(point);
-    if (point) {
-      for (const other of placed) {
-        if (Math.abs(other.x - point.x) < 160 && Math.abs(other.y - point.y) < 46) {
-          visible = false;
-          break;
-        }
-      }
-    }
-    if (!visible || !point) {
-      label.element.style.opacity = '0';
-      continue;
-    }
-    label.element.style.opacity = '0.68';
-    label.element.style.left = `${point.x}px`;
-    label.element.style.top = `${point.y + 30}px`;
   }
+  const ranked = [...second]
+    .sort((a, b) => (state.graph.nodes[b].pagerank || 0) - (state.graph.nodes[a].pagerank || 0))
+    .slice(0, Math.max(0, 120 - direct.length));
+  return new Set([index, ...direct, ...ranked]);
+}
+
+function frameLocal(nodes) {
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  for (const index of nodes) {
+    const node = state.graph.nodes[index];
+    x += node.x; y += node.y; z += node.z;
+  }
+  const n = Math.max(1, nodes.size);
+  const center = [x / n, y / n, z / n];
+  let radius = 0;
+  for (const index of nodes) {
+    const node = state.graph.nodes[index];
+    radius = Math.max(radius, Math.hypot(node.x - center[0], node.y - center[1], node.z - center[2]));
+  }
+  state.camera.focusOn(center, clamp(radius * 2.6 + 0.35, 0.55, 2.5));
+}
+
+function showLocalGraph(index) {
+  if (index == null || !state.graph) return;
+  if (state.mode !== 'universe') setMode('universe', { persist: false, animate: false });
+  const nodes = localAround(index);
+  state.local = { center: index, nodes };
+  state.folderFocus = null;
+  syncFolderFocus();
+  state.renderer.setLocalNodes(nodes);
+  state.renderer.setFocus(index);
+  frameLocal(nodes);
+}
+
+function clearLocalGraph({ resetCamera = true, rerender = true } = {}) {
+  if (!state.local) return;
+  state.local = null;
+  if (state.renderer) {
+    state.renderer.setLocalNodes(null);
+    state.renderer.setFocus(state.selected);
+  }
+  if (resetCamera) state.camera.frame(state.mode);
+  if (rerender && state.detail) renderPanel(state.detail);
+}
+
+function focusFolder(name) {
+  const label = state.folderLabels.find((folder) => folder.name === name);
+  if (!label || !state.renderer) return;
+  const brain = state.brain > 0.35;
+  const target = brain
+    ? (label.diary ? [0, 0, 0] : label.brainPosition || label.focusPosition)
+    : label.focusPosition;
+  state.folderFocus = name;
+  state.camera.focusOn(target, brain ? 1.55 : label.focusDistance);
+  syncFolderFocus();
+}
+
+/// Reflect the focused section in the chip, the titles and the renderer dimming.
+function syncFolderFocus() {
+  const active = Boolean(state.folderFocus);
+  els.sectionFocus.hidden = !active;
+  if (active) els.sectionFocusName.textContent = state.folderFocus;
+  for (const label of state.folderLabels) {
+    const current = label.name === state.folderFocus;
+    label.element.classList.toggle('is-active', current);
+    label.element.setAttribute('aria-pressed', String(current));
+  }
+  if (state.renderer) state.renderer.setFolderFocus(state.folderFocus);
+}
+
+function clearFolderFocus({ resetCamera = true } = {}) {
+  if (!state.folderFocus) return;
+  state.folderFocus = null;
+  syncFolderFocus();
+  if (resetCamera) state.camera.frame(state.mode);
 }
 
 function formatDate(progress) {
@@ -773,6 +928,8 @@ function formatDate(progress) {
 
 function setMode(mode, { persist = true, animate = true } = {}) {
   state.mode = mode;
+  if (state.folderFocus) clearFolderFocus({ resetCamera: false });
+  if (state.local) clearLocalGraph({ resetCamera: false, rerender: false });
   ui.setModeButtons(mode);
   syncSettingsViews();
 
@@ -847,6 +1004,7 @@ function onScrub(event) {
 function toggleFolder(name) {
   if (state.hidden.has(name)) state.hidden.delete(name);
   else state.hidden.add(name);
+  if (state.hidden.has(name) && state.folderFocus === name) clearFolderFocus();
   ui.syncFolders(state.hidden);
   state.renderer.setFolderFilter(state.hidden);
   if (state.atlas) state.atlas.setHidden(state.hidden);
@@ -1040,6 +1198,10 @@ function onPointerMove(event) {
     state.camera.orbit(dx, dy);
     return;
   }
+  // Picking visits every node. It does not need to run at pointer frequency.
+  const now = performance.now();
+  if (now - state.lastPick < 45) return;
+  state.lastPick = now;
   const point = localPoint(event);
   const index = state.renderer.pick(point.x, point.y);
   setHover(index >= 0 ? index : null);
@@ -1061,6 +1223,10 @@ function onPointerUp(event) {
       openNote(index);
     } else if (!els.panel.hidden) {
       closePanel();
+    } else if (state.local) {
+      clearLocalGraph();
+    } else if (state.folderFocus) {
+      clearFolderFocus();
     }
   }
   state.dragMoved = false;
@@ -1118,6 +1284,8 @@ function onKeyDown(event) {
     else if (state.palette.open) closePalette();
     else if (state.launching && state.vaultId) hideLaunch();
     else if (!els.panel.hidden) closePanel();
+    else if (state.local) clearLocalGraph();
+    else if (state.folderFocus) clearFolderFocus();
     else setHover(null);
     return;
   }
@@ -1135,11 +1303,15 @@ function onKeyDown(event) {
     event.preventDefault();
     setMode(state.mode === 'brain' ? 'universe' : 'brain');
   } else if (event.key.toLowerCase() === 'r') startReplay();
-  else if (event.key.toLowerCase() === 'n' && state.live) createNote();
+  else if (event.key.toLowerCase() === 'l' && state.selected != null) {
+    if (state.local) clearLocalGraph();
+    else showLocalGraph(state.selected);
+  } else if (event.key.toLowerCase() === 'n' && state.live) createNote();
   else if (event.key.toLowerCase() === 'c' && state.selected != null) {
     toggleSelection(state.selected);
     if (state.detail) renderPanel(state.detail);
-  } else if (event.key.toLowerCase() === 'f') {
+  } else if (event.key.toLowerCase() === 'f' || event.key === '0') {
+    clearFolderFocus({ resetCamera: false });
     state.camera.yaw = 0.55;
     state.camera.pitch = 0.22;
     state.camera.frame(state.mode);
@@ -1197,7 +1369,9 @@ async function openNote(index, { record = true } = {}) {
   const node = state.graph.nodes[index];
   if (!node) return;
   const token = ++openToken;
+  const wasLocal = Boolean(state.local);
   state.selected = index;
+  if (wasLocal) showLocalGraph(index);
   state.renderer.setFocus(index);
   if (state.atlas) state.atlas.setFocus(index);
   if (record) pushHistory(node.id);
@@ -1313,6 +1487,21 @@ function renderPanel(detail) {
   });
   els.panelActions.appendChild(collect);
 
+  const local = document.createElement('button');
+  local.type = 'button';
+  local.className = 'btn';
+  local.textContent = state.local ? 'Full graph' : 'Local graph';
+  local.title = state.local
+    ? 'Return to the whole vault'
+    : 'Show only this note and its nearby connections';
+  local.addEventListener('click', () => {
+    if (state.local) clearLocalGraph();
+    else showLocalGraph(nodeIndex(detail.id));
+    local.textContent = state.local ? 'Full graph' : 'Local graph';
+    local.title = state.local ? 'Return to the whole vault' : 'Show only this note and its nearby connections';
+  });
+  els.panelActions.appendChild(local);
+
   const status = document.createElement('span');
   status.className = 'panel-status';
   status.id = 'panel-status';
@@ -1341,6 +1530,7 @@ function renderPanel(detail) {
 
 function closePanel() {
   if (els.panel.hidden) return;
+  if (state.local) clearLocalGraph({ resetCamera: true, rerender: false });
   openToken += 1;
   els.panel.hidden = true;
   state.detail = null;

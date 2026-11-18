@@ -100,6 +100,7 @@ uniform float uReveal;
 uniform float uSizeScale;
 uniform float uDensity;
 uniform float uCrowd;
+uniform float uBrainCrowd;
 uniform float uMorph;
 
 out vec2 vUv;
@@ -125,7 +126,8 @@ void main() {
   gl_Position = clip;
   gl_Position.xy += offset * clip.w;
   float twinkle = 0.82 + 0.18 * sin(uTime * 1.6 + aSeed * 6.2831);
-  vAlpha = born * aFocus * twinkle * mix(uDensity, uCrowd, uMorph);
+  float crowd = mix(uCrowd, uBrainCrowd, uMorph);
+  vAlpha = born * aFocus * twinkle * mix(uDensity, crowd, uMorph);
 }`;
 
 export const STAR_FS = `#version 300 es
