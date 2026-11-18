@@ -226,6 +226,29 @@ The folder list toggles visibility; hidden folders dim instead of disappearing,
 so the context stays visible. Clicking a `[[link]]`, a backlink or an unlinked
 mention opens that note in place, and the arrows walk back through the chain.
 
+## Editing
+
+**Edit** opens the note as plain Markdown in a textarea. It is deliberately not
+a rich-text surface: what you type is what gets saved, including frontmatter and
+`[[wikilinks]]`.
+
+| Action | Key |
+| --- | --- |
+| Save / cancel | `Ctrl S` or `Ctrl Enter` / `Esc` |
+| Bold, italic, inline code | `Ctrl B`, `Ctrl I`, `Ctrl E` |
+| Wikilink | select text, `Ctrl K` |
+| Strikethrough, highlight, code block | `Ctrl Shift X`, `Ctrl Shift H`, `Ctrl Shift K` |
+| Heading 1–3 | `Ctrl 1`, `Ctrl 2`, `Ctrl 3` |
+| Ordered / bullet / task list | `Ctrl Shift 7`, `Ctrl Shift 8`, `Ctrl Shift 9` |
+| Blockquote | `Ctrl Shift .` |
+| Indent / outdent | `Tab` / `Shift Tab` |
+
+`⌘` replaces `Ctrl` on macOS. Typing `[` inserts `[]` with the caret inside;
+parentheses, braces and quotes do the same. If the caret is before a closing
+character, typing it steps over instead of adding a duplicate, and backspace
+deletes an empty pair. `Enter` continues a list, task or quote marker; pressing
+it again on an empty item ends the list.
+
 ## Vault settings
 
 The gear in the toolbar holds the per-vault decisions:
@@ -327,7 +350,7 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | macOS (Apple silicon) | `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
-Tagged releases (`v0.8.0`) are fixed; every push to `main` also refreshes the
+Tagged releases (`v0.9.0`) are fixed; every push to `main` also refreshes the
 rolling `latest` build. The version appears in `cortex --version`, in **Vault
 settings → About**, and on `/api/about`. `SHA256SUMS.txt` is attached to every
 release.
