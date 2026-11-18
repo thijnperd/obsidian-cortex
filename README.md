@@ -4,17 +4,18 @@ Cortex turns a folder of Markdown notes into a navigable 3D universe — and the
 gives that view a job: collect notes, read their local graph, and turn the
 selection into a research brief or an idea decision.
 
-Four spatial views share one graph: a 3D **universe**, a **brain**, a
-**timeline**, and an **atlas** that draws folders as countries on a parchment
-map and links as roads. Same notes, different question: where does this live, and what connects
-to it? A fifth, **Decisions**, steps out of the graph: it lists the research
-briefs and idea refinements you have written, grouped by status, with the notes
-each one cites.
+Five spatial views share one graph: a 3D **universe**, a **brain**, a
+**timeline**, an **atlas** that draws folders as countries on a parchment map,
+and a **bento** board that sizes a box for every folder by its note count. Same
+notes, different question: where does this live, what connects to it, and what
+is in here at all? A sixth, **Decisions**, steps out of the graph: it lists the
+research briefs and idea refinements you have written, grouped by status, with
+the notes each one cites.
 
 It reads and writes plain Markdown, so an existing Obsidian or Logseq vault
 works as-is. No account, no cloud, no database.
 
-## The five views
+## The six views
 
 The same app at three vault sizes. The small demo is a first-run taste, the
 medium one is the full tour, and the giant one is the stress test: **5,523
@@ -35,8 +36,8 @@ Click a folder title to fly into that galaxy; `All folders` flies back out.
 | **Graph** — notes are stars, links are light, and the sky is a nebula. | **Brain** — the same graph inside a real cortical surface. |
 | ![Small vault: timeline view](docs/screenshots/small/03-timeline.jpg) | ![Small vault: atlas view](docs/screenshots/small/04-atlas.jpg) |
 | **Timeline** — the vault replayed as it was written. | **Atlas** — seven folders as countries, notes as places, links as roads. |
-| ![Small vault: decisions view](docs/screenshots/small/05-decisions.jpg) | |
-| **Decisions** — two starter briefs, grouped by `status`, with their sources. | |
+| ![Small vault: bento view](docs/screenshots/small/06-bento.jpg) | ![Small vault: decisions view](docs/screenshots/small/05-decisions.jpg) |
+| **Bento** — every folder as a box, sized by how much of the vault it holds. | **Decisions** — two starter briefs, grouped by `status`, with their sources. |
 
 ### Medium — 328 notes, 557 links
 
@@ -46,8 +47,8 @@ Click a folder title to fly into that galaxy; `All folders` flies back out.
 | **Graph** — the full universe; drag to orbit, scroll to zoom, `f` to reframe. | **Brain** — the same graph inside a real cortical surface, links as fibre tracts. |
 | ![Medium vault: timeline view](docs/screenshots/medium/03-timeline.jpg) | ![Medium vault: atlas view](docs/screenshots/medium/04-atlas.jpg) |
 | **Timeline** — the vault replayed in the order it was written, with a scrubber. | **Atlas** — countries, towns, roads, and rivers that follow the land. |
-| ![Medium vault: decisions view](docs/screenshots/medium/05-decisions.jpg) | |
-| **Decisions** — research briefs and idea refinements, grouped by `status`. | Read-only on purpose: `status` stays your frontmatter. |
+| ![Medium vault: bento view](docs/screenshots/medium/06-bento.jpg) | ![Medium vault: decisions view](docs/screenshots/medium/05-decisions.jpg) |
+| **Bento** — seven folders as boxes, with their strongest notes inside. | **Decisions** — research briefs and idea refinements, grouped by `status`. |
 
 ### Giant — 5,523 notes, 24,151 links
 
@@ -57,8 +58,8 @@ Click a folder title to fly into that galaxy; `All folders` flies back out.
 | **Graph** — 36 labelled topic galaxies over a sphere, plus a three-year daily journal ring. | **Brain** — topic folders on the cortex; diary entries form the core. |
 | ![Giant vault: timeline view](docs/screenshots/giant/03-timeline.jpg) | ![Giant vault: atlas view](docs/screenshots/giant/04-atlas.jpg) |
 | **Timeline** — four years of entries replayed. | **Atlas** — 41 countries; dense folders are stipple, not a wall of black badges. |
-| ![Giant vault: decisions view](docs/screenshots/giant/05-decisions.jpg) | |
-| **Decisions** — 26 cards across open and refining, each with real sources. | |
+| ![Giant vault: bento view](docs/screenshots/giant/06-bento.jpg) | ![Giant vault: decisions view](docs/screenshots/giant/05-decisions.jpg) |
+| **Bento** — 41 boxes; the 1,095-note journal is the large tile. | **Decisions** — 26 cards across open and refining, each with real sources. |
 
 ```bash
 cargo run -p cortex                                    # reopens the last vault, or offers a picker
@@ -137,6 +138,11 @@ countries, notes become places inside them, links become roads.
 
 - **Geography is deterministic.** The same vault always grows the same map, so
   a place stays where you learned it.
+- **Countries are sized by their contents.** Capitals are packed with a radius
+  taken from the folder's note count, and a power diagram moves each shared
+  border until cell area matches that count. A 16-note folder becomes a small
+  country and the 1,095-note journal a large one, without changing the
+  campaign-map look or the welded borders.
 - **Borders are shared.** Country outlines are grown from a partition of the
   folder centres and roughened with noise keyed to the *unordered* endpoints of
   each border segment, so two neighbouring countries displace their shared
@@ -160,9 +166,24 @@ Drag to pan, wheel or `+`/`-` to zoom, `0` to fit, arrow keys to pan with the
 keyboard, click a place to open it. Hiding a folder dims its country and its
 roads rather than deleting them.
 
+## Bento
+
+The fifth view answers *what is even in here?* Every folder becomes a box, its
+strongest notes are listed inside, and the box is sized by how much of the vault
+it holds. A big folder earns a large tile; the rest fill a four-column grid.
+Click a note to read it without leaving the board, or **Open in graph** to fly
+to that folder's section.
+
+- **Sized by content, not by link rank.** A journal with a thousand entries is a
+  big box even when its notes are barely linked to each other.
+- **Deterministic.** Folder order and note ranks come from the same scan, so the
+  same vault produces the same board on every load and in `cortex export`.
+- **DOM only.** The board costs no WebGL frame; switching to it stops the scene
+  renderer until you leave.
+
 ## Decisions
 
-The fifth view answers a different question: *what have I concluded, and on
+The last view answers a different question: *what have I concluded, and on
 what?* Every note with `type: research` or `type: idea` — the two kinds Cortex
 writes — appears as a card, grouped by its `status`.
 
@@ -196,7 +217,7 @@ payload rather than a second index.
 | Focus a note | click it |
 | Local neighbourhood | `Local graph` in the note panel, or `l` |
 | Fly to a folder / back out | click its title, or `All folders` |
-| Views | `1` graph, `2` brain, `3` timeline, `4` atlas, `5` decisions |
+| Views | `1` graph, `2` brain, `3` timeline, `4` atlas, `5` decisions, `6` bento |
 | Reset camera | `f` |
 | New note / edit | `n`, or `Edit` in the panel |
 | Open another folder | `Ctrl O` / `⌘O` |
@@ -306,7 +327,7 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | macOS (Apple silicon) | `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
-Tagged releases (`v0.7.0`) are fixed; every push to `main` also refreshes the
+Tagged releases (`v0.8.0`) are fixed; every push to `main` also refreshes the
 rolling `latest` build. The version appears in `cortex --version`, in **Vault
 settings → About**, and on `/api/about`. `SHA256SUMS.txt` is attached to every
 release.
@@ -314,10 +335,22 @@ release.
 ### Windows says it is unsafe
 
 The executable is unsigned, so SmartScreen shows *Windows protected your PC* on
-the first run: **More info → Run anyway**. There is no auto-update yet;
-**Check for updates** in About opens the release page. The full walk through,
-including uninstall and checksum verification, is in
+the first run: **More info → Run anyway**. The full walk through, including
+uninstall and checksum verification, is in
 [installing on Windows](docs/install-windows.md).
+
+### Updates
+
+Cortex checks its release feed once when it starts, and again from **Check for
+updates** in About. A newer stable tag appears as a small notice above the
+graph: **Update** on Windows, **Download** on macOS and Linux.
+
+The Windows path downloads `CortexSetup-<version>.exe`, verifies it against that
+release's `SHA256SUMS.txt`, runs the installer silently, and reopens Cortex. It
+never installs a build whose checksum does not match. macOS and Linux open the
+release page instead: replacing a running Unix binary safely needs its own
+mechanism, and pretending an archive can do it is how data gets lost. The check
+reads the public Atom feed for releases, not the rate-limited GitHub API.
 
 ### What starts when you run `cortex`
 

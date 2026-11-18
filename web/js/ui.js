@@ -378,6 +378,132 @@ export function renderDecisions(container, structures, onOpen) {
   }
 }
 
+/**
+ * Bento: every folder becomes a box, its strongest notes become the contents.
+ * The board answers "what is in this vault?" without asking anyone to read a
+ * graph — sizes come from note count, not from link topology.
+ */
+export function renderBento(container, graph, hidden, { onOpen, onFolder, palette }) {
+  container.textContent = '';
+  const nodes = graph?.nodes || [];
+  const total = nodes.length || 1;
+  const byFolder = new Map();
+  for (const node of nodes) {
+    const list = byFolder.get(node.folder);
+    if (list) list.push(node);
+    else byFolder.set(node.folder, [node]);
+  }
+  for (const list of byFolder.values()) {
+    list.sort(
+      (a, b) =>
+        (b.pagerank || 0) - (a.pagerank || 0)
+        || String(b.created || '').localeCompare(String(a.created || ''))
+        || a.title.localeCompare(b.title),
+    );
+  }
+
+  const folders = [...(graph?.meta.folders || [])]
+    .filter((folder) => (byFolder.get(folder.name) || []).length)
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+  if (!folders.length) {
+    const empty = document.createElement('div');
+    empty.className = 'bento-empty';
+    const title = document.createElement('h2');
+    title.textContent = 'No notes to group yet';
+    const body = document.createElement('p');
+    body.textContent = 'Open a folder of Markdown notes and its folders appear here as boxes.';
+    empty.append(title, body);
+    container.appendChild(empty);
+    return;
+  }
+
+  folders.forEach((folder, rank) => {
+    const notes = byFolder.get(folder.name) || [];
+    const share = notes.length / total;
+    const cell = document.createElement('article');
+    cell.className = 'bento-cell';
+    cell.dataset.folder = folder.name;
+    if (hidden.has(folder.name)) cell.classList.add('is-off');
+    // A handful of folders get a true bento rhythm; a vault with forty folders
+    // stays a dense grid of equal cards instead of two giant boxes and a sea
+    // of slivers.
+    // One anchor tile and two wide tiles per board: a readable hierarchy that
+    // does not turn a seven-folder vault into seven identical cards.
+    if (rank === 0) cell.classList.add('is-large');
+    else if (rank < 3) cell.classList.add('is-wide');
+
+    const colour = palette[(folder.color ?? rank) % palette.length];
+    cell.style.setProperty('--folder', `rgb(${Math.round(colour[0] * 255)}, ${Math.round(colour[1] * 255)}, ${Math.round(colour[2] * 255)})`);
+
+    const head = document.createElement('header');
+    head.className = 'bento-head';
+    const dot = document.createElement('span');
+    dot.className = 'bento-dot';
+    const name = document.createElement('button');
+    name.type = 'button';
+    name.className = 'bento-title';
+    name.textContent = folder.name;
+    name.title = `Fly into ${folder.name} in the graph`;
+    name.addEventListener('click', () => onFolder(folder.name));
+    const count = document.createElement('span');
+    count.className = 'bento-count';
+    count.textContent = String(notes.length);
+    count.title = `${notes.length} of ${total} notes`;
+    head.append(dot, name, count);
+    cell.appendChild(head);
+
+    const meta = document.createElement('p');
+    meta.className = 'bento-meta';
+    const top = notes[0];
+    meta.textContent = top
+      ? `${Math.round(share * 100)}% of the vault · ${top.title}`
+      : `${Math.round(share * 100)}% of the vault`;
+    cell.appendChild(meta);
+
+    const list = document.createElement('div');
+    list.className = 'bento-notes';
+    const limit = cell.classList.contains('is-large') ? 9 : 2;
+    for (const note of notes.slice(0, limit)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'bento-note';
+      button.title = note.title;
+      const label = document.createElement('span');
+      label.className = 'bento-note-title';
+      label.textContent = note.title;
+      const links = document.createElement('span');
+      links.className = 'bento-note-meta';
+      links.textContent = `${note.degree || 0}`;
+      links.title = `${note.degree || 0} links`;
+      button.append(label, links);
+      button.addEventListener('click', () => onOpen(note.id));
+      list.appendChild(button);
+    }
+    cell.appendChild(list);
+
+    const footer = document.createElement('div');
+    footer.className = 'bento-foot';
+    if (notes.length > limit) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'bento-more';
+      more.textContent = `+${notes.length - limit} more`;
+      more.addEventListener('click', () => onFolder(folder.name));
+      footer.appendChild(more);
+    }
+    const foot = document.createElement('button');
+    foot.type = 'button';
+    foot.className = 'bento-graph';
+    foot.textContent = 'Open in graph ↗';
+    foot.addEventListener('click', () => onFolder(folder.name));
+    footer.appendChild(foot);
+    cell.appendChild(footer);
+
+    container.appendChild(cell);
+  });
+}
+
 export function setTimelineDate(text) {
   const element = document.getElementById('replay-date');
   if (element) element.textContent = text;

@@ -30,9 +30,11 @@ becomes public, because it is not available to this repository while private.
 The Windows documentation owns the SmartScreen instructions instead of
 pretending the warning away.
 
-**No auto-update.** "Check for updates" compares the running version with the
-newest release and opens the release page. A silent updater needs signing and a
-swap-on-exit helper on Windows; it is its own decision, not a checkbox here.
+**No auto-update in 0.7.0.** "Check for updates" compared the running version
+with the newest release and opened the release page. A silent updater needs
+signing and a swap-on-exit helper on Windows; it was its own decision, not a
+checkbox here. [ADR 0007](0007-auto-update.md) adds that decision: automatic
+checks, and a checksum-verified silent installer on Windows.
 
 **The repository becomes public at the first tagged release**, so the download
 and the attestation exist at all. History is scanned for secrets before the
@@ -49,7 +51,8 @@ Zed — and every other client — gets the printed snippet instead.
   requires "More info → Run anyway", and that sentence belongs in the README.
 - Making the repository public exposes the full history and turns the release
   into a real download. That is the point, and it is also the risk.
-- No auto-update means users must click. Acceptable while the release cadence
-  is one maintainer; revisit with signing.
+- Manual updates were acceptable while the release cadence was one maintainer;
+  ADR 0007 revisits that without waiting for signing, and keeps the checksum as
+  the integrity boundary.
 - The installer and the zip can drift if only one is exercised. The release
   checklist requires running both.

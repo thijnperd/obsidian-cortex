@@ -45,6 +45,7 @@ const state = {
   events: null,
   version: null,
   about: null,
+  update: null,
   launching: false,
   time: 0,
   dragging: false,
@@ -61,9 +62,15 @@ const els = {
   sectionFocus: document.getElementById('section-focus'),
   sectionFocusName: document.getElementById('section-focus-name'),
   sectionFocusExit: document.getElementById('section-focus-exit'),
+  update: document.getElementById('update'),
+  updateText: document.getElementById('update-text'),
+  updateAction: document.getElementById('update-action'),
+  updateClose: document.getElementById('update-close'),
   atlas: document.getElementById('atlas'),
   decisions: document.getElementById('decisions'),
   decisionsBoard: document.getElementById('decisions-board'),
+  bento: document.getElementById('bento'),
+  bentoBoard: document.getElementById('bento-board'),
   settings: document.getElementById('settings'),
   settingsButton: document.getElementById('settings-button'),
   settingsClose: document.getElementById('settings-close'),
@@ -192,6 +199,9 @@ async function start() {
       }
       ui.hideBoot();
       requestAnimationFrame(loop);
+      // The app checks once per launch; a failure stays quiet until the user
+      // asks in Vault settings, where an error is worth reporting.
+      if (state.live) checkForUpdates();
       return;
     }
 
@@ -281,9 +291,9 @@ function wire() {
   els.launchBrowse.addEventListener('click', browseFolder);
   els.settingsMcpTest.addEventListener('click', testMcp);
   els.settingsMcpConfig.addEventListener('click', copyMcpConfig);
-  els.settingsUpdate.addEventListener('click', () => {
-    if (state.about?.releases) window.open(state.about.releases, '_blank', 'noopener');
-  });
+  els.settingsUpdate.addEventListener('click', () => checkForUpdates({ manual: true }));
+  els.updateAction.addEventListener('click', installUpdate);
+  els.updateClose.addEventListener('click', dismissUpdate);
   els.vaultButton.addEventListener('click', () => showLaunch());
   els.addVault.addEventListener('click', () => showLaunch());
   els.foldersReset.addEventListener('click', resetFolders);
@@ -520,6 +530,7 @@ function applyGraph(graph) {
   const overview = isOverview(graph.nodes.length);
   ui.setStats(graph.meta, overview);
   ui.renderDecisions(els.decisionsBoard, graph.structures, openDecision);
+  syncBento();
   ui.renderFolders(els.folders, graph.meta.folders, state.hidden, toggleFolder, PALETTE);
   ui.syncFolders(state.hidden);
   buildLookup();
@@ -576,6 +587,12 @@ function resolveTarget(target) {
   const key = String(target || '').trim().replace(/\.md$/i, '').toLowerCase();
   if (!key) return null;
   return state.lookup.get(key) || state.lookup.get(key.split('/').pop()) || null;
+}
+
+/** A bento box names a folder; fly there in the graph, where the section lives. */
+function openFolderInGraph(name) {
+  setMode('universe', { persist: false });
+  focusFolder(name);
 }
 
 /** A card names a note id; the board can open it without leaving the view. */
@@ -719,8 +736,8 @@ function loop(now) {
     if (state.atlas) state.atlas.tick(now);
     return;
   }
-  // The board is DOM: no scene to draw, and no reason to keep paying for one.
-  if (state.mode === 'decisions') return;
+  // The boards are DOM: no scene to draw, and no reason to keep paying for one.
+  if (state.mode === 'decisions' || state.mode === 'bento') return;
 
   state.time += dt;
 
@@ -935,13 +952,17 @@ function setMode(mode, { persist = true, animate = true } = {}) {
 
   const atlasMode = mode === 'atlas';
   const boardMode = mode === 'decisions';
+  const bentoMode = mode === 'bento';
+  const domMode = boardMode || bentoMode;
   els.replay.hidden = mode !== 'replay';
-  els.canvas.hidden = atlasMode || boardMode;
-  els.labels.hidden = atlasMode || boardMode;
+  els.canvas.hidden = atlasMode || domMode;
+  els.labels.hidden = atlasMode || domMode;
   els.atlas.hidden = !atlasMode;
   els.decisions.hidden = !boardMode;
+  els.bento.hidden = !bentoMode;
   document.body.classList.toggle('mode-atlas', atlasMode);
   document.body.classList.toggle('mode-decisions', boardMode);
+  document.body.classList.toggle('mode-bento', bentoMode);
 
   if (atlasMode) {
     const atlas = ensureAtlas();
@@ -1008,6 +1029,7 @@ function toggleFolder(name) {
   ui.syncFolders(state.hidden);
   state.renderer.setFolderFilter(state.hidden);
   if (state.atlas) state.atlas.setHidden(state.hidden);
+  syncBento();
 }
 
 function resetFolders() {
@@ -1015,6 +1037,17 @@ function resetFolders() {
   ui.syncFolders(state.hidden);
   state.renderer.setFolderFilter(state.hidden);
   if (state.atlas) state.atlas.setHidden(state.hidden);
+  syncBento();
+}
+
+/** The bento board is DOM, so a folder toggle is a cheap re-render. */
+function syncBento() {
+  if (!state.graph) return;
+  ui.renderBento(els.bentoBoard, state.graph, state.hidden, {
+    onOpen: openDecision,
+    onFolder: openFolderInGraph,
+    palette: PALETTE,
+  });
 }
 
 /* ---------- atlas ---------- */
@@ -1122,10 +1155,85 @@ async function loadAbout() {
   try {
     const about = await api.about();
     state.about = about;
-    const build = about.build && about.build !== 'dev' ? ` (${about.build})` : '';
-    els.settingsAbout.textContent = `Cortex ${about.version}${build} · port ${about.port} · ${about.config || 'config folder unknown'}`;
+    renderAbout();
   } catch {
     els.settingsAbout.textContent = 'Cortex';
+  }
+}
+
+function renderAbout() {
+  if (!els.settingsAbout || !state.about) return;
+  const about = state.about;
+  const build = about.build && about.build !== 'dev' ? ` (${about.build})` : '';
+  let line = `Cortex ${about.version}${build} · port ${about.port} · ${about.config || 'config folder unknown'}`;
+  if (state.update) {
+    if (state.update.error) line += ' · update check unavailable';
+    else if (state.update.available) line += ` · ${state.update.latest} available`;
+    else if (state.update.latest) line += ' · up to date';
+  }
+  els.settingsAbout.textContent = line;
+}
+
+/* ---------- updates ---------- */
+
+async function checkForUpdates({ manual = false } = {}) {
+  if (!state.live) {
+    if (manual) ui.toast('The static demo cannot check for updates');
+    return;
+  }
+  try {
+    const info = await api.updateInfo();
+    state.update = info;
+    renderAbout();
+    if (info.available) {
+      showUpdateBanner(info);
+      if (manual) ui.toast(`Cortex ${info.latest} is available`);
+    } else if (manual) {
+      ui.toast(info.error ? `Could not check for updates: ${info.error}` : 'Cortex is up to date');
+    }
+  } catch (error) {
+    if (manual) ui.toast(error.message || 'Could not check for updates');
+  }
+}
+
+function showUpdateBanner(info) {
+  if (prefs.get('cortex.update.dismissed', '') === info.latest) return;
+  els.updateText.textContent = `Cortex ${info.latest} is available`;
+  els.updateAction.textContent = info.can_install ? 'Update' : 'Download';
+  els.updateAction.hidden = false;
+  els.updateClose.hidden = false;
+  els.updateAction.disabled = false;
+  els.update.hidden = false;
+}
+
+function dismissUpdate() {
+  els.update.hidden = true;
+  if (state.update?.latest) prefs.set('cortex.update.dismissed', state.update.latest);
+}
+
+async function installUpdate() {
+  const info = state.update;
+  if (!info?.available) return;
+  if (!info.can_install) {
+    const url = info.url || state.about?.releases;
+    if (url) window.open(url, '_blank', 'noopener');
+    return;
+  }
+  const confirmed = window.confirm(
+    `Install Cortex ${info.latest} now?\n\nCortex will close and reopen when the installer finishes.`,
+  );
+  if (!confirmed) return;
+  els.updateAction.disabled = true;
+  els.updateText.textContent = `Downloading Cortex ${info.latest}…`;
+  try {
+    const result = await api.installUpdate();
+    els.updateText.textContent = result.message || 'Installing…';
+    els.updateAction.hidden = true;
+    els.updateClose.hidden = true;
+  } catch (error) {
+    els.updateText.textContent = 'The update failed';
+    els.updateAction.disabled = false;
+    ui.toast(error.message || 'The update failed');
   }
 }
 
@@ -1146,6 +1254,7 @@ function openSettings() {
   syncAgentHelp(vault);
   refreshMcpStatus();
   loadAbout();
+  checkForUpdates();
   els.settingsReveal.disabled = Boolean(vault.missing);
   syncSettingsViews();
   els.settings.hidden = false;
@@ -1299,6 +1408,7 @@ function onKeyDown(event) {
   else if (event.key === '3') setMode('replay');
   else if (event.key === '4') setMode('atlas');
   else if (event.key === '5') setMode('decisions');
+  else if (event.key === '6') setMode('bento');
   else if (event.key === ' ' || event.key === 'Spacebar') {
     event.preventDefault();
     setMode(state.mode === 'brain' ? 'universe' : 'brain');

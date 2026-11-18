@@ -40,13 +40,15 @@ use cortex_core::Vault;
 
 use crate::assets;
 use crate::desktop;
-use crate::{instance, mcp_setup, version};
+use crate::{instance, mcp_setup, update, version};
 
 const MAX_BODY: usize = MAX_NOTE_BYTES as usize + 64 * 1024;
 /// Stat-only check. Cheap enough to feel instant without an OS watcher crate,
 /// and it behaves the same on network shares and every platform.
 const WATCH_INTERVAL: Duration = Duration::from_millis(400);
 const EVENT_WAIT: Duration = Duration::from_secs(25);
+/// A release check reaches GitHub; once every half hour is plenty.
+const UPDATE_TTL: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -76,6 +78,7 @@ pub struct AppState {
     active: Arc<RwLock<Option<String>>>,
     revision: watch::Sender<u64>,
     last_write: Arc<RwLock<Instant>>,
+    update: Arc<RwLock<Option<(Instant, update::Check)>>>,
     stop: Option<watch::Sender<bool>>,
 }
 
@@ -329,6 +332,7 @@ pub async fn serve_with(
         active: Arc::new(RwLock::new(active)),
         revision,
         last_write: Arc::new(RwLock::new(Instant::now() - Duration::from_secs(60))),
+        update: Arc::new(RwLock::new(None)),
         stop: stop.clone(),
     };
     for handle in &handles {
@@ -349,6 +353,7 @@ pub async fn serve_with(
         .route("/api/vaults/agents", post(api_vault_agents))
         .route("/api/reveal", post(api_reveal))
         .route("/api/about", get(api_about))
+        .route("/api/update", get(api_update).post(api_install_update))
         .route("/api/pick-folder", post(api_pick_folder))
         .route("/api/mcp/status", get(api_mcp_status))
         .route("/api/mcp/test", post(api_mcp_test))
@@ -874,6 +879,48 @@ async fn api_about(State(state): State<AppState>) -> Response {
         StatusCode::OK,
         serde_json::to_string(&info).unwrap_or_default(),
     )
+}
+
+async fn api_update(State(state): State<AppState>) -> Response {
+    if let Some((checked, info)) = state.update.read().await.clone() {
+        if checked.elapsed() < UPDATE_TTL {
+            return json_response(
+                StatusCode::OK,
+                serde_json::to_string(&info).unwrap_or_default(),
+            );
+        }
+    }
+    // curl is blocking; GitHub must never stall the app's own event loop.
+    let info = tokio::task::spawn_blocking(update::check)
+        .await
+        .unwrap_or_else(|_| update::Check::failed("The update check stopped unexpectedly"));
+    *state.update.write().await = Some((Instant::now(), info.clone()));
+    json_response(
+        StatusCode::OK,
+        serde_json::to_string(&info).unwrap_or_default(),
+    )
+}
+
+async fn api_install_update(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Some(rejection) = begin_admin(&state, &headers).await {
+        return rejection;
+    }
+    let result = tokio::task::spawn_blocking(update::install).await;
+    match result {
+        Ok(Ok(message)) => json_response(
+            StatusCode::OK,
+            json!({ "ok": true, "message": message }).to_string(),
+        ),
+        Ok(Err(message)) => json_response(
+            StatusCode::BAD_REQUEST,
+            json!({ "error": message, "code": "update_failed" }).to_string(),
+        ),
+        Err(_) => json_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json!({ "error": "The installer stopped unexpectedly", "code": "update_failed" })
+                .to_string(),
+        ),
+    }
 }
 
 async fn api_pick_folder(State(state): State<AppState>, headers: HeaderMap) -> Response {

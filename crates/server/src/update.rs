@@ -1,0 +1,412 @@
+//! Update check, and the Windows installer hand-off.
+//!
+//! Cortex has no signing certificate and no second binary, so "auto update"
+//! here means: read the project's release feed when the app starts, tell the
+//! user in the UI, and — on Windows — download `CortexSetup-<version>.exe` from
+//! the tagged release, verify it against `SHA256SUMS.txt`, run it silently, and
+//! let the installer restart Cortex.
+//!
+//! The release feed is the Atom feed GitHub publishes for tags, not the REST
+//! API: it has no anonymous rate limit, and the asset names are deterministic
+//! (`CortexSetup-<version>.exe`), so one request is enough to know what to get.
+//!
+//! The request goes through `curl`, which ships with Windows 10+, macOS and
+//! every Linux Cortex supports. That keeps a TLS stack out of the binary for a
+//! feature that only matters once per release.
+
+#[cfg(windows)]
+use std::fmt::Write as _;
+use std::process::Command;
+#[cfg(windows)]
+use std::time::Duration;
+
+use serde::Serialize;
+
+use crate::version;
+
+const FEED_URL: &str = "https://github.com/thijnperd/obsidian-cortex/releases.atom";
+#[cfg(windows)]
+const DOWNLOAD_BASE: &str = "https://github.com/thijnperd/obsidian-cortex/releases/download";
+
+/// The JSON the browser sees.
+#[derive(Debug, Clone, Serialize)]
+pub struct Check {
+    pub current: String,
+    pub latest: Option<String>,
+    pub available: bool,
+    pub url: Option<String>,
+    pub can_install: bool,
+    pub error: Option<String>,
+}
+
+impl Check {
+    pub fn failed(message: impl Into<String>) -> Check {
+        Check {
+            current: version::VERSION.to_string(),
+            latest: None,
+            available: false,
+            url: None,
+            can_install: false,
+            error: Some(message.into()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Semver {
+    major: u64,
+    minor: u64,
+    patch: u64,
+}
+
+fn parse_version(tag: &str) -> Option<Semver> {
+    let trimmed = tag.trim().trim_start_matches(['v', 'V']);
+    // A prerelease or rolling build is not something to push at a user.
+    if trimmed.contains('-') || trimmed.contains('+') {
+        return None;
+    }
+    let mut parts = trimmed.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    let patch = parts.next()?.parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(Semver {
+        major,
+        minor,
+        patch,
+    })
+}
+
+impl Semver {
+    fn text(&self) -> String {
+        format!("{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
+/// Newest stable tag in a release Atom feed, with its release page.
+fn latest_from_feed(feed: &str) -> Option<(Semver, String)> {
+    let mut best: Option<(Semver, String)> = None;
+    for line in feed.lines() {
+        let Some(href) = link_href(line) else {
+            continue;
+        };
+        let Some((_, tag)) = href.rsplit_once("/releases/tag/") else {
+            continue;
+        };
+        let Some(version) = parse_version(tag) else {
+            continue;
+        };
+        if best
+            .as_ref()
+            .map_or(true, |(current, _)| version > *current)
+        {
+            best = Some((version, href.to_string()));
+        }
+    }
+    best
+}
+
+fn link_href(line: &str) -> Option<&str> {
+    let start = line.find("href=\"")? + "href=\"".len();
+    let rest = &line[start..];
+    let end = rest.find('"')?;
+    Some(&rest[..end])
+}
+
+/// Read the release feed. Any failure is reported, never guessed around.
+pub fn check() -> Check {
+    let feed = match curl(FEED_URL) {
+        Ok(feed) => feed,
+        Err(error) => return Check::failed(error),
+    };
+    let Some((latest, url)) = latest_from_feed(&feed) else {
+        return Check::failed("No stable release found");
+    };
+    let current = parse_version(version::VERSION);
+    let available = current.map_or(true, |current| latest > current);
+    Check {
+        current: version::VERSION.to_string(),
+        latest: Some(latest.text()),
+        available,
+        url: Some(url),
+        can_install: available && cfg!(windows),
+        error: None,
+    }
+}
+
+/// Download the installer, verify it, start it, and let it replace this binary.
+///
+/// Only Windows has an installer to run. Everywhere else the UI opens the
+/// release download instead of pretending an archive can update a live binary.
+pub fn install() -> Result<String, String> {
+    #[cfg(not(windows))]
+    {
+        Err("Cortex updates from the release download on this platform".to_string())
+    }
+
+    #[cfg(windows)]
+    {
+        let feed = curl(FEED_URL)?;
+        let (latest, _) =
+            latest_from_feed(&feed).ok_or_else(|| "no stable release was found".to_string())?;
+        if parse_version(version::VERSION).is_some_and(|current| latest <= current) {
+            return Err("Cortex is already up to date".to_string());
+        }
+
+        let name = format!("CortexSetup-{}.exe", latest.text());
+        let base = format!("{DOWNLOAD_BASE}/v{}", latest.text());
+        let directory = std::env::temp_dir().join("cortex-update");
+        std::fs::create_dir_all(&directory)
+            .map_err(|error| format!("could not create {}: {error}", directory.display()))?;
+        let file = directory.join(&name);
+        let _ = std::fs::remove_file(&file);
+        curl_to(&format!("{base}/{name}"), &file.to_string_lossy())?;
+
+        let sums = curl(&format!("{base}/SHA256SUMS.txt"))?;
+        let expected = lookup_sum(&sums, &name)
+            .ok_or_else(|| "the release checksum file does not name the installer".to_string())?;
+        let bytes = std::fs::read(&file)
+            .map_err(|error| format!("could not read the download: {error}"))?;
+        if !sha256(&bytes).eq_ignore_ascii_case(&expected) {
+            let _ = std::fs::remove_file(&file);
+            return Err("The update failed its checksum; nothing was installed".to_string());
+        }
+
+        Command::new(&file)
+            .args([
+                "/VERYSILENT",
+                "/SUPPRESSMSGBOXES",
+                "/NORESTART",
+                "/CLOSEAPPLICATIONS",
+            ])
+            .spawn()
+            .map_err(|error| format!("could not start the installer: {error}"))?;
+
+        // Give the HTTP response time to reach the page, then let the installer
+        // have the executable to itself. The silent install restarts Cortex.
+        std::thread::spawn(|| {
+            std::thread::sleep(Duration::from_millis(1500));
+            std::process::exit(0);
+        });
+
+        Ok(format!(
+            "Installing Cortex {}; it will reopen when the installer finishes",
+            latest.text()
+        ))
+    }
+}
+
+#[cfg(windows)]
+fn lookup_sum(body: &str, name: &str) -> Option<String> {
+    body.lines().find_map(|line| {
+        let mut parts = line.split_whitespace();
+        let hash = parts.next()?;
+        let file = parts.next()?.trim_start_matches('*');
+        (file.eq_ignore_ascii_case(name) && hash.len() == 64).then(|| hash.to_string())
+    })
+}
+
+// A checksum is the whole security value of a silent install, so the hash is
+// computed here rather than delegated to a platform utility.
+#[cfg(windows)]
+fn sha256(bytes: &[u8]) -> String {
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
+    ];
+    let mut state: [u32; 8] = [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+        0x5be0cd19,
+    ];
+    let mut message = bytes.to_vec();
+    let bits = (bytes.len() as u64).wrapping_mul(8);
+    message.push(0x80);
+    while message.len() % 64 != 56 {
+        message.push(0);
+    }
+    message.extend_from_slice(&bits.to_be_bytes());
+
+    for chunk in message.chunks(64) {
+        let mut words = [0u32; 64];
+        for (index, word) in words.iter_mut().take(16).enumerate() {
+            let start = index * 4;
+            *word = u32::from_be_bytes([
+                chunk[start],
+                chunk[start + 1],
+                chunk[start + 2],
+                chunk[start + 3],
+            ]);
+        }
+        for index in 16..64 {
+            let s0 = words[index - 15].rotate_right(7)
+                ^ words[index - 15].rotate_right(18)
+                ^ (words[index - 15] >> 3);
+            let s1 = words[index - 2].rotate_right(17)
+                ^ words[index - 2].rotate_right(19)
+                ^ (words[index - 2] >> 10);
+            words[index] = words[index - 16]
+                .wrapping_add(s0)
+                .wrapping_add(words[index - 7])
+                .wrapping_add(s1);
+        }
+
+        let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = state;
+        for index in 0..64 {
+            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+            let choice = (e & f) ^ ((!e) & g);
+            let temp1 = h
+                .wrapping_add(s1)
+                .wrapping_add(choice)
+                .wrapping_add(K[index])
+                .wrapping_add(words[index]);
+            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+            let majority = (a & b) ^ (a & c) ^ (b & c);
+            let temp2 = s0.wrapping_add(majority);
+            h = g;
+            g = f;
+            f = e;
+            e = d.wrapping_add(temp1);
+            d = c;
+            c = b;
+            b = a;
+            a = temp1.wrapping_add(temp2);
+        }
+        state[0] = state[0].wrapping_add(a);
+        state[1] = state[1].wrapping_add(b);
+        state[2] = state[2].wrapping_add(c);
+        state[3] = state[3].wrapping_add(d);
+        state[4] = state[4].wrapping_add(e);
+        state[5] = state[5].wrapping_add(f);
+        state[6] = state[6].wrapping_add(g);
+        state[7] = state[7].wrapping_add(h);
+    }
+
+    let mut out = String::with_capacity(64);
+    for word in state {
+        let _ = write!(out, "{word:08x}");
+    }
+    out
+}
+
+fn curl(url: &str) -> Result<String, String> {
+    let output = Command::new(curl_binary())
+        .args([
+            "-fsSL",
+            "--max-time",
+            "20",
+            "--retry",
+            "1",
+            "-H",
+            "User-Agent: cortex-updater",
+            url,
+        ])
+        .output()
+        .map_err(|_| "curl is not available to check for updates".to_string())?;
+    if !output.status.success() {
+        return Err(format!("GitHub did not answer ({})", output.status));
+    }
+    String::from_utf8(output.stdout)
+        .map_err(|_| "GitHub answered with something that is not text".to_string())
+}
+
+#[cfg(windows)]
+fn curl_to(url: &str, file: &str) -> Result<(), String> {
+    let output = Command::new(curl_binary())
+        .args([
+            "-fsSL",
+            "--max-time",
+            "300",
+            "--retry",
+            "2",
+            "-o",
+            file,
+            "-H",
+            "User-Agent: cortex-updater",
+            url,
+        ])
+        .output()
+        .map_err(|_| "curl is not available to download the update".to_string())?;
+    if !output.status.success() {
+        return Err(format!("could not download the update ({})", output.status));
+    }
+    Ok(())
+}
+
+fn curl_binary() -> &'static str {
+    if cfg!(windows) {
+        "curl.exe"
+    } else {
+        "curl"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn versions_sort_numerically() {
+        assert!(parse_version("v0.10.0") > parse_version("v0.9.9"));
+        assert!(parse_version("0.8.0") > parse_version("v0.7.0"));
+        assert_eq!(
+            parse_version("v1.2.3"),
+            Some(Semver {
+                major: 1,
+                minor: 2,
+                patch: 3
+            })
+        );
+        assert_eq!(parse_version("latest"), None);
+        assert_eq!(parse_version("v0.8.0-beta.1"), None);
+        assert_eq!(parse_version("v0.8"), None);
+    }
+
+    #[test]
+    fn feed_picks_the_newest_stable_tag() {
+        let feed = r#"<?xml version="1.0"?>
+<feed>
+  <entry><link rel="alternate" type="text/html" href="https://github.com/thijnperd/obsidian-cortex/releases/tag/latest"/></entry>
+  <entry><link rel="alternate" type="text/html" href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v0.7.0"/></entry>
+  <entry><link rel="alternate" type="text/html" href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v0.10.0"/></entry>
+  <entry><link rel="alternate" type="text/html" href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v0.11.0-beta.1"/></entry>
+</feed>"#;
+        let (version, url) = latest_from_feed(feed).unwrap();
+        assert_eq!(version.text(), "0.10.0");
+        assert!(url.ends_with("/releases/tag/v0.10.0"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn sha256_matches_the_standard_vectors() {
+        assert_eq!(
+            sha256(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            sha256(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn sums_file_names_the_installer() {
+        let body = "aaaa  CortexSetup-0.8.0.exe\nbbbb *cortex-windows-x86_64.zip\n";
+        assert_eq!(lookup_sum(body, "CortexSetup-0.8.0.exe"), None);
+        let long = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef  CortexSetup-0.8.0.exe";
+        assert_eq!(
+            lookup_sum(long, "CortexSetup-0.8.0.exe").as_deref(),
+            Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        );
+    }
+}

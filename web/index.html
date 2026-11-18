@@ -23,6 +23,14 @@
     <div class="decisions-board" id="decisions-board"></div>
   </section>
 
+  <section class="bento" id="bento" hidden aria-labelledby="bento-title">
+    <header class="bento-header">
+      <h2 class="bento-heading" id="bento-title">Bento</h2>
+      <p class="bento-sub">Every folder as a box, its strongest notes inside. A general overview of what the vault holds.</p>
+    </header>
+    <div class="bento-board" id="bento-board"></div>
+  </section>
+
   <div class="boot" id="boot">
     <p class="boot-status" id="boot-status">Opening vault…</p>
   </div>
@@ -41,6 +49,7 @@
       <button class="view" data-mode="brain" type="button" aria-pressed="false">Brain</button>
       <button class="view" data-mode="replay" type="button" aria-pressed="false">Timeline</button>
       <button class="view" data-mode="atlas" type="button" aria-pressed="false">Atlas</button>
+      <button class="view" data-mode="bento" type="button" aria-pressed="false">Bento</button>
       <button class="view" data-mode="decisions" type="button" aria-pressed="false">Decisions</button>
     </div>
 
@@ -56,6 +65,12 @@
   <div class="section-focus" id="section-focus" hidden>
     <span class="section-focus-name" id="section-focus-name"></span>
     <button class="section-focus-exit" id="section-focus-exit" type="button">All folders</button>
+  </div>
+
+  <div class="update" id="update" hidden role="status">
+    <span class="update-text" id="update-text"></span>
+    <button class="btn btn-primary" id="update-action" type="button">Update</button>
+    <button class="icon-button" id="update-close" type="button" aria-label="Dismiss the update notice">×</button>
   </div>
 
   <aside class="sidebar" id="sidebar" hidden>
@@ -141,6 +156,7 @@
             <button class="choice" data-mode="brain" type="button" aria-pressed="false">Brain</button>
             <button class="choice" data-mode="replay" type="button" aria-pressed="false">Timeline</button>
             <button class="choice" data-mode="atlas" type="button" aria-pressed="false">Atlas</button>
+            <button class="choice" data-mode="bento" type="button" aria-pressed="false">Bento</button>
             <button class="choice" data-mode="decisions" type="button" aria-pressed="false">Decisions</button>
           </div>
           <p class="field-help">Cortex remembers the view you last used in each vault.</p>
@@ -216,6 +232,7 @@
             <label class="choice"><input type="radio" name="launch-view" value="brain" /><span>Brain</span></label>
             <label class="choice"><input type="radio" name="launch-view" value="replay" /><span>Timeline</span></label>
             <label class="choice"><input type="radio" name="launch-view" value="atlas" /><span>Atlas</span></label>
+            <label class="choice"><input type="radio" name="launch-view" value="bento" /><span>Bento</span></label>
             <label class="choice"><input type="radio" name="launch-view" value="decisions" /><span>Decisions</span></label>
           </div>
         </fieldset>
