@@ -80,10 +80,13 @@ enum Command {
         #[arg(long)]
         off: bool,
     },
-    /// Generate the bundled demo vault (concepts + two years of journal).
+    /// Generate a bundled demo vault: small, medium (328 notes) or large.
     SeedDemo {
         #[arg(default_value = "demo")]
         vault: PathBuf,
+        /// Which demo to write: small, medium or large.
+        #[arg(long, default_value = "medium")]
+        size: String,
         #[arg(long)]
         force: bool,
     },
@@ -161,9 +164,17 @@ fn main() -> Result<()> {
             let runtime = tokio::runtime::Runtime::new()?;
             runtime.block_on(app::serve(config))
         }
-        Some(Command::SeedDemo { vault, force }) => {
-            let count = demo::seed(&vault, force).context("could not seed demo vault")?;
-            println!("[cortex] wrote {count} notes to {}", vault.display());
+        Some(Command::SeedDemo { vault, size, force }) => {
+            let size = demo::DemoSize::from_name(&size).with_context(|| {
+                format!("unknown demo size: {size} (use small, medium or large)")
+            })?;
+            let count =
+                demo::seed_with(&vault, force, size).context("could not seed demo vault")?;
+            println!(
+                "[cortex] wrote {count} {} notes to {}",
+                size.name(),
+                vault.display()
+            );
             println!(
                 "[cortex] next: cargo run -p cortex -- serve {}",
                 vault.display()
