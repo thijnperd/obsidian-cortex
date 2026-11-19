@@ -100,7 +100,7 @@ fn latest_from_feed(feed: &str) -> Option<(Semver, String)> {
         };
         if best
             .as_ref()
-            .map_or(true, |(current, _)| version > *current)
+            .is_none_or(|(current, _)| version > *current)
         {
             best = Some((version, href.to_string()));
         }
@@ -125,7 +125,7 @@ pub fn check() -> Check {
         return Check::failed("No stable release found");
     };
     let current = parse_version(version::VERSION);
-    let available = current.map_or(true, |current| latest > current);
+    let available = current.is_none_or(|current| latest > current);
     Check {
         current: version::VERSION.to_string(),
         latest: Some(latest.text()),
