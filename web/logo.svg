@@ -7,7 +7,7 @@
       <line x1="512" y1="58" x2="512" y2="966" stroke="#000" stroke-width="20" />
     </mask>
   </defs>
-  <g fill="currentColor" mask="url(#cortex-trail)">
+  <g fill="#f2ead9" mask="url(#cortex-trail)">
     <circle cx="512" cy="512" r="330" />
     <circle cx="300" cy="210" r="156" />
     <circle cx="512" cy="150" r="170" />
