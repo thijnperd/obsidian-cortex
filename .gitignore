@@ -7,3 +7,7 @@
 *.tmp
 server.log
 static.log
+
+# generated video toolchain and scratch frames
+marketing/tiktok/bin/
+marketing/tiktok/_*.png
