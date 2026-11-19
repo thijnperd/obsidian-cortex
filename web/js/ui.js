@@ -113,6 +113,11 @@ export function renderLaunch(container, vaults, { onOpen, onForget }) {
     open.className = 'launch-open';
     open.title = vault.path;
 
+    const tile = document.createElement('span');
+    tile.className = 'launch-item-tile';
+    tile.setAttribute('aria-hidden', 'true');
+    tile.textContent = (vault.name || '?').trim().charAt(0).toUpperCase();
+
     const text = document.createElement('span');
     text.className = 'launch-item-text';
     const name = document.createElement('span');
@@ -131,7 +136,7 @@ export function renderLaunch(container, vaults, { onOpen, onForget }) {
         ? `${vault.notes == null ? '—' : vault.notes} notes`
         : 'open';
 
-    open.append(text, meta);
+    open.append(tile, text, meta);
     open.addEventListener('click', () => onOpen(vault));
 
     const forget = document.createElement('button');
@@ -147,6 +152,8 @@ export function renderLaunch(container, vaults, { onOpen, onForget }) {
     row.append(open, forget);
     container.appendChild(row);
   }
+  const recents = container.closest('.launch-recents');
+  if (recents) recents.hidden = vaults.length === 0;
 }
 
 function relationList(title, notes, empty) {
