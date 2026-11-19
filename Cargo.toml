@@ -3,9 +3,9 @@ resolver = "2"
 members = ["crates/core", "crates/server"]
 
 [workspace.package]
-version = "1.1.1"
+version = "1.2.0"
 edition = "2021"
-rust-version = "1.78"
+rust-version = "1.85"
 license = "MIT"
 
 [workspace.dependencies]

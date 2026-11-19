@@ -7,7 +7,7 @@ mod launch;
 mod mcp;
 mod mcp_setup;
 #[cfg(any(windows, target_os = "macos"))]
-mod tray;
+mod native;
 mod update;
 mod version;
 

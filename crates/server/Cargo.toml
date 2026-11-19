@@ -20,16 +20,21 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time",
 clap = { version = "4", features = ["derive"] }
 rust-embed = "8"
 
-# The tray needs a native event loop. Linux deliberately has neither, so the
-# binary there stays free of GTK, appindicator and Wayland headers.
+# A real window on the platforms that ship one: WebView2 on Windows and
+# WKWebView on macOS. Linux deliberately keeps the browser path so the binary
+# does not link WebKitGTK, GTK and libsoup just to start.
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]
-tray-icon = "0.19"
-winit = "0.30"
+wry = "0.57"
+tao = "0.37"
+tray-icon = "0.26"
 
 # The real folder dialog exists on Windows; macOS and Linux use their own
 # picker command instead of linking a GUI toolkit.
 [target.'cfg(windows)'.dependencies]
 rfd = "0.15"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
 
 [dev-dependencies]
 tempfile = "3"
