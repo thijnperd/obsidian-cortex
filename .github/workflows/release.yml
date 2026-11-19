@@ -98,12 +98,38 @@ jobs:
         run: cargo test --workspace --all-targets --locked
       - name: Build
         run: cargo build --release -p cortex --locked
-      - name: Package (unix)
+      # A bare binary has no identity, icon or normal signing shape on macOS;
+      # the archive is an app bundle so Finder and the Dock see Cortex.
+      - name: Package (macos app)
         run: |
-          mkdir -p out/cortex
-          cp target/release/cortex out/cortex/cortex
-          cp README.md out/cortex/README.md
-          tar -czf cortex-macos-arm64.tar.gz -C out cortex
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          app="Cortex.app"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+          cp target/release/cortex "$app/Contents/MacOS/cortex"
+          cp assets/icons/cortex.icns "$app/Contents/Resources/cortex.icns"
+          cat > "$app/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key><string>cortex</string>
+            <key>CFBundleIdentifier</key><string>dev.cortex.app</string>
+            <key>CFBundleName</key><string>Cortex</string>
+            <key>CFBundleDisplayName</key><string>Cortex</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>$version</string>
+            <key>CFBundleVersion</key><string>$version</string>
+            <key>CFBundleIconFile</key><string>cortex.icns</string>
+            <key>LSMinimumSystemVersion</key><string>12.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+            <key>NSRequiresAquaSystemAppearance</key><false/>
+          </dict>
+          </plist>
+          PLIST
+          # Ad-hoc signing is what lets an arm64 bundle run at all; it is not a
+          # substitute for a Developer ID certificate and notarization.
+          codesign --force --sign - "$app"
+          tar -czf cortex-macos-arm64.tar.gz "$app"
       - uses: actions/upload-artifact@v4
         with:
           name: cortex-macos-arm64

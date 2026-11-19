@@ -1,10 +1,10 @@
 ; Cortex, per-user install. No admin, no service: a Start Menu entry, an
 ; uninstaller, an optional login entry, and App Paths so `cortex` resolves.
 ;
-; CI passes the version: ISCC.exe /DAppVersion=1.1.1 installer\cortex.iss
+; CI passes the version: ISCC.exe /DAppVersion=1.2.0 installer\cortex.iss
 
 #ifndef AppVersion
-  #define AppVersion "1.1.1"
+  #define AppVersion "1.2.0"
 #endif
 
 [Setup]
@@ -21,6 +21,8 @@ OutputBaseFilename=CortexSetup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; Same mark as the exe and the window: installer, uninstaller and shortcuts.
+SetupIconFile=cortex.ico
 ; The in-app updater closes Cortex before it runs the installer; Restart Manager
 ; covers the case where it did not (a console `cortex serve` is still running).
 CloseApplications=yes

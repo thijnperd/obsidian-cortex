@@ -54,9 +54,10 @@ node --check web/js/*.js                 # no build step for the UI
 - **One process owns an instance.** `cortex app` runs the server in-process and
   its life is the window's; `serve` is the console path. `server.json` is a
   discovery file, not a lock — the health probe decides whether it is current.
-- **The window belongs to the browser.** It is Chromium `--app` with a private
-  profile; the app waits on that child. Do not "improve" this into a webview
-  without reopening ADR 0005.
+- **The window is native on Windows and macOS.** `crates/server/src/native.rs`
+  runs WebView2/WKWebView through wry and tao, loading the loopback server;
+  the tray lives in the same event loop. Linux deliberately keeps the browser
+  path and must not start linking GTK/WebKit without a new ADR. See ADR 0009.
 - **Every note must survive the reveal animation.** `appear` values feed
   `smoothstep(appear, appear + 0.05, reveal)`; a value at or above 1 hides the
   note in every 3D view.
