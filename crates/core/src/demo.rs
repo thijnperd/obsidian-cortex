@@ -1579,7 +1579,7 @@ fn write_seed_links(
     let links = seed
         .links
         .iter()
-        .filter(|link| allowed.map_or(true, |set| set.contains(**link)))
+        .filter(|link| allowed.is_none_or(|set| set.contains(**link)))
         .collect::<Vec<_>>();
     let threads = links
         .iter()

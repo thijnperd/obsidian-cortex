@@ -2,8 +2,8 @@
 //!
 //! `cortex` with no subcommand detaches `cortex app`, so the terminal comes
 //! back and closing it changes nothing. `cortex app` is the one process that
-//! owns the server in-process, opens the window and, on Windows and macOS,
-//! shows the tray. Its life is the window's.
+//! owns the server in-process and opens the window — a native WebView2/WKWebView
+//! window on Windows and macOS, the browser on Linux. Its life is the window's.
 
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -22,7 +22,7 @@ use crate::{desktop, instance, version};
 pub fn detach() -> Result<()> {
     if let Some((_, live)) = instance::live() {
         println!("[cortex] already running on port {}", live.port);
-        desktop::open_window(&format!("http://127.0.0.1:{}/", live.port), 1440, 900);
+        desktop::open_url(&format!("http://127.0.0.1:{}/", live.port));
         return Ok(());
     }
 
@@ -79,7 +79,7 @@ pub fn run_app() -> Result<()> {
 
     if let Some((_, live)) = instance::live() {
         println!("[cortex] already running on port {}", live.port);
-        desktop::open_window(&format!("http://127.0.0.1:{}/", live.port), 1440, 900);
+        desktop::open_url(&format!("http://127.0.0.1:{}/", live.port));
         return Ok(());
     }
 
@@ -137,27 +137,36 @@ pub fn run_app() -> Result<()> {
     }
 
     let url = format!("http://127.0.0.1:{port}/");
-    let child = desktop::open_window(&url, 1440, 900);
-    let (name, agents) = instance::active_agent();
-    let label = format!(
-        "{} — agent access {}",
-        name,
-        if agents { "on" } else { "off" }
-    );
+    let (_, agents) = instance::active_agent();
 
     #[cfg(any(windows, target_os = "macos"))]
     {
         let log = instance::log_path().unwrap_or_else(|| PathBuf::from("cortex.log"));
         // Returns when the window closes or the tray asks to quit.
-        let _ = crate::tray::run(&url, log, &label, child)?;
-        let _ = stop_tx.send(true);
-        let _ = server.join();
+        let outcome = crate::native::run(
+            &url,
+            Some(crate::native::TrayOptions {
+                log,
+                agent_access: agents,
+            }),
+        );
+        if let Err(error) = outcome {
+            eprintln!("[cortex] the native window could not start: {error:#}");
+            eprintln!("[cortex] opening the UI in your browser instead");
+            desktop::open_url(&url);
+            let _ = server.join();
+        } else {
+            let _ = stop_tx.send(true);
+            let _ = server.join();
+        }
     }
     #[cfg(not(any(windows, target_os = "macos")))]
     {
-        // No tray: the instance lives until `cortex stop` ends the server.
-        let _ = child;
-        let _ = label;
+        // No native webview on Linux: a chromeless browser window if one is
+        // installed, otherwise a normal tab. The instance lives until
+        // `cortex stop` ends the server.
+        let _ = desktop::open_window(&url, 1440, 900);
+        let _ = agents;
         let _ = server.join();
     }
     if let Some(file) = &file {

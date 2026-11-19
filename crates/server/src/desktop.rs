@@ -143,8 +143,17 @@ pub async fn pick_folder() -> Option<PathBuf> {
     }
 }
 
-/// For `cortex doctor`: which browser would host the window.
+/// For `cortex doctor`: what actually hosts the window on this platform.
 pub fn browser_label() -> String {
+    #[cfg(any(windows, target_os = "macos"))]
+    {
+        return if cfg!(windows) {
+            "WebView2 (native window)".to_string()
+        } else {
+            "WKWebView (native window)".to_string()
+        };
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     match chromium_candidates().first() {
         Some(path) => path.display().to_string(),
         None => "no Chromium browser found — the UI opens as a normal tab".to_string(),
