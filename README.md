@@ -1,17 +1,21 @@
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.1.1">
-    <img src="docs/screenshots/v1-decision-trail.jpg" width="100%" alt="Cortex 1.1.1 showing a decision trail beside the Decisions board">
+  <img src="assets/icons/cortex-128.png" width="80" height="80" alt="Cortex">
+</p>
+
+<p align="center">
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.2.0">
+    <img src="docs/screenshots/v1-decision-trail.jpg" width="100%" alt="Cortex 1.2 showing a decision trail beside the Decisions board">
   </a>
 </p>
 
-<h1 align="center">Cortex 1.1.1 — The Guided Tour</h1>
+<h1 align="center">Cortex 1.2 — The Native Window</h1>
 
 <p align="center"><strong>Your notes have a shape. Cortex shows you the reason.</strong></p>
 
 <p align="center"><a href="https://thijnperd.github.io/obsidian-cortex/"><strong>▶ Open the live demo</strong></a> — 328 notes, six views, no install.</p>
 
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.1.1"><img alt="Cortex 1.1.1" src="https://img.shields.io/badge/version-1.1.1-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.2.0"><img alt="Cortex 1.2.0" src="https://img.shields.io/badge/version-1.2.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
   <a href="https://thijnperd.github.io/obsidian-cortex/"><img alt="Live demo" src="https://img.shields.io/badge/live%20demo-328%20notes-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
   <img alt="Local-first" src="https://img.shields.io/badge/local--first-your%20folder-101216?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
@@ -25,6 +29,10 @@ into six ways of seeing it — then keeps the part most tools throw away:
 
 No account. No cloud. No database. No model required. Just your files, a graph
 that earns its place, and a memory for judgment.
+
+On Windows and macOS it is a real desktop app: WebView2 or WKWebView inside a
+Cortex window, with a tray, an app icon and no browser profile behind it. Linux
+keeps the browser path so the binary stays self-contained.
 
 **Most tools help you collect. Cortex helps you conclude.**
 
@@ -166,7 +174,7 @@ drive).
 - `cortex serve <folder>` still opens one in the foreground, and `Ctrl+O`
   (`⌘O` on macOS) returns to the picker. Closing the app window ends the
   background instance; `cortex stop` does it from a terminal, and
-  `cortex doctor` says what is running, on which port, with which browser.
+  `cortex doctor` says what is running, on which port, with which webview.
 - Nothing is copied, moved or synced. Cortex reads the folder in place, and a
   folder that has been moved shows up struck through until you forget it.
 
@@ -445,7 +453,7 @@ cargo run -p cortex -- serve ~/Notes --title "My vault"
 | Flag | Meaning |
 | --- | --- |
 | `--open` | open the UI in your browser once the server is up |
-| `--app` | open a chromeless app window (Chrome, Edge, Brave) instead of a tab |
+| `--app` | `serve` only: open a chromeless browser window instead of a tab |
 | `--read-only` | serve without write endpoints (switching folders still works) |
 | `--bind 0.0.0.0` | expose on the LAN (loopback is the default) |
 | `--allow-any-origin` | relax the same-origin check (LAN preview) |
@@ -460,10 +468,12 @@ and the same-origin check rather than by `--read-only`. Combined with
 `--allow-any-origin` that means anyone who can reach the server can point it at
 any folder the process can read — which is why the default is loopback-only.
 
-## What 1.1 is
+## What 1.2 is
 
-Cortex 1.1.1 is the local-first version: your folder, plain Markdown, six views,
-decision trails, the guided tour, the MCP bridge and the Windows installer.
+Cortex 1.2 is the desktop release: your folder, plain Markdown, six views,
+decision trails, the guided tour, the MCP bridge and a real window on Windows
+and macOS. The UI is served by the same in-process server; the window and tray
+now belong to Cortex instead of a Chromium process.
 
 It deliberately does **not** include a hosted sync service, a mobile app,
 real-time collaboration, a plugin runtime, a block editor or a built-in AI
@@ -474,7 +484,7 @@ proprietary database, no telemetry.
 The UI still has no build step. Every screenshot in this README is a seeded
 vault rendered by the app, not a mock-up.
 
-## Get Cortex 1.1.1 — The Guided Tour
+## Get Cortex 1.2.0 — The Native Window
 
 **One folder. Six views. A reason for every decision.**
 
@@ -486,11 +496,11 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | Platform | File |
 | --- | --- |
 | Windows x86-64 | `CortexSetup-<version>.exe` or `cortex-windows-x86_64.zip` |
-| macOS (Apple silicon) | `cortex-macos-arm64.tar.gz` |
+| macOS (Apple silicon) | `Cortex.app` in `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
 Tagged releases are fixed; every push to `main` also refreshes the rolling
-`latest` build. The current release is **v1.1.1 — The Guided Tour**. The version
+`latest` build. The current release is **v1.2.0 — The Native Window**. The version
 appears in `cortex --version`, in **Vault settings → About**, and on
 `/api/about`. `SHA256SUMS.txt` is attached to every release.
 
@@ -524,10 +534,16 @@ port, records it in `server.json`, and a second launch opens a window against
 the running instance instead of dying on a bind error. `cortex stop` ends it,
 `cortex doctor` explains it.
 
-The window is Chrome, Edge or Brave in `--app` mode with a profile of its own —
-a chromeless window without shipping a second runtime. Without one of those
-browsers you get a normal tab, and closing that tab cannot end the instance, so
-use the tray or `cortex stop`. Linux has no tray: it runs until `cortex stop`.
+On Windows the window is WebView2; on macOS it is WKWebView, inside a
+`Cortex.app` bundle. Both are the system webview, so there is no browser
+profile, no `--app` flag and no Chromium process to outlive the app. Closing the
+window ends the instance, and the tray can do the same. If the webview cannot
+start, Cortex says so in the log and opens the UI in your browser instead.
+
+Linux still uses Chrome, Edge or Brave in `--app` mode when one is installed,
+otherwise a normal tab. It has no tray, so it runs until `cortex stop`. Wry
+would link WebKitGTK, GTK and libsoup into a binary that is currently
+self-contained; that trade is left to a later release (ADR 0009).
 
 Or point it straight at a folder, in the foreground:
 
@@ -558,7 +574,7 @@ cargo fmt --all --check
 
 ```bash
 cortex doctor     # version, config and log paths, live instance, port,
-                  # browser, every vault and its agent switch, MCP clients
+                  # webview, every vault and its agent switch, MCP clients
 cortex stop       # ask the background instance to exit
 ```
 
@@ -580,8 +596,8 @@ publishes the static export to the
 ## License
 
 Cortex is MIT licensed. See [LICENSE](LICENSE). Security reports follow
-[SECURITY.md](SECURITY.md), and the v1.1.1 release notes are drafted in
-[docs/releases/v1.1.1.md](docs/releases/v1.1.1.md).
+[SECURITY.md](SECURITY.md), and the v1.2.0 release notes are drafted in
+[docs/releases/v1.2.0.md](docs/releases/v1.2.0.md).
 
 ## Credits
 

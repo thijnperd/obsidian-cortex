@@ -75,7 +75,7 @@ pub fn run(url: &str, tray: Option<TrayOptions>) -> Result<()> {
         .build(&window)
         .context("could not create the Cortex webview")?;
 
-    let tray_icon_bytes: &[u8] = if matches!(window.theme(), Some(Theme::Dark)) {
+    let tray_icon_bytes: &[u8] = if matches!(window.theme(), Theme::Dark) {
         TRAY_LIGHT
     } else {
         TRAY_DARK
