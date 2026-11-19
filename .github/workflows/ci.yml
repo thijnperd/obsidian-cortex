@@ -68,12 +68,10 @@ jobs:
   pages:
     name: demo → github pages
     needs: check
-    # Pages is off for private repositories, so this job only runs once the
-    # repository has it enabled and the PAGES_ENABLED variable is set to true.
+    # Pages builds from Actions, so every push to main refreshes the live demo.
     if: >-
       github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && vars.PAGES_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -89,7 +87,7 @@ jobs:
       - name: Seed demo vault
         run: cargo run --release -p cortex --locked -- seed-demo demo
       - name: Export static build
-        run: cargo run --release -p cortex --locked -- export demo --out dist --title "Cortex Atlas"
+        run: cargo run --release -p cortex --locked -- export demo --out dist --title "Cortex Demo"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

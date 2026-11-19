@@ -8,8 +8,11 @@
 
 <p align="center"><strong>Your notes have a shape. Cortex shows you the reason.</strong></p>
 
+<p align="center"><a href="https://thijnperd.github.io/obsidian-cortex/"><strong>▶ Open the live demo</strong></a> — 328 notes, six views, no install.</p>
+
 <p align="center">
   <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.1.1"><img alt="Cortex 1.1.1" src="https://img.shields.io/badge/version-1.1.1-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <a href="https://thijnperd.github.io/obsidian-cortex/"><img alt="Live demo" src="https://img.shields.io/badge/live%20demo-328%20notes-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
   <img alt="Local-first" src="https://img.shields.io/badge/local--first-your%20folder-101216?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-101216?style=flat-square&amp;labelColor=0a0b0d">
@@ -571,7 +574,8 @@ in [`docs/research-workflows.md`](docs/research-workflows.md).
 `crates/core` is pure logic (parse, index, layout, search, synthesis);
 `crates/server` is axum plus the embedded `web/` UI, which is hand-written
 WebGL2 with no build step. CI runs the checks on Linux, macOS and Windows and
-publishes the static export to GitHub Pages.
+publishes the static export to the
+[live demo](https://thijnperd.github.io/obsidian-cortex/).
 
 ## License
 
