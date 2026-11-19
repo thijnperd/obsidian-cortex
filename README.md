@@ -6,333 +6,133 @@
 
 <p align="center"><strong>Your notes, as a brain.</strong></p>
 
-<p align="center">A local-first thinking space for people who refuse to lose the thread.<br>
-Point it at a folder of Markdown and Cortex turns what you already wrote into a brain you can see —<br>
-then keeps the part most tools throw away: <strong>why you decided what you decided.</strong></p>
-
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.3.0">
-    <img src="docs/screenshots/medium/02-brain.jpg" width="100%" alt="Screenshot of Cortex's Brain view: a translucent cortical surface with folder clusters, note stars and links as fibre tracts">
+  <a href="https://thijnperd.github.io/obsidian-cortex/?view=brain">
+    <img src="docs/screenshots/medium/02-brain.jpg" width="100%" alt="Screenshot of Cortex's Brain view: a translucent cortical surface with folder clusters, note stars and links drawn as fibre tracts">
   </a>
 </p>
 
-<p align="center"><em>The Brain view — 328 notes, 557 links, one cortical surface. Every link is a fibre tract.</em></p>
+<p align="center"><em>The Brain view of a 328-note vault: 557 links on one cortical surface.</em></p>
 
-<p align="center"><a href="https://thijnperd.github.io/obsidian-cortex/?view=brain"><strong>▶ Open the live demo</strong></a> — it starts in the Brain: 328 notes, no install.</p>
+<p align="center"><a href="https://thijnperd.github.io/obsidian-cortex/?view=brain"><strong>Open the live demo</strong></a> — 328 notes, opens in the Brain, no install.</p>
 
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.3.0"><img alt="Cortex 1.3.0" src="https://img.shields.io/badge/version-1.3.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
-  <a href="https://thijnperd.github.io/obsidian-cortex/?view=brain"><img alt="Live demo" src="https://img.shields.io/badge/live%20demo-328%20notes-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
-  <img alt="Local-first" src="https://img.shields.io/badge/local--first-your%20folder-101216?style=flat-square&amp;labelColor=0a0b0d">
-  <img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases"><img alt="Version 1.3.0" src="https://img.shields.io/badge/version-1.3.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <img alt="Licensed MIT" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-101216?style=flat-square&amp;labelColor=0a0b0d">
 </p>
 
-Cortex is a local-first thinking space for people who refuse to lose the
-thread. Point it at a folder of Markdown and it turns what you already wrote
-into six ways of seeing it. The one that gives the app its name is the Brain:
-a folded cortical surface where folders become regions, notes become stars and
-wikilinks become fibre tracts.
+Cortex reads a folder of Markdown and draws it as a brain. Folders become
+regions on a cortical surface, notes become stars, and wikilinks become fibre
+tracts you can follow with the mouse.
 
-It is not a decorative skin. The Brain is the fastest way to see the cluster
-you forgot, the bridge between two projects, and the note that connects
-nothing — because it is the same deterministic layout as the graph, arranged
-for spatial memory instead of a flat map.
+It is the same vault scan behind six views. The layout is deterministic, so a
+folder stays where you learned it, and switching from Brain to Graph to Timeline
+changes the lens rather than the data.
 
-No account. No cloud. No database. No model required. Just your files, a brain
-that earns its place, and a memory for judgment.
+On Windows and macOS it is a desktop app: a WebView2 or WKWebView window with a
+tray icon and no browser profile behind it. On Linux it serves the UI to your
+browser and the binary stays self-contained.
 
-On Windows and macOS it is a real desktop app: WebView2 or WKWebView inside a
-Cortex window, with a tray, an app icon and no browser profile behind it. Linux
-keeps the browser path so the binary stays self-contained.
+No account, no cloud, no database, no model required. Your files stay where they
+are; deleting the folder is the uninstall.
 
 **Most tools help you collect. Cortex helps you conclude.**
 
-- **Start with the brain.** Notes sit on a real cortical surface; folders keep
-their own colour and region, and links draw as fibre tracts you can follow.
-It is the same vault as every other view — one click changes the lens, not the
-data.
-- **Keep the evidence.** Collect two or more notes and Cortex writes the
-research brief or idea refinement for you — a real Markdown file with
-`[[wikilinks]]` back to every source. No prompt, no API key, no model.
-- **Find the why.** Decisions carry confidence, a review date and the note they
-supersede. Past-due reviews surface on the board; the trail shows exactly what
-the conclusion rests on.
+## Install
 
-## Why the brain
-
-Every knowledge tool draws a graph now. A graph is useful, but it is also
-generic: nodes and lines, the same picture everywhere. Cortex is named after
-the cortex because the shape of a brain is a better memory palace than a
-scatter plot.
-
-The Brain view gives each folder a place on the cortical surface and keeps the
-strongest links close. Drag to orbit, scroll to zoom, click a folder title to
-fly into its region. Press `f` to reframe. The layout is deterministic: the
-same vault always grows the same brain, so a region stays where you learned it.
-
-Under it is the same graph payload, the same search, the same notes. Switch to
-Graph and the clusters are still there, unwrapped. Switch to Timeline and the
-same notes replay in the order you wrote them. The brain is the front door,
-not a separate product.
-
-### New here? Take the tour
-
-Press **Tour** in the toolbar. Cortex checks whether your vault has the pieces
-the tour teaches — a research brief, an idea note and a decision trail. If it
-does, the tour runs in place. If not, Cortex opens a generated **Cortex Tour**
-demo and returns you to your own vault when you finish. Your notes are never
-written to or changed. Finishing changes the toolbar button to **Replay**,
-remembered in this browser, so the full walkthrough is always one click away.
-
-The fifteen steps cover all six views, including the Brain, plus collecting
-evidence, Research brief, Refine idea, Decisions and the trail, the daily note
-and the shortcuts that keep the loop fast. It is the shortest path from “I have
-notes” to “I know why I decided this.”
-
-### The reasoning trail
-
-<p align="center">
-  <img src="docs/screenshots/v1-decisions.jpg" width="100%" alt="Cortex Decisions board with a review-due decision">
-</p>
-
-This is the other half of the release. A decision is not a note with a checkbox. It has a
-confidence level, a date when it should be looked at again, and a predecessor it
-supersedes. Cortex keeps that context in plain frontmatter, so it survives every
-editor, every export and every sync folder — and turns your graph into a record
-of **how you think**, not just what you saved.
-
-It reads and writes plain Markdown, so an existing Obsidian or Logseq vault
-works as-is. Research briefs, idea notes, Decisions and decision trails are
-**native Cortex features**: they are built from your notes and frontmatter on
-your machine. MCP is an optional bridge for an external AI client, not a
-dependency of any view or workflow.
-
-## Native, map, or MCP?
-
-| Capability | What it is | Uses the Atlas map? | Needs MCP/AI? |
-| --- | --- | --- | --- |
-| Graph, Brain, Timeline, Atlas, Bento | Native views of the same vault scan | Atlas **is** the map | No |
-| Search, backlinks, related notes | Native vault features | No | No |
-| Research brief / Refine idea | Native Markdown scaffold from selected notes | Only as a note on the map | No |
-| Decisions board / decision trails | Native board and panel derived from `type`, `status` and wikilinks | No | No |
-| Today’s note | Native file at `Journal/YYYY-MM-DD.md` | No | No |
-| External AI client | Optional MCP bridge | No | Yes, separately |
-
-The rest of this README keeps those three ideas separate: **native features**
-work on the folder, the **Atlas** is one spatial view, and **MCP** is optional.
-
-## Six views. One question.
-
-The same app at three vault sizes. The small demo is a first-run taste, the
-medium one is the full tour, and the giant one is the stress test: **5,523
-notes, 24,151 links, 41 folders, zero unresolved links.** Every screenshot
-below is a different seeded vault, not a mock-up.
-
-Above 1,200 notes Cortex switches to a folder-level **overview**: notes keep
-their real positions, but the graph labels folders instead of a dozen
-individual stars, draws only the strongest 5,000 links, and the atlas turns
-dense folders into light stipple. Hover or select a note for its own label.
-Click a folder title to fly into that galaxy; `All folders` flies back out.
-
-The graph is a sphere of **folder galaxies**: every folder is a local cluster of
-note dots, the strongest links stay nearby, and a large daily journal becomes a
-chronological ring around the vault instead of a blob that swallows the map.
-That is the layout in every screenshot below. The Brain view takes that same
-layout and folds it onto the cortical surface, so the map you learn in Graph is
-the map you recognise in Brain.
-
-### Small — 21 notes, 35 links
-
-| | |
+| Platform | File |
 | --- | --- |
-| ![Small vault: brain view](docs/screenshots/small/02-brain.jpg) | ![Small vault: graph view](docs/screenshots/small/01-graph.jpg) |
-| **Brain** — the same graph inside a real cortical surface. | **Graph** — folder galaxies: notes are dots, links are light, and the sky is a nebula. |
-| ![Small vault: timeline view](docs/screenshots/small/03-timeline.jpg) | ![Small vault: atlas view](docs/screenshots/small/04-atlas.jpg) |
-| **Timeline** — the vault replayed as it was written. | **Atlas** — seven folders as countries, notes as places, links as roads. |
-| ![Small vault: bento view](docs/screenshots/small/06-bento.jpg) | ![Small vault: decisions view](docs/screenshots/small/05-decisions.jpg) |
-| **Bento** — every folder as a box, sized by how much of the vault it holds. | **Decisions** — two starter briefs, grouped by `status`, with their sources. |
+| Windows x86-64 | `CortexSetup-1.3.0.exe`, or `cortex-windows-x86_64.zip` to run unpacked |
+| macOS (Apple silicon) | `Cortex.app` inside `cortex-macos-arm64.tar.gz` |
+| Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
-### Medium — 328 notes, 557 links
+Download from [Releases](https://github.com/thijnperd/obsidian-cortex/releases).
+`SHA256SUMS.txt` is attached to every release. The Windows installer is per
+user, needs no admin rights, and adds a Start Menu entry and an uninstaller.
 
-| | |
-| --- | --- |
-| ![Medium vault: brain view](docs/screenshots/medium/02-brain.jpg) | ![Medium vault: graph view](docs/screenshots/medium/01-graph.jpg) |
-| **Brain** — the same graph inside a real cortical surface, links as fibre tracts. | **Graph** — folder galaxies around the journal’s orbit; drag to orbit, scroll to zoom, `f` to reframe. |
-| ![Medium vault: timeline view](docs/screenshots/medium/03-timeline.jpg) | ![Medium vault: atlas view](docs/screenshots/medium/04-atlas.jpg) |
-| **Timeline** — the vault replayed in the order it was written, with a scrubber. | **Atlas** — countries, towns, roads, and rivers that follow the land. |
-| ![Medium vault: bento view](docs/screenshots/medium/06-bento.jpg) | ![Medium vault: decisions view](docs/screenshots/medium/05-decisions.jpg) |
-| **Bento** — seven folders as boxes, with their strongest notes inside. | **Decisions** — research briefs and idea refinements, grouped by `status`. |
+The executable is unsigned, so SmartScreen shows *Windows protected your PC* on
+first run: **More info → Run anyway**. The longer walk through, including
+checksum verification, is in [installing on Windows](docs/install-windows.md).
 
-### Giant — 5,523 notes, 24,151 links
-
-| | |
-| --- | --- |
-| ![Giant vault: brain view](docs/screenshots/giant/02-brain.jpg) | ![Giant vault: graph view](docs/screenshots/giant/01-graph.jpg) |
-| **Brain** — topic folders on the cortex; diary entries form the core. | **Graph** — 36 labelled topic galaxies over a sphere, plus a three-year daily journal ring. |
-| ![Giant vault: timeline view](docs/screenshots/giant/03-timeline.jpg) | ![Giant vault: atlas view](docs/screenshots/giant/04-atlas.jpg) |
-| **Timeline** — four years of entries replayed. | **Atlas** — 41 countries; dense folders are stipple, not a wall of black badges. |
-| ![Giant vault: bento view](docs/screenshots/giant/06-bento.jpg) | ![Giant vault: decisions view](docs/screenshots/giant/05-decisions.jpg) |
-| **Bento** — 41 boxes; the 1,095-note journal is the large tile. | **Decisions** — 26 cards across open and refining, each with real sources. |
+### From source
 
 ```bash
-cargo run -p cortex                                    # reopens the last vault, or offers a picker
-cargo run -p cortex -- seed-demo demo --size small     # 21 notes
-cargo run -p cortex -- seed-demo demo --size medium    # 328 notes (default)
-cargo run -p cortex -- seed-demo demo --size large     # 5,523 notes
-cargo run -p cortex -- serve demo                      # open one folder directly
+cargo run -p cortex                                  # last vault, or the picker
+cargo run -p cortex -- seed-demo demo --size small   # 21 notes
+cargo run -p cortex -- seed-demo demo --size medium  # 328 notes
+cargo run -p cortex -- seed-demo demo --size large   # 5,523 notes
+cargo run -p cortex -- serve demo                    # open that folder directly
 ```
 
-All three vaults are written by `seed-demo` from the binary itself. No demo
-vault is downloaded, and nothing is fetched from GitHub at startup.
+`seed-demo` writes the demo vault from the binary itself. Nothing is downloaded.
 
-## Opening a folder
+### First five minutes
 
-Run `cortex` (or the Start Menu shortcut) and it reopens whatever you used
-last. With nothing remembered you get a launch screen: the folders you have
-opened before, **Browse…** for the platform's folder dialog, and a path field
-for the places a dialog cannot reach (a network share, a WSL path, another
-drive).
+1. Run `cortex`. With nothing remembered you get a launch screen: recent
+   folders, **Browse…**, and a path field for network shares and WSL paths.
+2. Pick a folder of Markdown. Obsidian and Logseq vaults open as they are.
+3. The Brain appears. Drag to orbit, scroll to zoom, click a folder name to fly
+   into it, press `f` to reframe.
+4. Press **Tour** for the fifteen-step walkthrough. If your vault lacks the
+   notes it teaches, it opens a generated demo and returns you afterwards
+   without writing to your files.
+5. Press `t` for today's note, `Ctrl K` to search, `1`–`6` to change view.
 
-- Vaults are remembered in `vaults.json` in your platform config directory
-  (`$XDG_CONFIG_HOME/cortex`, `~/Library/Application Support/cortex`,
-  `%APPDATA%\cortex`). Override it with `CORTEX_CONFIG_DIR`.
-- Several vaults can stay open at once. The list on the left switches between
-  them without restarting anything; search, synthesis and the palette always
-  act on the vault you are looking at.
-- Choose the view you land in on the launch screen (**Open in**), or change it
-  later from **Vault settings**. Cortex remembers the view per vault.
-- `cortex serve <folder>` still opens one in the foreground, and `Ctrl+O`
-  (`⌘O` on macOS) returns to the picker. Closing the app window ends the
-  background instance; `cortex stop` does it from a terminal, and
-  `cortex doctor` says what is running, on which port, with which webview.
-- Nothing is copied, moved or synced. Cortex reads the folder in place, and a
-  folder that has been moved shows up struck through until you forget it.
+## Why a brain
 
-### Live updates
+Every knowledge tool draws a graph. A graph is a useful picture and a generic
+one: dots and lines, the same everywhere. Cortex is named after the cortex
+because a folded surface is a better memory palace than a scatter plot.
 
-A change on disk — your editor, a sync client, another machine — appears in
-about 400 ms. Only the changed files are re-parsed, and every note that still
-exists keeps its position, so the universe does not rearrange itself while you
-work. The tab is notified over a long poll: no refresh button, no page reload.
-If the change lands in the note you are editing, Cortex warns instead of
-replacing your draft.
+The Brain gives each folder a region and keeps the strongest links close. Under
+it is the graph payload, the same search and the same notes, so the brain is a
+front door rather than a separate product. Switch to Graph and the clusters are
+still there, unwrapped.
 
-## Native setup: research and decisions
+## Six views
 
-This is the part that makes Cortex different, and it does not use the Atlas map
-or an AI connection. Cortex builds a deterministic Markdown scaffold from the
-notes you select; it does not call a model or write the thinking for you.
+The same vault at 328 notes and 557 links. Every screenshot in this README is a
+seeded vault rendered by the app.
 
-1. **Open a folder.** Run `cortex`, choose a vault, or use **Open another
-   folder**. Seed a throwaway vault with `cortex seed-demo demo --size small`
-   if you want to try the loop first.
-2. **Collect at least two notes.** ⌘-click (or shift-click) stars, or open a
-   note and press `Collect`. Collected notes stay bright while everything else
-dims. The **Collected** tray appears in the sidebar.
-3. **Choose a structure note.** In the tray, `Research brief` asks for a
-   question and writes `Synthesis/<question>.md`; `Refine idea` asks for the
-   decision and writes an idea note in the same folder. Both are ordinary
-   Markdown files with frontmatter, a linked evidence list (title, folder,
-   excerpt) and the sections you need to fill in. No network request, model or
-   API key is involved.
-4. **Read and revisit it in Decisions.** Press `5` (or click **Decisions**). The
-   new note appears as a card under `open` or `refining`, with the notes it
-   cites. Add optional `confidence`, `review_on` and `supersedes` frontmatter
-   to turn it into a decision with a due date and a trail.
-5. **Open the trail.** Click the card or press `y` in the note to see the
-   decision trail, its linked sources and the note it supersedes.
+| | |
+| --- | --- |
+| ![Brain view: cortical surface with folder regions](docs/screenshots/medium/02-brain.jpg) | ![Graph view: folder galaxies around the journal's orbit](docs/screenshots/medium/01-graph.jpg) |
+| **Brain** — the graph folded onto a cortical surface, links as fibre tracts. | **Graph** — folder galaxies; drag to orbit, scroll to zoom, `f` to reframe. |
+| ![Timeline view: the vault replayed with a scrubber](docs/screenshots/medium/03-timeline.jpg) | ![Atlas view: folders as countries, notes as places](docs/screenshots/medium/04-atlas.jpg) |
+| **Timeline** — the vault replayed in the order you wrote it. | **Atlas** — folders as countries, notes as places, links as roads. |
+| ![Bento view: folders as boxes sized by content](docs/screenshots/medium/06-bento.jpg) | ![Decisions view: briefs grouped by status, with sources](docs/screenshots/medium/05-decisions.jpg) |
+| **Bento** — every folder as a box, sized by how much of the vault it holds. | **Decisions** — briefs and idea notes grouped by `status`, with their sources. |
 
-Every claim in the brief is one click from its source, because the evidence
-list is made of `[[wikilinks]]`, not copies — and the brief itself joins the
-**Decisions** view with those sources on the card. The Atlas is separate: it
-renders folders and notes on a map, so a brief appears there as a note like any
-other, but Decisions cards are not drawn on the map.
+Above 1,200 notes the graph switches to a folder-level overview: notes keep their
+positions, folders get the labels, only the strongest 5,000 links draw, and dense
+folders become stipple on the atlas. Hover or select a note for its own label.
 
-## The idea-refinement loop
+### The same views on 5,523 notes
 
-Select the notes that carry the tension, then choose `Refine idea`. The scaffold
-has situation, assumptions (load-bearing vs cosmetic), two options with effort /
-risk / reversibility, a recommendation, and "what would change my mind".
+![Brain view of the giant vault: topic folders on the cortex](docs/screenshots/giant/02-brain.jpg)
 
-This is the part most note tools leave out: they help you collect and connect,
-then stop before a decision exists. Cortex makes the decision artifact a
-first-class note in the same graph, and keeps it in **Decisions** until its
-`status` says otherwise.
+The giant demo vault has 5,523 notes, 24,151 links and 41 folders, with no
+unresolved links. A three-year daily journal becomes a ring around the vault
+instead of a blob that swallows it.
 
-## The atlas
+![Atlas view of the giant vault: 41 folders as countries](docs/screenshots/giant/04-atlas.jpg)
 
-The fourth view is a campaign map for history and worldbuilding: folders become
-countries, notes become places inside them, links become roads.
+The atlas sizes each country by its note count and turns a 1,095-note journal
+into stipple rather than a wall of markers. Rivers, roads, contours and forests
+are all drawn from one height model, so the terrain matches the land.
 
-- **Geography is deterministic.** The same vault always grows the same map, so
-  a place stays where you learned it.
-- **Countries are sized by their contents.** Capitals are packed with a radius
-  taken from the folder's note count, and a power diagram moves each shared
-  border until cell area matches that count. A 16-note folder becomes a small
-  country and the 1,095-note journal a large one, without changing the
-  campaign-map look or the welded borders.
-- **Borders are shared.** Country outlines are grown from a partition of the
-  folder centres and roughened with noise keyed to the *unordered* endpoints of
-  each border segment, so two neighbouring countries displace their shared
-  border to the same line instead of leaving a seam.
-- **Water follows the land.** Rivers are not drawn by hand: a 132×132 height
-  model (ridges inland, sea at the coast) is sink-filled and drained by
-  steepest descent, and one unit of rain per cell accumulates into streams
-  that join, widen and reach the sea.
-- **Terrain is engraved, not stamped.** Contour lines, hill shading, mountain
-  ranges and woods are all sampled from that same height model, so ranges sit
-  where the rivers rise and forests fill the low ground between them.
-- **Wilderness is the default.** Land nobody settled is stippled with grass;
-  each clump of notes gets a walled enclosure with cleared ground inside it.
-  A folder of 240 notes becomes stipple, not a wall of discs.
-- **Roads carry weight.** Every link draws a road. A note with more links draws
-  a wider road, and a link that crosses a border becomes a dashed trade route.
-- **Sea, islands, compass.** The land is pulled in from the frame, ringed with
-  a fine sea wash, and dotted with small islands off the coasts.
+The small demo (21 notes) is the first-run taste: `seed-demo demo --size small`.
 
-Drag to pan, wheel or `+`/`-` to zoom, `0` to fit, arrow keys to pan with the
-keyboard, click a place to open it. Hiding a folder dims its country and its
-roads rather than deleting them.
+## Decisions, and the trail
 
-## Bento
+<p align="center">
+  <img src="docs/screenshots/v1-decisions.jpg" width="100%" alt="Cortex Decisions board showing a card with a review date and its cited sources">
+</p>
 
-The fifth view answers *what is even in here?* Every folder becomes a box, its
-strongest notes are listed inside, and the box is sized by how much of the vault
-it holds. A big folder earns a large tile; the rest fill a four-column grid.
-Click a note to read it without leaving the board, or **Open in graph** to fly
-to that folder's section.
-
-- **Sized by content, not by link rank.** A journal with a thousand entries is a
-  big box even when its notes are barely linked to each other.
-- **Deterministic.** Folder order and note ranks come from the same scan, so the
-  same vault produces the same board on every load and in `cortex export`.
-- **DOM only.** The board costs no WebGL frame; switching to it stops the scene
-  renderer until you leave.
-
-## Decisions
-
-The last view answers a different question: *what have I concluded, and on
-what?* Every note with `type: research` or `type: idea` — the two kinds Cortex
-writes — appears as a card, grouped by its `status`.
-
-- `open` and `refining` are the columns Cortex creates. Any other value you
-  write in frontmatter becomes its own column, so `answered` or `parked` works
-  without Cortex pretending to know what it means.
-- A card shows its folder, its date, how many notes it cites, and those notes as
-  chips. Click a chip to open the source; click the title to read or edit the
-  brief.
-- Links that point nowhere are counted on the card instead of being hidden.
-- The board is read-only on purpose. `status` is your frontmatter, editable in
-  Obsidian, another editor or by an agent: Cortex reports it and does not take
-  the field over. Obsidian's Bases already moves cards between columns; what it
-  cannot do is show the evidence a decision rests on.
-- **The trail.** Add `confidence`, `review_on` and `supersedes` to the
-  frontmatter. The card shows confidence and the review date; a past date is
-  marked **Review due**. The note panel shows the trail above the prose and the
-  linked sources below it. Press `y` to jump back to the trail.
-- Empty is a real state. Until you write a brief, the view explains the loop
-  instead of pretending to have data.
+A decision here is not a note with a checkbox. It carries a confidence level, a
+date to look at it again, and a predecessor it supersedes. Cortex keeps that in
+plain frontmatter, so it survives every editor and every sync folder.
 
 ```yaml
 ---
@@ -344,43 +144,56 @@ supersedes: "[[Earlier decision]]"
 ---
 ```
 
-All three fields are optional. A plain Markdown note, an Obsidian vault and a
-static export keep working without them. The design is recorded in
-[ADR 0008](docs/adr/0008-decision-trails.md); the market research is in
-[docs/research/v1-note-app-landscape.md](docs/research/v1-note-app-landscape.md).
+All three fields are optional, and the board is read-only on purpose: `status`
+is your frontmatter, editable in Obsidian or by an agent. Any value you write
+becomes its own column, so `answered` and `parked` work without Cortex guessing
+what they mean. A past `review_on` date is marked **Review due** and shows up on
+the board; press `y` in the note to see the trail, its linked sources and the
+note it replaces.
 
-The board is built from the same vault scan as the graph, so it updates on the
-same live poll, works in `cortex export`, and costs one field in the graph
-payload rather than a second index.
+### Research briefs and idea notes
+
+Select two or more notes, then choose **Research brief** or **Refine idea** in
+the Collected tray. Cortex writes `Synthesis/<question>.md`: ordinary Markdown
+with frontmatter, an evidence list of `[[wikilinks]]` with title, folder and
+excerpt, and the sections to fill in.
+
+The brief is a scaffold, not generated prose. There is no prompt, no model and no
+API key. Because every claim is a wikilink, each one is a click from its source,
+and the brief joins the Decisions board with those sources on its card.
+
+`Refine idea` writes situation, assumptions (load-bearing vs cosmetic), two
+options with effort, risk and reversibility, a recommendation, and "what would
+change my mind". That artifact is the point: most note tools stop before a
+decision exists.
 
 ## Navigating
 
-`Ctrl` on Windows and Linux, `⌘` on macOS.
+`Ctrl` on Windows and Linux, `⌘` on macOS. The app names the keys of the OS you
+are on rather than showing both.
 
 | Action | Key |
 | --- | --- |
 | Search every note | `Ctrl K` / `⌘K`, or `/` |
-| Back / forward through opened notes | `Ctrl [` / `Ctrl ]` (`⌘[` / `⌘]`), or `‹` `›` in the panel |
+| Back / forward through opened notes | `Ctrl [` / `Ctrl ]` (`⌘[` / `⌘]`), or `‹` `›` |
 | Collect / uncollect a note | `Ctrl` / `⌘` / `Shift` + click, or `c` |
-| Focus a note | click it |
 | Local neighbourhood | `Local graph` in the note panel, or `l` |
 | Fly to a folder / back out | click its title, or `All folders` |
 | Views | `1` graph, `2` brain, `3` timeline, `4` atlas, `5` decisions, `6` bento |
 | Reset camera | `f` |
 | New note / edit | `n`, or `Edit` in the panel |
-| Today’s note | `t`, or the sun button in the toolbar |
-| Jump to a decision trail | `y` while a research brief or idea note is open |
+| Today's note | `t`, or the sun button in the toolbar |
+| Jump to a decision trail | `y` while a brief or idea note is open |
 | Open another folder | `Ctrl O` / `⌘O` |
 
-The folder list toggles visibility; hidden folders dim instead of disappearing,
-so the context stays visible. Clicking a `[[link]]`, a backlink or an unlinked
-mention opens that note in place, and the arrows walk back through the chain.
+Hidden folders dim instead of disappearing, so the context stays on screen.
+Clicking a `[[link]]`, a backlink or an unlinked mention opens that note in
+place, and the arrows walk back through the chain.
 
 ## Editing
 
-**Edit** opens the note as plain Markdown in a textarea. It is deliberately not
-a rich-text surface: what you type is what gets saved, including frontmatter and
-`[[wikilinks]]`.
+**Edit** opens the note as plain Markdown in a textarea. What you type is what
+gets saved, frontmatter and wikilinks included.
 
 | Action | Key |
 | --- | --- |
@@ -394,60 +207,59 @@ a rich-text surface: what you type is what gets saved, including frontmatter and
 | Indent / outdent | `Tab` / `Shift Tab` |
 
 `⌘` replaces `Ctrl` on macOS. Typing `[` inserts `[]` with the caret inside;
-parentheses, braces and quotes do the same. If the caret is before a closing
-character, typing it steps over instead of adding a duplicate, and backspace
-deletes an empty pair. `Enter` continues a list, task or quote marker; pressing
-it again on an empty item ends the list.
+parentheses, braces and quotes do the same. Typing a closing character in front
+of one steps over it instead of duplicating it.
 
-Today’s note is a normal Markdown file at `Journal/YYYY-MM-DD.md`. Cortex opens
-an existing one instead of replacing it; a new one starts with Notes, Decisions
-and Tomorrow headings. Add decision metadata to any research brief or idea note
-with the optional fields shown above.
+Today's note is a normal file at `Journal/YYYY-MM-DD.md`. Cortex opens an
+existing one rather than replacing it; a new one starts with Notes, Decisions
+and Tomorrow headings.
 
 ## Vault settings
 
-The gear in the toolbar holds the per-vault decisions:
+The gear in the toolbar holds the per-vault choices: **Opens in** (which view
+this vault starts in), **Show in folder** (hands the path to Explorer, Finder or
+your file manager), **Map** (roads and trade routes on the atlas) and **Agent
+access** (the MCP permission described below).
 
-- **Opens in** — which view this vault should start in.
-- **Show in folder** — hands the folder to Explorer, Finder or your file
-  manager. The same button (⤢) sits beside every vault in the sidebar.
-- **Map** — roads and trade routes on the atlas.
-- **Agent access** — optional MCP permission: whether an external AI client may
-  read and write this vault. Off does not affect search, views, editing,
-  research briefs, Decisions or daily notes.
+## Several folders at once
 
-## Optional: connect an AI client (MCP)
+Vaults are remembered in `vaults.json` under your platform config directory
+(`$XDG_CONFIG_HOME/cortex`, `~/Library/Application Support/cortex`,
+`%APPDATA%\cortex`), overridable with `CORTEX_CONFIG_DIR`. The sidebar switches
+between open vaults without restarting; search, briefs and the palette act on the
+vault you are looking at. Nothing is copied, moved or synced, and a folder that
+has been moved shows up struck through until you forget it.
 
-**Skip this section for the native workflow above.** Cortex has no built-in
-model and does not need an AI client to search, collect, write briefs, refine
-ideas, use Decisions or edit notes.
+A change on disk appears in about 400 ms. Only the changed files are re-parsed,
+and notes that still exist keep their positions, so the graph does not rearrange
+itself while you work. If the change lands in the note you are editing, Cortex
+warns instead of replacing your draft.
 
-If you already use an AI client, Cortex ships a Model Context Protocol server,
-so that client can read the vault, create notes and rewrite sections — through
-the same guards the app enforces. This is a separate integration, not the
-engine behind research briefs or decisions.
+## Optional: connect an AI client
+
+**Skip this for everything above.** Cortex has no built-in model and needs no AI
+client to search, collect, write briefs, refine ideas, use Decisions or edit
+notes.
+
+If you already use an AI client, Cortex ships a Model Context Protocol server so
+that client can read the vault, create notes and rewrite sections through the
+same guards the app enforces.
 
 ```bash
-cortex mcp ~/Notes                    # stdio MCP server bound to one vault
-cortex mcp-config --vault ~/Notes     # the snippet, with this binary and this folder
+cortex mcp ~/Notes                          # stdio MCP server bound to one vault
+cortex mcp-config --vault ~/Notes           # the snippet, with this binary and folder
 cortex mcp-config --vault ~/Notes --write   # merge it into Claude Desktop and Cursor
 ```
 
-The printed JSON contains the absolute path to the binary **and** the folder,
-so the copy-paste version works. `--write` merges `mcpServers.cortex` into
-Claude Desktop and Cursor, backing the file up first and leaving every other
-key alone; Zed and everything else get the snippet to paste. Cortex has no
-approval step of its own: the AI client decides whether to trust a server, and
-most clients only read their config at startup — **restart the client** after
-adding it. Vault settings → **AI clients** has the same snippet, a status line
-for each client, and **Test connection**, which really starts `cortex mcp`,
-initializes it and lists its tools.
-
-Without an argument `cortex mcp` binds to the vault you opened last.
+`--write` backs up the config first and leaves every other key alone; Zed and
+anything else get the snippet to paste. Cortex has no approval step of its own:
+the client decides whether to trust a server, and most clients only read their
+config at startup, so restart the client afterwards. Vault settings → **AI
+clients** shows the snippet, a status line per client, and **Test connection**.
 
 | Tool | What it does |
 | --- | --- |
-| `cortex_guide` | House format and the rules; an agent should read it first |
+| `cortex_guide` | House format and rules; an agent reads this first |
 | `cortex_stats` | Note and link counts, folders, orphans, unresolved links |
 | `cortex_search` | Full-text search with snippets |
 | `cortex_read_note` | Body, tags, headings, and the hash a write needs |
@@ -463,142 +275,65 @@ Without an argument `cortex mcp` binds to the vault you opened last.
 Every write must present the hash from `cortex_read_note`. If the file changed
 in between, the write fails with a conflict and the current hash instead of
 clobbering the note you have open in Obsidian. There is no delete tool,
-`.obsidian/` and paths outside the vault are refused, and each write is
-appended to `agent-writes.jsonl` in the config directory. The instructions an
-agent actually receives are in `docs/agent-guide.md`; the reasoning is in
-[ADR 0003](docs/adr/0003-agent-access.md).
+`.obsidian/` and paths outside the vault are refused, and each write is appended
+to `agent-writes.jsonl` in the config directory.
 
-Access is a per-vault switch. It is on for a vault you have opened in Cortex and
-off for a folder Cortex has never seen, so naming a path on the command line is
-not a way around it. Turn it off in vault settings, or with
-`cortex agents ~/Notes --off`; `cortex mcp` then refuses to start, and a client
-that is already connected is stopped on its next call. Turning it back on needs
-one of those two, not a restart.
+Access is a per-vault switch: on for a vault you have opened in Cortex, off for a
+folder Cortex has never seen, so naming a path on the command line is not a way
+around it. Turn it off in vault settings or with `cortex agents ~/Notes --off`;
+a connected client stops on its next call. The instructions an agent receives are
+in [docs/agent-guide.md](docs/agent-guide.md), the reasoning in
+[ADR 0003](docs/adr/0003-agent-access.md).
 
 ## Run it on your own vault
 
 ```bash
-cargo run -p cortex -- serve ~/Notes --title "My vault"
+cortex serve ~/Notes --title "My vault"
 ```
 
 | Flag | Meaning |
 | --- | --- |
 | `--open` | open the UI in your browser once the server is up |
 | `--app` | `serve` only: open a chromeless browser window instead of a tab |
-| `--read-only` | serve without write endpoints (switching folders still works) |
+| `--read-only` | serve without write endpoints |
 | `--bind 0.0.0.0` | expose on the LAN (loopback is the default) |
 | `--allow-any-origin` | relax the same-origin check (LAN preview) |
 | `--allow-framing` | allow embedding in an iframe |
 | `--port` | default 3000 |
 
 `cortex export <vault> --out dist` writes a static, read-only site plus
-`graph.json` (note bodies included). `cortex index <vault>` prints vault health.
+`graph.json`; `cortex index <vault>` prints vault health.
 
-Because opening a folder reads it, it is gated by the `x-cortex` write header
-and the same-origin check rather than by `--read-only`. Combined with
-`--allow-any-origin` that means anyone who can reach the server can point it at
-any folder the process can read — which is why the default is loopback-only.
+Opening a folder reads it, so it is gated by the `x-cortex` write header and the
+same-origin check rather than by `--read-only`. With `--allow-any-origin`,
+anyone who can reach the server can point it at any folder the process can read.
+That is why the default is loopback-only.
 
-## What 1.3 is
+### Updates and process lifetime
 
-Cortex 1.3 is the brain-first release: the README and the social card now lead
-with the Brain view, because it is the clearest answer to “what does this app
-see that my file manager does not?” The tour's Brain step names it as the
-signature view, and the app icon follows the same mark — a solid brain, a
-vertical seam and the thinking trail cut through it. The positioning is written
-down in [docs/marketing.md](docs/marketing.md).
+Cortex checks its release feed once at startup and from **Check for updates** in
+About. The Windows path downloads the installer, verifies it against that
+release's `SHA256SUMS.txt`, runs it and reopens Cortex; it never installs a build
+whose checksum does not match. macOS and Linux open the release page, because
+replacing a running Unix binary safely needs its own mechanism.
 
-The chrome now uses Tabler icons, and shortcut hints name the keys of the OS
-you are actually on — `⌘` on macOS, `Ctrl` on Windows and Linux — instead of
-showing both at once.
+One process owns the server, the window and (on Windows and macOS) the tray. It
+starts in the background, so the terminal comes back and closing it changes
+nothing. If port 3000 is taken it uses the next free port, records it in
+`server.json`, and a second launch opens a window against the running instance.
+`cortex stop` ends it; `cortex doctor` explains it.
 
-The desktop work from 1.2 is still here: your folder, plain Markdown, six
-views, decision trails, the guided tour, the MCP bridge and a real window on
-Windows and macOS, with the tray owned by the app.
-
-It deliberately does **not** include a hosted sync service, a mobile app,
-real-time collaboration, a plugin runtime, a block editor or a built-in AI
-model. Use the folder with iCloud, Dropbox, Syncthing or Git if you want it on
-more than one machine. The boundary is part of the product: no account, no
-proprietary database, no telemetry.
-
-The UI still has no build step. Every screenshot in this README is a seeded
-vault rendered by the app, not a mock-up.
-
-## Get Cortex 1.3.0 — Your Notes, as a Brain
-
-**One folder. Six views. A reason for every decision.**
-
-**Installer:** `CortexSetup-<version>.exe` — per user, no admin, Start Menu
-entry, uninstaller, optional start-at-login. **Portable:**
-`cortex-windows-x86_64.zip`, unpack and run `cortex.exe`. Both from
-https://github.com/thijnperd/obsidian-cortex/releases
-
-| Platform | File |
-| --- | --- |
-| Windows x86-64 | `CortexSetup-<version>.exe` or `cortex-windows-x86_64.zip` |
-| macOS (Apple silicon) | `Cortex.app` in `cortex-macos-arm64.tar.gz` |
-| Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
-
-Tagged releases are fixed; every push to `main` also refreshes the rolling
-`latest` build. The current release is **v1.3.0 — Your Notes, as a Brain**. The version
-appears in `cortex --version`, in **Vault settings → About**, and on
-`/api/about`. `SHA256SUMS.txt` is attached to every release.
-
-### Windows says it is unsafe
-
-The executable is unsigned, so SmartScreen shows *Windows protected your PC* on
-the first run: **More info → Run anyway**. The full walk through, including
-uninstall and checksum verification, is in
-[installing on Windows](docs/install-windows.md).
-
-### Updates
-
-Cortex checks its release feed once when it starts, and again from **Check for
-updates** in About. A newer stable tag appears as a small notice above the
-graph: **Update** on Windows, **Download** on macOS and Linux.
-
-The Windows path downloads `CortexSetup-<version>.exe`, verifies it against that
-release's `SHA256SUMS.txt`, runs the installer silently, and reopens Cortex. It
-never installs a build whose checksum does not match. macOS and Linux open the
-release page instead: replacing a running Unix binary safely needs its own
-mechanism, and pretending an archive can do it is how data gets lost. The check
-reads the public Atom feed for releases, not the rate-limited GitHub API.
-
-### What starts when you run `cortex`
-
-One process owns the server, the window and (on Windows and macOS) the tray
-icon. It starts in the background, so the terminal comes straight back and
-closing it changes nothing. Closing the window ends the instance; **Quit
-Cortex** in the tray does the same. If port 3000 is taken it takes the next free
-port, records it in `server.json`, and a second launch opens a window against
-the running instance instead of dying on a bind error. `cortex stop` ends it,
-`cortex doctor` explains it.
-
-On Windows the window is WebView2; on macOS it is WKWebView, inside a
-`Cortex.app` bundle. Both are the system webview, so there is no browser
-profile, no `--app` flag and no Chromium process to outlive the app. Closing the
-window ends the instance, and the tray can do the same. If the webview cannot
-start, Cortex says so in the log and opens the UI in your browser instead.
-
-Linux still uses Chrome, Edge or Brave in `--app` mode when one is installed,
-otherwise a normal tab. It has no tray, so it runs until `cortex stop`. Wry
-would link WebKitGTK, GTK and libsoup into a binary that is currently
-self-contained; that trade is left to a later release (ADR 0009).
-
-Or point it straight at a folder, in the foreground:
-
-```bash
-cortex serve ~/Documents/MyVault --open
-```
+On Linux, Cortex uses Chrome, Edge or Brave in `--app` mode, otherwise a normal
+tab. It has no tray, so it runs until `cortex stop`. Linking WebKitGTK, GTK and
+libsoup through wry would give up a currently self-contained binary, and that
+trade is left to a later release ([ADR 0009](docs/adr/0009-native-window.md)).
 
 ## Design constraints
 
 - **The files are the app.** Frontmatter, wikilinks, tags and headings are the
-  only schema; no proprietary format. Deleting the vault is the uninstall.
-- **The graph must earn its place.** It is for orphans, clusters, and local
-  neighbourhoods — not for reading the whole vault at once. That is why focus
-  and filters exist.
+  only schema. Deleting the vault is the uninstall.
+- **The graph must earn its place.** It is for orphans, clusters and local
+  neighbourhoods, not for reading the whole vault at once.
 - **Writes are opt-in.** Loopback by default, custom header plus exact-origin
   check, path validation, atomic writes, 1 MiB caps, strict CSP.
 - **Deterministic.** Same vault, same layout, so places stay memorable.
@@ -609,7 +344,13 @@ cortex serve ~/Documents/MyVault --open
 cargo test -p cortex-core
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
+node --check web/js/*.js
 ```
+
+`crates/core` is pure logic: parse, index, layout, search, synthesis.
+`crates/server` is axum plus the embedded `web/` UI, hand-written WebGL2 with no
+build step. CI runs the checks on Linux, macOS and Windows and publishes the
+static export to the [live demo](https://thijnperd.github.io/obsidian-cortex/).
 
 ## When something is wrong
 
@@ -620,32 +361,22 @@ cortex stop       # ask the background instance to exit
 ```
 
 The background process writes `<config>/cortex.log`; the tray's **Show log**
-opens it, and it rotates once at 1 MiB. A busy port is no longer an error: the
-next free one is chosen and printed. If `cortex` says nothing at all, run
-`cortex app` in a terminal — it is the same process with its output attached.
-
-The workflow design is grounded in primary documentation from Obsidian,
-Logseq, Heptabase, Roam, Zettelkasten and Forte Labs; the notes and sources are
-in [`docs/research-workflows.md`](docs/research-workflows.md).
-
-`crates/core` is pure logic (parse, index, layout, search, synthesis);
-`crates/server` is axum plus the embedded `web/` UI, which is hand-written
-WebGL2 with no build step. CI runs the checks on Linux, macOS and Windows and
-publishes the static export to the
-[live demo](https://thijnperd.github.io/obsidian-cortex/).
+opens it, and it rotates once at 1 MiB. If `cortex` says nothing at all, run
+`cortex app` in a terminal: same process, output attached.
 
 ## License
 
-Cortex is MIT licensed. See [LICENSE](LICENSE). Security reports follow
-[SECURITY.md](SECURITY.md), and the v1.3.0 release notes are in
-[docs/releases/v1.3.0.md](docs/releases/v1.3.0.md).
+MIT. See [LICENSE](LICENSE); security reports follow [SECURITY.md](SECURITY.md),
+and the 1.3.0 notes are in [docs/releases/v1.3.0.md](docs/releases/v1.3.0.md).
+The in-app icons are [Tabler Icons](https://tabler.io/icons), MIT licensed, with
+the notice in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-The in-app icons are from [Tabler Icons](https://tabler.io/icons), MIT licensed;
-the notice is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-## Credits
-
-The Brain view's cortical surface is a simplified version of the
+The Brain view's cortical surface is a reduced version of the
 [Detailed Human Brain Model](https://3d.nih.gov/entries/3DPX-021161) from NIH 3D
-(Johnson J), used under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-It was reduced from 377,701 to 20,018 triangles for the renderer.
+(Johnson J), used under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+and cut from 377,701 triangles to 20,018.
+
+The workflow design is grounded in primary documentation from Obsidian, Logseq,
+Heptabase, Roam, Zettelkasten and Forte Labs; the notes and sources are in
+[`docs/research-workflows.md`](docs/research-workflows.md). The README rewrite
+follows [README and copy research](docs/research/readme-and-copy.md).
