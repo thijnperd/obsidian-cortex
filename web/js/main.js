@@ -10,6 +10,7 @@ import { Atlas } from './atlas.js';
 import { attachEditor } from './editor.js';
 import { Tutorial } from './tutorial.js';
 import { diaryFolders, isOverview } from './scale.js';
+import { applyPlatformHints, key, mod } from './platform.js';
 
 const state = {
   graph: null,
@@ -165,7 +166,12 @@ const TOUR_COMPLETE_KEY = 'cortex.tour.completed';
 function syncTourButton() {
   const complete = prefs.get(TOUR_COMPLETE_KEY, false);
   const label = complete ? 'Replay the guided tour' : 'Take the guided tour';
-  els.tourButton.textContent = complete ? '↻ Replay' : '◎ Tour';
+  const tourLabel = document.getElementById('tour-label');
+  const startIcon = els.tourButton.querySelector('.tour-icon-start');
+  const replayIcon = els.tourButton.querySelector('.tour-icon-replay');
+  if (tourLabel) tourLabel.textContent = complete ? 'Replay' : 'Tour';
+  if (startIcon) startIcon.hidden = complete;
+  if (replayIcon) replayIcon.hidden = !complete;
   els.tourButton.title = label;
   els.tourButton.setAttribute('aria-label', label);
 }
@@ -177,6 +183,14 @@ function viewForVault(id) {
 function launchView() {
   const checked = document.querySelector('input[name="launch-view"]:checked');
   return checked ? checked.value : 'universe';
+}
+
+const VIEWS = new Set(['universe', 'brain', 'replay', 'atlas', 'bento', 'decisions']);
+
+/// A marketing link can name the view it wants: `?view=brain`.
+function requestedView() {
+  const view = new URLSearchParams(window.location.search).get('view');
+  return VIEWS.has(view) ? view : null;
 }
 
 function selectionIndices() {
@@ -210,7 +224,7 @@ async function start() {
         (vault) => vault.id === listing.active && !vault.missing,
       );
       if (active) {
-        await switchVault(active.id);
+        await switchVault(active.id, requestedView() || undefined);
       } else {
         showLaunch();
       }
@@ -225,6 +239,8 @@ async function start() {
     document.body.classList.add('is-static');
     const graph = await api.loadStaticGraph();
     applyGraph(graph);
+    const view = requestedView();
+    if (view) setMode(view, { persist: false, animate: false });
     document.addEventListener('visibilitychange', onVisibility);
     ui.hideBoot();
     requestAnimationFrame(loop);
@@ -240,9 +256,11 @@ async function start() {
 }
 
 function wire() {
+  applyPlatformHints();
   syncTourButton();
   const storedView = prefs.get('cortex.launchView', 'universe');
-  const storedRadio = document.querySelector(`input[name="launch-view"][value="${storedView}"]`);
+  const openingView = requestedView() || storedView;
+  const storedRadio = document.querySelector(`input[name="launch-view"][value="${openingView}"]`);
   if (storedRadio) storedRadio.checked = true;
 
   els.canvas.addEventListener('pointerdown', onPointerDown);
@@ -1425,9 +1443,9 @@ function buildTourSteps({ usedDemo, demoReason }) {
     {
       title: 'Search — find a phrase, not just a title',
       body: [
-        'Press `Ctrl K` / `⌘K` anywhere, or `/`, and type part of a title, a tag, a folder or a sentence. Results always come from the vault you are looking at.',
+        `Press \`${key('K')}\` anywhere, or \`/\`, and type part of a title, a tag, a folder or a sentence. Results always come from the vault you are looking at.`,
       ],
-      hint: 'The tour blocks app shortcuts until it ends. Afterwards, `/` and `Ctrl K` both open search.',
+      hint: `The tour blocks app shortcuts until it ends. Afterwards, \`/\` and \`${key('K')}\` both open search.`,
       target: '#search-button',
       placement: 'bottom',
       enter: () => closeCompose(),
@@ -1435,7 +1453,7 @@ function buildTourSteps({ usedDemo, demoReason }) {
     {
       title: 'Collect evidence — the tray is the handoff',
       body: [
-        'A decision needs sources. Select notes with `Ctrl`/`⌘`/`Shift`-click, or press `c` on the open note. The Collected tray appears on the left.',
+        `A decision needs sources. Select notes with \`${mod}\`/\`Shift\`-click, or press \`c\` on the open note. The Collected tray appears on the left.`,
       ],
       points: [
         'I collected sources for you. Collection lives in memory until you create a structure note, and the tour restores your own collection when it closes.',
@@ -1523,6 +1541,7 @@ function buildTourSteps({ usedDemo, demoReason }) {
         'Press `2`. Notes sit on a folded cortical surface and links become fibre tracts. It is the same vault as Graph, arranged for a different kind of spatial memory.',
       ],
       points: [
+        'This is the view the app is named after, and the front door in the README.',
         'Folder titles still fly you into a region.',
         'Drag and scroll behave like Graph; `f` resets the view.',
         'Nothing new is stored: this is one graph with another lens.',
@@ -1591,7 +1610,7 @@ function buildTourSteps({ usedDemo, demoReason }) {
         'The sun button, or `t`, opens today’s note at `Journal/YYYY-MM-DD.md`; an existing note is opened, never overwritten.',
       ],
       points: [
-        '`n` creates a note. Edit opens plain Markdown; `Ctrl S` / `⌘S` saves and `Esc` cancels.',
+        `\`n\` creates a note. Edit opens plain Markdown; \`${key('S')}\` saves and \`Esc\` cancels.`,
         '`1`–`6` switch views, `f` resets the camera, and `y` jumps to a decision trail.',
         'Vault settings holds the opening view, map roads and optional AI client access. Every native workflow here works without MCP.',
       ],
@@ -2293,7 +2312,7 @@ function openCompose(template) {
     return;
   }
   if (state.selection.size < 2) {
-    ui.toast('⌘-click or shift-click at least two stars to collect them');
+    ui.toast(`${mod}-click or shift-click at least two stars to collect them`);
     return;
   }
   state.compose = template;

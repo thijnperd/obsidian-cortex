@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.3.0 — Your Notes, as a Brain
+
+### The brain is the front door
+
+- The README hero is now the Brain view of the 328-note seeded vault, with
+  Decisions and the reasoning trail as the second beat instead of the banner.
+- The repository social card is the same 1280×640 brain crop.
+- `?view=brain` opens a vault or the static demo directly in a named view;
+  the README and demo badge use it so the first click lands on the Brain.
+- The positioning and its assumptions are written down in `docs/marketing.md`;
+  the primary-source research is in `docs/research/v1.3-brain-first.md`.
+
+### A mark that survives 16px
+
+- The app icon is redrawn from the supplied mark: one solid, four-lobed brain
+  silhouette, a vertical seam and a single double-band thinking trail. The
+  scalloped “cloud” outline and hairline spiral artifacts are gone.
+- The new geometry runs through the PNG set, `.ico`, `.icns`, tray glyphs,
+  window icon, README mark and favicon.
+
+### A UI that names your keys
+
+- Toolbar and panel glyphs are now inline Tabler icons (MIT), bundled as a
+  sprite with the notice in `THIRD_PARTY_NOTICES.md`.
+- Shortcut hints are rendered for the host OS: `⌘K` on macOS, `Ctrl K` on
+  Windows and Linux. The Mac glyph no longer appears on Windows, and the
+  Windows modifier no longer appears on macOS.
+
+### Release
+
+- Version 1.3.0 across the binary, installer and About panel.
+
 ## 1.2.0 — The Native Window
 
 ### A real window

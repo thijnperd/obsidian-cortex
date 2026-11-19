@@ -6,13 +6,28 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="dark light" />
-  <meta name="description" content="Cortex opens a folder of Markdown notes and shows how they connect." />
-  <title>Cortex</title>
+  <meta name="description" content="Cortex turns a folder of Markdown into a brain you can see, with a record of why you decided what you decided." />
+  <title>Cortex — your notes, as a brain</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
 </head>
 <body>
+  <!-- Tabler Icons, MIT: https://tabler.io/icons. See THIRD_PARTY_NOTICES.md. -->
+  <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-search" viewBox="0 0 24 24"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /><path d="M21 21l-6 -6" /></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065" /><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" /></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><path d="M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7" /></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5l0 14" /><path d="M5 12l14 0" /></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6l-12 12" /><path d="M6 6l12 12" /></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 6l-6 6l6 6" /></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9 6l6 6l-6 6" /></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6l6 -6" /></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><path d="M8 16l2 -6l6 -2l-2 6l-6 2" /><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M12 3l0 2" /><path d="M12 19l0 2" /><path d="M3 12l2 0" /><path d="M19 12l2 0" /></symbol>
+    <symbol id="i-external-link" viewBox="0 0 24 24"><path d="M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6" /><path d="M11 13l9 -9" /><path d="M15 4h5v5" /></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" /></symbol>
+  </svg>
+
   <canvas id="stage" aria-label="Graph of notes"></canvas>
   <div class="labels" id="labels"></div>
   <canvas id="atlas" class="atlas" tabindex="0" hidden
@@ -42,7 +57,7 @@
     <button class="vault-button" id="vault-button" type="button" title="Switch vault">
       <span class="vault-name" id="vault-title">Cortex</span>
       <span class="vault-path" id="vault-sub">no folder open</span>
-      <span class="vault-caret" aria-hidden="true">⌄</span>
+      <span class="vault-caret" aria-hidden="true"><svg class="icon"><use href="#i-chevron-down"></use></svg></span>
     </button>
 
     <p class="stats" id="stats"></p>
@@ -57,13 +72,18 @@
     </div>
 
     <div class="toolbar-actions">
-      <button class="search-button" id="search-button" type="button">
-        <span>Search</span><kbd>⌘K</kbd>
+      <button class="search-button" id="search-button" type="button" aria-label="Search">
+        <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
+        <span>Search</span><kbd data-mod="K"></kbd>
       </button>
-      <button class="tour-button" id="tour-button" type="button" title="Take the guided tour" aria-haspopup="dialog" hidden>◎ Tour</button>
-      <button class="icon-button" id="settings-button" type="button" title="Vault settings" aria-label="Vault settings">⚙</button>
-      <button class="icon-button" id="today-note" type="button" title="Today's note (t)" aria-label="Today's note" hidden>☀</button>
-      <button class="icon-button" id="new-note" type="button" title="New note" hidden>＋</button>
+      <button class="tour-button" id="tour-button" type="button" title="Take the guided tour" aria-haspopup="dialog" hidden>
+        <svg class="icon tour-icon-start" aria-hidden="true"><use href="#i-compass"></use></svg>
+        <svg class="icon tour-icon-replay" aria-hidden="true" hidden><use href="#i-refresh"></use></svg>
+        <span id="tour-label">Tour</span>
+      </button>
+      <button class="icon-button" id="settings-button" type="button" title="Vault settings" aria-label="Vault settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg></button>
+      <button class="icon-button" id="today-note" type="button" title="Today's note (t)" aria-label="Today's note" hidden><svg class="icon" aria-hidden="true"><use href="#i-sun"></use></svg></button>
+      <button class="icon-button" id="new-note" type="button" title="New note" hidden><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg></button>
     </div>
   </header>
 
@@ -75,7 +95,7 @@
   <div class="update" id="update" hidden role="status">
     <span class="update-text" id="update-text"></span>
     <button class="btn btn-primary" id="update-action" type="button">Update</button>
-    <button class="icon-button" id="update-close" type="button" aria-label="Dismiss the update notice">×</button>
+    <button class="icon-button" id="update-close" type="button" aria-label="Dismiss the update notice"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
   </div>
 
   <aside class="sidebar" id="sidebar" hidden>
@@ -102,17 +122,17 @@
       </div>
     </section>
 
-    <p class="sidebar-hint" id="hint">Drag to orbit · scroll to zoom · click a folder title to fly in · ⌘K to search</p>
+    <p class="sidebar-hint" id="hint">Drag to orbit · scroll to zoom · click a folder title to fly in · <kbd data-mod="K"></kbd> to search</p>
   </aside>
 
   <aside class="panel" id="panel" hidden aria-label="Note">
     <header class="panel-head">
       <div class="panel-history">
-        <button class="icon-button" id="panel-back" type="button" title="Back (⌘[)" disabled>‹</button>
-        <button class="icon-button" id="panel-forward" type="button" title="Forward (⌘])" disabled>›</button>
+        <button class="icon-button" id="panel-back" type="button" aria-label="Back" data-title="Back" data-shortcut="[" disabled><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"></use></svg></button>
+        <button class="icon-button" id="panel-forward" type="button" aria-label="Forward" data-title="Forward" data-shortcut="]" disabled><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg></button>
       </div>
       <p class="panel-crumbs" id="panel-crumbs"></p>
-      <button class="icon-button" id="panel-close" type="button" title="Close (esc)" aria-label="Close note">×</button>
+      <button class="icon-button" id="panel-close" type="button" title="Close (esc)" aria-label="Close note"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
     </header>
     <div class="panel-scroll" id="panel-body"></div>
     <footer class="panel-actions" id="panel-actions"></footer>
@@ -141,7 +161,7 @@
     <div class="settings-box" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <header class="settings-head">
         <h2 id="settings-title">Vault settings</h2>
-        <button class="icon-button" id="settings-close" type="button" aria-label="Close settings">×</button>
+        <button class="icon-button" id="settings-close" type="button" aria-label="Close settings"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
       </header>
       <div class="settings-body">
         <section class="settings-section">
@@ -256,7 +276,7 @@
           <li>MCP when you want it</li>
         </ul>
 
-        <p class="launch-foot">Or start it directly: <code>cortex serve ~/Notes</code> · <kbd>⌘O</kbd> opens this screen</p>
+        <p class="launch-foot">Or start it directly: <code>cortex serve ~/Notes</code> · <kbd data-mod="O"></kbd> opens this screen</p>
     </div>
   </div>
 
@@ -269,7 +289,7 @@
           <p class="tour-kicker" id="tour-kicker">Guided tour</p>
           <span class="tour-context" id="tour-context" hidden></span>
         </div>
-        <button class="icon-button" id="tour-close" type="button" aria-label="Exit the guided tour">×</button>
+        <button class="icon-button" id="tour-close" type="button" aria-label="Exit the guided tour"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
       </header>
       <div class="tour-progress" aria-hidden="true"><span id="tour-progress-bar"></span></div>
       <h2 class="tour-title" id="tour-title"></h2>

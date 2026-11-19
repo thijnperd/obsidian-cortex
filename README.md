@@ -1,22 +1,28 @@
 <p align="center">
-  <img src="assets/icons/cortex-128.png" width="80" height="80" alt="Cortex">
+  <img src="assets/icons/cortex-128.png" width="84" height="84" alt="Cortex">
 </p>
 
+<h1 align="center">Cortex</h1>
+
+<p align="center"><strong>Your notes, as a brain.</strong></p>
+
+<p align="center">A local-first thinking space for people who refuse to lose the thread.<br>
+Point it at a folder of Markdown and Cortex turns what you already wrote into a brain you can see —<br>
+then keeps the part most tools throw away: <strong>why you decided what you decided.</strong></p>
+
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.2.0">
-    <img src="docs/screenshots/v1-decision-trail.jpg" width="100%" alt="Cortex 1.2 showing a decision trail beside the Decisions board">
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.3.0">
+    <img src="docs/screenshots/medium/02-brain.jpg" width="100%" alt="Screenshot of Cortex's Brain view: a translucent cortical surface with folder clusters, note stars and links as fibre tracts">
   </a>
 </p>
 
-<h1 align="center">Cortex 1.2 — The Native Window</h1>
+<p align="center"><em>The Brain view — 328 notes, 557 links, one cortical surface. Every link is a fibre tract.</em></p>
 
-<p align="center"><strong>Your notes have a shape. Cortex shows you the reason.</strong></p>
-
-<p align="center"><a href="https://thijnperd.github.io/obsidian-cortex/"><strong>▶ Open the live demo</strong></a> — 328 notes, six views, no install.</p>
+<p align="center"><a href="https://thijnperd.github.io/obsidian-cortex/?view=brain"><strong>▶ Open the live demo</strong></a> — it starts in the Brain: 328 notes, no install.</p>
 
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.2.0"><img alt="Cortex 1.2.0" src="https://img.shields.io/badge/version-1.2.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
-  <a href="https://thijnperd.github.io/obsidian-cortex/"><img alt="Live demo" src="https://img.shields.io/badge/live%20demo-328%20notes-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases/tag/v1.3.0"><img alt="Cortex 1.3.0" src="https://img.shields.io/badge/version-1.3.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <a href="https://thijnperd.github.io/obsidian-cortex/?view=brain"><img alt="Live demo" src="https://img.shields.io/badge/live%20demo-328%20notes-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
   <img alt="Local-first" src="https://img.shields.io/badge/local--first-your%20folder-101216?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-101216?style=flat-square&amp;labelColor=0a0b0d">
@@ -24,10 +30,16 @@
 
 Cortex is a local-first thinking space for people who refuse to lose the
 thread. Point it at a folder of Markdown and it turns what you already wrote
-into six ways of seeing it — then keeps the part most tools throw away:
-**why you decided what you decided.**
+into six ways of seeing it. The one that gives the app its name is the Brain:
+a folded cortical surface where folders become regions, notes become stars and
+wikilinks become fibre tracts.
 
-No account. No cloud. No database. No model required. Just your files, a graph
+It is not a decorative skin. The Brain is the fastest way to see the cluster
+you forgot, the bridge between two projects, and the note that connects
+nothing — because it is the same deterministic layout as the graph, arranged
+for spatial memory instead of a flat map.
+
+No account. No cloud. No database. No model required. Just your files, a brain
 that earns its place, and a memory for judgment.
 
 On Windows and macOS it is a real desktop app: WebView2 or WKWebView inside a
@@ -36,16 +48,33 @@ keeps the browser path so the binary stays self-contained.
 
 **Most tools help you collect. Cortex helps you conclude.**
 
-- **See the shape.** A 3D universe, a brain, a timeline, an atlas and a bento
-  board show the same notes from different angles. The graph is not decoration:
-  it is how you find the cluster you forgot, the bridge between two projects,
-  and the note that connects nothing.
+- **Start with the brain.** Notes sit on a real cortical surface; folders keep
+their own colour and region, and links draw as fibre tracts you can follow.
+It is the same vault as every other view — one click changes the lens, not the
+data.
 - **Keep the evidence.** Collect two or more notes and Cortex writes the
-  research brief or idea refinement for you — a real Markdown file with
-  `[[wikilinks]]` back to every source. No prompt, no API key, no model.
+research brief or idea refinement for you — a real Markdown file with
+`[[wikilinks]]` back to every source. No prompt, no API key, no model.
 - **Find the why.** Decisions carry confidence, a review date and the note they
-  supersede. Past-due reviews surface on the board; the trail shows exactly what
-  the conclusion rests on.
+supersede. Past-due reviews surface on the board; the trail shows exactly what
+the conclusion rests on.
+
+## Why the brain
+
+Every knowledge tool draws a graph now. A graph is useful, but it is also
+generic: nodes and lines, the same picture everywhere. Cortex is named after
+the cortex because the shape of a brain is a better memory palace than a
+scatter plot.
+
+The Brain view gives each folder a place on the cortical surface and keeps the
+strongest links close. Drag to orbit, scroll to zoom, click a folder title to
+fly into its region. Press `f` to reframe. The layout is deterministic: the
+same vault always grows the same brain, so a region stays where you learned it.
+
+Under it is the same graph payload, the same search, the same notes. Switch to
+Graph and the clusters are still there, unwrapped. Switch to Timeline and the
+same notes replay in the order you wrote them. The brain is the front door,
+not a separate product.
 
 ### New here? Take the tour
 
@@ -53,13 +82,13 @@ Press **Tour** in the toolbar. Cortex checks whether your vault has the pieces
 the tour teaches — a research brief, an idea note and a decision trail. If it
 does, the tour runs in place. If not, Cortex opens a generated **Cortex Tour**
 demo and returns you to your own vault when you finish. Your notes are never
-written to or changed. Finishing changes the toolbar button to **↻ Replay**,
+written to or changed. Finishing changes the toolbar button to **Replay**,
 remembered in this browser, so the full walkthrough is always one click away.
 
-The fifteen steps cover all six views, collecting evidence, Research brief,
-Refine idea, Decisions and the trail, plus the daily note and the shortcuts that
-keep the loop fast. It is the shortest path from “I have notes” to “I know why I
-decided this.”
+The fifteen steps cover all six views, including the Brain, plus collecting
+evidence, Research brief, Refine idea, Decisions and the trail, the daily note
+and the shortcuts that keep the loop fast. It is the shortest path from “I have
+notes” to “I know why I decided this.”
 
 ### The reasoning trail
 
@@ -67,7 +96,7 @@ decided this.”
   <img src="docs/screenshots/v1-decisions.jpg" width="100%" alt="Cortex Decisions board with a review-due decision">
 </p>
 
-This is the release. A decision is not a note with a checkbox. It has a
+This is the other half of the release. A decision is not a note with a checkbox. It has a
 confidence level, a date when it should be looked at again, and a predecessor it
 supersedes. Cortex keeps that context in plain frontmatter, so it survives every
 editor, every export and every sync folder — and turns your graph into a record
@@ -109,14 +138,16 @@ Click a folder title to fly into that galaxy; `All folders` flies back out.
 The graph is a sphere of **folder galaxies**: every folder is a local cluster of
 note dots, the strongest links stay nearby, and a large daily journal becomes a
 chronological ring around the vault instead of a blob that swallows the map.
-That is the layout in every screenshot below.
+That is the layout in every screenshot below. The Brain view takes that same
+layout and folds it onto the cortical surface, so the map you learn in Graph is
+the map you recognise in Brain.
 
 ### Small — 21 notes, 35 links
 
 | | |
 | --- | --- |
-| ![Small vault: graph view](docs/screenshots/small/01-graph.jpg) | ![Small vault: brain view](docs/screenshots/small/02-brain.jpg) |
-| **Graph** — folder galaxies: notes are dots, links are light, and the sky is a nebula. | **Brain** — the same graph inside a real cortical surface. |
+| ![Small vault: brain view](docs/screenshots/small/02-brain.jpg) | ![Small vault: graph view](docs/screenshots/small/01-graph.jpg) |
+| **Brain** — the same graph inside a real cortical surface. | **Graph** — folder galaxies: notes are dots, links are light, and the sky is a nebula. |
 | ![Small vault: timeline view](docs/screenshots/small/03-timeline.jpg) | ![Small vault: atlas view](docs/screenshots/small/04-atlas.jpg) |
 | **Timeline** — the vault replayed as it was written. | **Atlas** — seven folders as countries, notes as places, links as roads. |
 | ![Small vault: bento view](docs/screenshots/small/06-bento.jpg) | ![Small vault: decisions view](docs/screenshots/small/05-decisions.jpg) |
@@ -126,8 +157,8 @@ That is the layout in every screenshot below.
 
 | | |
 | --- | --- |
-| ![Medium vault: graph view](docs/screenshots/medium/01-graph.jpg) | ![Medium vault: brain view](docs/screenshots/medium/02-brain.jpg) |
-| **Graph** — folder galaxies around the journal’s orbit; drag to orbit, scroll to zoom, `f` to reframe. | **Brain** — the same graph inside a real cortical surface, links as fibre tracts. |
+| ![Medium vault: brain view](docs/screenshots/medium/02-brain.jpg) | ![Medium vault: graph view](docs/screenshots/medium/01-graph.jpg) |
+| **Brain** — the same graph inside a real cortical surface, links as fibre tracts. | **Graph** — folder galaxies around the journal’s orbit; drag to orbit, scroll to zoom, `f` to reframe. |
 | ![Medium vault: timeline view](docs/screenshots/medium/03-timeline.jpg) | ![Medium vault: atlas view](docs/screenshots/medium/04-atlas.jpg) |
 | **Timeline** — the vault replayed in the order it was written, with a scrubber. | **Atlas** — countries, towns, roads, and rivers that follow the land. |
 | ![Medium vault: bento view](docs/screenshots/medium/06-bento.jpg) | ![Medium vault: decisions view](docs/screenshots/medium/05-decisions.jpg) |
@@ -137,8 +168,8 @@ That is the layout in every screenshot below.
 
 | | |
 | --- | --- |
-| ![Giant vault: graph view](docs/screenshots/giant/01-graph.jpg) | ![Giant vault: brain view](docs/screenshots/giant/02-brain.jpg) |
-| **Graph** — 36 labelled topic galaxies over a sphere, plus a three-year daily journal ring. | **Brain** — topic folders on the cortex; diary entries form the core. |
+| ![Giant vault: brain view](docs/screenshots/giant/02-brain.jpg) | ![Giant vault: graph view](docs/screenshots/giant/01-graph.jpg) |
+| **Brain** — topic folders on the cortex; diary entries form the core. | **Graph** — 36 labelled topic galaxies over a sphere, plus a three-year daily journal ring. |
 | ![Giant vault: timeline view](docs/screenshots/giant/03-timeline.jpg) | ![Giant vault: atlas view](docs/screenshots/giant/04-atlas.jpg) |
 | **Timeline** — four years of entries replayed. | **Atlas** — 41 countries; dense folders are stipple, not a wall of black badges. |
 | ![Giant vault: bento view](docs/screenshots/giant/06-bento.jpg) | ![Giant vault: decisions view](docs/screenshots/giant/05-decisions.jpg) |
@@ -468,12 +499,22 @@ and the same-origin check rather than by `--read-only`. Combined with
 `--allow-any-origin` that means anyone who can reach the server can point it at
 any folder the process can read — which is why the default is loopback-only.
 
-## What 1.2 is
+## What 1.3 is
 
-Cortex 1.2 is the desktop release: your folder, plain Markdown, six views,
-decision trails, the guided tour, the MCP bridge and a real window on Windows
-and macOS. The UI is served by the same in-process server; the window and tray
-now belong to Cortex instead of a Chromium process.
+Cortex 1.3 is the brain-first release: the README and the social card now lead
+with the Brain view, because it is the clearest answer to “what does this app
+see that my file manager does not?” The tour's Brain step names it as the
+signature view, and the app icon follows the same mark — a solid brain, a
+vertical seam and the thinking trail cut through it. The positioning is written
+down in [docs/marketing.md](docs/marketing.md).
+
+The chrome now uses Tabler icons, and shortcut hints name the keys of the OS
+you are actually on — `⌘` on macOS, `Ctrl` on Windows and Linux — instead of
+showing both at once.
+
+The desktop work from 1.2 is still here: your folder, plain Markdown, six
+views, decision trails, the guided tour, the MCP bridge and a real window on
+Windows and macOS, with the tray owned by the app.
 
 It deliberately does **not** include a hosted sync service, a mobile app,
 real-time collaboration, a plugin runtime, a block editor or a built-in AI
@@ -484,7 +525,7 @@ proprietary database, no telemetry.
 The UI still has no build step. Every screenshot in this README is a seeded
 vault rendered by the app, not a mock-up.
 
-## Get Cortex 1.2.0 — The Native Window
+## Get Cortex 1.3.0 — Your Notes, as a Brain
 
 **One folder. Six views. A reason for every decision.**
 
@@ -500,7 +541,7 @@ https://github.com/thijnperd/obsidian-cortex/releases
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
 Tagged releases are fixed; every push to `main` also refreshes the rolling
-`latest` build. The current release is **v1.2.0 — The Native Window**. The version
+`latest` build. The current release is **v1.3.0 — Your Notes, as a Brain**. The version
 appears in `cortex --version`, in **Vault settings → About**, and on
 `/api/about`. `SHA256SUMS.txt` is attached to every release.
 
@@ -596,8 +637,11 @@ publishes the static export to the
 ## License
 
 Cortex is MIT licensed. See [LICENSE](LICENSE). Security reports follow
-[SECURITY.md](SECURITY.md), and the v1.2.0 release notes are drafted in
-[docs/releases/v1.2.0.md](docs/releases/v1.2.0.md).
+[SECURITY.md](SECURITY.md), and the v1.3.0 release notes are in
+[docs/releases/v1.3.0.md](docs/releases/v1.3.0.md).
+
+The in-app icons are from [Tabler Icons](https://tabler.io/icons), MIT licensed;
+the notice is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Credits
 

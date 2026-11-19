@@ -2,6 +2,7 @@
 // strict CSP never needs 'unsafe-inline'.
 
 import { escapeHtml } from './markdown.js';
+import { key } from './platform.js';
 
 export function setStats(meta, overview = false) {
   const element = document.getElementById('stats');
@@ -87,7 +88,8 @@ export function renderVaultList(container, vaults, activeId, onOpen, onReveal) {
       const reveal = document.createElement('button');
       reveal.type = 'button';
       reveal.className = 'vault-reveal';
-      reveal.textContent = '⤢';
+      reveal.innerHTML =
+        '<svg class="icon" aria-hidden="true"><use href="#i-external-link"></use></svg>';
       reveal.title = `Show ${vault.name} in the file manager`;
       reveal.setAttribute('aria-label', `Show ${vault.name} in the file manager`);
       reveal.disabled = Boolean(vault.missing);
@@ -241,7 +243,7 @@ export function editorHtml(detail, draft) {
     <p class="note-crumb">Editing · ${escapeHtml(detail.folder)}</p>
     <h1 class="note-title">${escapeHtml(detail.title)}</h1>
     <textarea class="editor" id="note-editor" spellcheck="false" aria-label="Note source" aria-describedby="editor-hint">${escapeHtml(draft)}</textarea>
-    <p class="editor-hint" id="editor-hint">Ctrl/⌘ B bold · I italic · K wikilink · E code · 1–3 heading · Shift 7/8/9 list · S save · Esc cancel</p>
+    <p class="editor-hint" id="editor-hint">${key('B')} bold · ${key('I')} italic · ${key('K')} wikilink · ${key('E')} code · ${key('1')}–3 heading · Shift 7/8/9 list · ${key('S')} save · Esc cancel</p>
   `;
 }
 
