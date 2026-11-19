@@ -98,10 +98,7 @@ fn latest_from_feed(feed: &str) -> Option<(Semver, String)> {
         let Some(version) = parse_version(tag) else {
             continue;
         };
-        if best
-            .as_ref()
-            .is_none_or(|(current, _)| version > *current)
-        {
+        if best.as_ref().is_none_or(|(current, _)| version > *current) {
             best = Some((version, href.to_string()));
         }
     }
