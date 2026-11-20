@@ -27,15 +27,16 @@ SetupIconFile=cortex.ico
 ; covers the case where it did not (a console `cortex serve` is still running).
 CloseApplications=yes
 RestartApplications=no
-UninstallDisplayIcon={app}\cortex.exe
+UninstallDisplayIcon={app}\cortex.ico
 ; The binary is unsigned, so the installer is too. The docs say so.
 
 [Files]
 Source: "..\target\release\cortex.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cortex.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{userprograms}\Cortex"; Filename: "{app}\cortex.exe"; Parameters: "app"
-Name: "{userdesktop}\Cortex"; Filename: "{app}\cortex.exe"; Parameters: "app"; Tasks: desktopicon
+Name: "{userprograms}\Cortex"; Filename: "{app}\cortex.exe"; Parameters: "app"; IconFilename: "{app}\cortex.ico"
+Name: "{userdesktop}\Cortex"; Filename: "{app}\cortex.exe"; Parameters: "app"; IconFilename: "{app}\cortex.ico"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked

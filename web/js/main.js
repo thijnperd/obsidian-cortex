@@ -31,6 +31,7 @@ const state = {
   selection: new Set(),
   compose: null,
   hidden: new Set(),
+  expandedFolders: new Set(),
   lookup: new Map(),
   incoming: new Map(),
   detail: null,
@@ -786,8 +787,7 @@ function applyGraph(graph) {
   ui.setStats(graph.meta, overview);
   ui.renderDecisions(els.decisionsBoard, graph.structures, openDecision);
   syncBento();
-  ui.renderFolders(els.folders, graph.meta.folders, state.hidden, toggleFolder, PALETTE);
-  ui.syncFolders(state.hidden);
+  renderSidebarFolders();
   buildLookup();
   buildIncoming();
 
@@ -892,11 +892,21 @@ function buildLabels() {
   const diaries = state.renderer?.diaries || diaryFolders(state.graph.nodes);
   // A large vault opens as a folder overview: individual stars are too small
   // to label usefully, and a dozen labels only add noise. Hovering still names
-  // a note, and a selected note keeps its label.
-  const ranked = [...state.graph.nodes]
+  // a note, and a selected note keeps its label. When focused on a folder or
+  // local graph, include every note in that focus set so zooming in names them.
+  const allEntries = state.graph.nodes
     .map((node, index) => ({ node, index }))
-    .sort((a, b) => b.node.pagerank - a.node.pagerank)
-    .slice(0, overview ? 0 : 16);
+    .sort((a, b) => b.node.pagerank - a.node.pagerank);
+  let ranked;
+  if (state.folderFocus) {
+    ranked = allEntries.filter(
+      (entry) => entry.node.folder === state.folderFocus || entry.index === state.selected,
+    );
+  } else if (state.local) {
+    ranked = allEntries.filter((entry) => state.local.nodes.has(entry.index));
+  } else {
+    ranked = allEntries.slice(0, overview ? 0 : 36);
+  }
   if (state.selected != null && !ranked.some((entry) => entry.index === state.selected)) {
     const index = state.selected;
     ranked.unshift({ node: state.graph.nodes[index], index });
@@ -1074,6 +1084,8 @@ function updateLabels() {
   }
 
   // Greedy de-overlap: a note label only appears when it has room to breathe.
+  const boxW = state.folderFocus || state.local ? 112 : 152;
+  const boxH = state.folderFocus || state.local ? 26 : 36;
   for (const label of state.labels) {
     const screen = state.renderer.screenOf(label.index);
     const node = state.graph.nodes[label.index];
@@ -1085,7 +1097,7 @@ function updateLabels() {
     if (visible && focusSet && !focusSet.has(label.index)) visible = false;
     if (visible && !focused) {
       for (const other of placed) {
-        if (Math.abs(other.x - screen.x) < 170 && Math.abs(other.y - screen.y) < 40) {
+        if (Math.abs(other.x - screen.x) < boxW && Math.abs(other.y - screen.y) < boxH) {
           visible = false;
           break;
         }
@@ -1094,7 +1106,7 @@ function updateLabels() {
     label.element.style.visibility = visible ? 'visible' : 'hidden';
     label.element.style.opacity = visible ? String(clamp(1.35 - screen.depth * 0.16, 0.28, 0.95)) : '0';
     if (visible) {
-      placed.push({ x: screen.x, y: screen.y, half: 85 });
+      placed.push({ x: screen.x, y: screen.y, half: boxW * 0.5 });
       label.element.style.left = `${screen.x}px`;
       label.element.style.top = `${screen.y}px`;
     }
@@ -1156,6 +1168,7 @@ function clearLocalGraph({ resetCamera = true, rerender = true } = {}) {
     state.renderer.setLocalNodes(null);
     state.renderer.setFocus(state.selected);
   }
+  if (state.graph) buildLabels();
   if (resetCamera) state.camera.frame(state.mode);
   if (rerender && state.detail) renderPanel(state.detail);
 }
@@ -1183,6 +1196,7 @@ function syncFolderFocus() {
     label.element.setAttribute('aria-pressed', String(current));
   }
   if (state.renderer) state.renderer.setFolderFocus(state.folderFocus);
+  if (state.graph) buildLabels();
 }
 
 function clearFolderFocus({ resetCamera = true } = {}) {
@@ -1277,6 +1291,25 @@ function onScrub(event) {
   const progress = Number(event.target.value) / 1000;
   state.reveal = 0.015 + progress * 0.985;
   ui.setTimelineDate(formatDate(progress));
+}
+
+function renderSidebarFolders() {
+  if (!state.graph) return;
+  const selectedId = state.selected != null ? state.graph.nodes[state.selected]?.id : null;
+  ui.renderFolders(els.folders, state.graph.meta.folders, state.hidden, toggleFolder, PALETTE, {
+    nodes: state.graph.nodes,
+    expanded: state.expandedFolders,
+    selectedId,
+    onToggleExpand: toggleFolderExpand,
+    onOpenNote: (index) => openNote(index),
+  });
+  ui.syncFolders(state.hidden);
+}
+
+function toggleFolderExpand(name) {
+  if (state.expandedFolders.has(name)) state.expandedFolders.delete(name);
+  else state.expandedFolders.add(name);
+  renderSidebarFolders();
 }
 
 function toggleFolder(name) {
@@ -2352,16 +2385,37 @@ function renderPanel(detail) {
   els.panelActions.appendChild(status);
 
   els.panelBody.querySelectorAll('.wikilink').forEach((link) => {
-    link.addEventListener('click', (event) => {
+    link.addEventListener('click', async (event) => {
       event.preventDefault();
-      const id = resolveTarget(link.dataset.target);
+      const rawTarget = link.dataset.target || '';
+      if (link.dataset.file === 'true') {
+        const [fileName, anchor] = rawTarget.split('#');
+        const page = anchor && /^page=(\d+)/i.exec(anchor);
+        const label = page ? `${fileName} (page ${page[1]})` : rawTarget;
+        if (state.live && state.detail) {
+          try {
+            await api.revealInFolder(state.detail.id, state.vaultId);
+            ui.toast(`Attachment: ${label} — revealed folder in Explorer`);
+          } catch {
+            ui.toast(`Attachment reference: ${label}`);
+          }
+        } else {
+          ui.toast(`Attachment reference: ${label}`);
+        }
+        return;
+      }
+      const id = resolveTarget(rawTarget);
       if (!id) {
-        ui.toast(`No note called “${link.dataset.target}” yet`);
+        ui.toast(`No note called “${rawTarget}” yet`);
         return;
       }
       const index = nodeIndex(id);
       if (index >= 0) openNote(index);
     });
+  });
+
+  document.querySelectorAll('.folder-note').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.noteId === detail.id);
   });
   els.panelBody.querySelectorAll('[data-note-id]').forEach((button) => {
     button.addEventListener('click', () => {

@@ -626,8 +626,13 @@ export class Atlas {
     this.height = 0;
     this.dpr = 1;
     this.dirty = true;
+    this.worldDirty = true;
+    this.paperDirty = true;
+    this.worldCanvas = null;
+    this.paperCanvas = null;
     this.paper = null;
     this.fibres = null;
+    this.fibresPattern = null;
     this.riverBands = [];
     this.lakes = [];
     this.terrain = null;
@@ -647,6 +652,7 @@ export class Atlas {
     image.decoding = 'async';
     image.addEventListener('load', () => {
       this.paper = image;
+      this.paperDirty = true;
       this.dirty = true;
     });
     image.addEventListener('error', () => {
@@ -741,6 +747,12 @@ export class Atlas {
       }
     });
     this.position = position;
+    this.namedCountries = [...this.countries]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, this.overview ? 26 : this.countries.length);
+    this.rankedPlaces = [...this.places]
+      .filter((place) => place.degree >= 4)
+      .sort((a, b) => b.pagerank - a.pagerank);
 
     this.layoutRoads();
   }
@@ -816,6 +828,7 @@ export class Atlas {
 
     this.roadBands = [...roads].map(([width, path]) => ({ width, path }));
     this.routeBands = [...routes].map(([width, path]) => ({ width, path }));
+    this.worldDirty = true;
     this.dirty = true;
   }
 
@@ -1289,7 +1302,20 @@ export class Atlas {
   buildTerrainMarks() {
     const n = GRID;
     const { elev, land, owner, mountains, forests } = this.terrain;
-    const nearPlace = (x, y) => this.places.some((place) => Math.hypot(place.x - x, place.y - y) < 24);
+    for (const country of this.countries) {
+      country.mountains = [];
+      country.forests = [];
+    }
+    const places = this.places;
+    const placeCount = places.length;
+    const nearPlace = (x, y) => {
+      for (let i = 0; i < placeCount; i += 1) {
+        const dx = places[i].x - x;
+        const dy = places[i].y - y;
+        if (dx * dx + dy * dy < 576) return true;
+      }
+      return false;
+    };
     for (let gy = 2; gy < n - 2; gy += 2) {
       for (let gx = 2; gx < n - 2; gx += 2) {
         const id = gy * n + gx;
@@ -1303,36 +1329,40 @@ export class Atlas {
           && noise2(gx, gy, 41) > 0.12
           && !nearPlace(x, y)
           && mountains.length < (this.overview ? 150 : 280)) {
-          mountains.push({
+          const mark = {
             x,
             y,
             s: 10 + height * 14,
             tilt: (noise2(gx, gy, 53) - 0.5) * 0.35,
             country: owner[id],
-          });
+          };
+          mountains.push(mark);
+          this.countries[owner[id]]?.mountains.push(mark);
         } else if (height > 0.12 && height < 0.46
           && fbm(x * 0.02, y * 0.02, 211, 3) > 0.48
           && noise2(gx, gy, 67) > 0.2
           && !nearPlace(x, y)
           && forests.length < (this.overview ? 0 : 340)) {
-          forests.push({
+          const tree = {
             x,
             y,
             s: 4.6 + noise2(gx, gy, 71) * 3.6,
             conifer: noise2(gx, gy, 83) > 0.45,
             country: owner[id],
-          });
+          };
+          forests.push(tree);
+          this.countries[owner[id]]?.forests.push(tree);
         }
       }
     }
   }
 
-  drawRelief(country) {
+  drawRelief(clipPath) {
     const relief = this.terrain?.relief;
-    if (!relief) return;
+    if (!relief || !clipPath) return;
     const { ctx } = this;
     ctx.save();
-    ctx.clip(country.path);
+    ctx.clip(clipPath);
     ctx.globalAlpha = 0.24;
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(relief, 0, 0, WORLD, WORLD);
@@ -1347,15 +1377,12 @@ export class Atlas {
   }
 
   drawTerrainMarks(country) {
-    const terrain = this.terrain;
-    if (!terrain) return;
-    const index = this.countries.indexOf(country);
-    const { ctx } = this;
-    for (const mountain of terrain.mountains) {
-      if (mountain.country === index) this.drawMountain(mountain);
+    if (!country.mountains && !country.forests) return;
+    if (country.mountains) {
+      for (const mountain of country.mountains) this.drawMountain(mountain);
     }
-    for (const forest of terrain.forests) {
-      if (forest.country === index) this.drawTree(forest);
+    if (country.forests) {
+      for (const forest of country.forests) this.drawTree(forest);
     }
   }
 
@@ -1430,16 +1457,19 @@ export class Atlas {
   setHidden(hidden) {
     this.hidden = hidden instanceof Set ? hidden : new Set(hidden || []);
     if (this.position) this.layoutRoads();
+    this.worldDirty = true;
     this.dirty = true;
   }
 
   setRoads(show) {
     this.showRoads = Boolean(show);
+    this.worldDirty = true;
     this.dirty = true;
   }
 
   setRoutes(show) {
     this.showRoutes = Boolean(show);
+    this.worldDirty = true;
     this.dirty = true;
   }
 
@@ -1605,14 +1635,19 @@ export class Atlas {
 
   pick(sx, sy) {
     if (!this.position) return null;
+    const scale = this.scale();
+    const ox = this.width / 2 + this.view.x - (WORLD / 2) * scale;
+    const oy = this.height / 2 + this.view.y - (WORLD / 2) * scale;
     let best = null;
-    let bestDistance = Infinity;
-    for (const place of this.places) {
-      const [x, y] = this.toScreen(place.x, place.y);
-      const distance = Math.hypot(x - sx, y - sy);
-      const radius = 9 + place.r;
-      if (distance < radius && distance < bestDistance) {
-        bestDistance = distance;
+    let bestD2 = Infinity;
+    for (let i = 0; i < this.places.length; i += 1) {
+      const place = this.places[i];
+      const dx = place.x * scale + ox - sx;
+      const dy = place.y * scale + oy - sy;
+      const d2 = dx * dx + dy * dy;
+      const r = 9 + place.r;
+      if (d2 < r * r && d2 < bestD2) {
+        bestD2 = d2;
         best = place;
       }
     }
@@ -1631,7 +1666,7 @@ export class Atlas {
     this.dpr = dpr;
     this.canvas.width = Math.round(width * dpr);
     this.canvas.height = Math.round(height * dpr);
-    this.fibres = null;
+    this.paperDirty = true;
     this.dirty = true;
   }
 
@@ -1640,15 +1675,104 @@ export class Atlas {
     if (!this.dirty) return;
     if (!this.started) this.started = now;
     this.draw(now);
-    this.dirty = false;
+    const fade = this.reduced ? 1 : clamp((now - this.started) / 320, 0, 1);
+    this.dirty = fade < 1;
+  }
+
+  ensurePaperLayer() {
+    const { width, height, dpr } = this;
+    const pw = Math.max(1, Math.round(width * dpr));
+    const ph = Math.max(1, Math.round(height * dpr));
+    if (!this.paperCanvas) {
+      this.paperCanvas = document.createElement('canvas');
+    }
+    if (this.paperCanvas.width !== pw || this.paperCanvas.height !== ph) {
+      this.paperCanvas.width = pw;
+      this.paperCanvas.height = ph;
+      this.paperDirty = true;
+    }
+    if (!this.paperDirty) return;
+    this.paperDirty = false;
+
+    const pctx = this.paperCanvas.getContext('2d');
+    pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    pctx.fillStyle = '#efe3c8';
+    pctx.fillRect(0, 0, width, height);
+    if (this.paper && this.paper.complete && this.paper.naturalWidth) {
+      const scale = Math.max(width / this.paper.naturalWidth, height / this.paper.naturalHeight);
+      const w = this.paper.naturalWidth * scale;
+      const h = this.paper.naturalHeight * scale;
+      pctx.globalAlpha = 0.9;
+      pctx.drawImage(this.paper, (width - w) / 2, (height - h) / 2, w, h);
+      pctx.globalAlpha = 1;
+      pctx.fillStyle = 'rgba(247, 238, 216, 0.34)';
+      pctx.fillRect(0, 0, width, height);
+    }
+    if (!this.fibres) this.fibres = this.makeFibres();
+    if (this.fibres && !this.fibresPattern) {
+      this.fibresPattern = pctx.createPattern(this.fibres, 'repeat');
+    }
+    if (this.fibresPattern) {
+      pctx.globalAlpha = 0.05;
+      pctx.fillStyle = this.fibresPattern;
+      pctx.fillRect(0, 0, width, height);
+      pctx.globalAlpha = 1;
+    }
+    const vignette = pctx.createRadialGradient(
+      width / 2,
+      height / 2,
+      Math.min(width, height) * 0.34,
+      width / 2,
+      height / 2,
+      Math.max(width, height) * 0.74,
+    );
+    vignette.addColorStop(0, 'rgba(92, 66, 34, 0)');
+    vignette.addColorStop(1, 'rgba(92, 66, 34, 0.26)');
+    pctx.fillStyle = vignette;
+    pctx.fillRect(0, 0, width, height);
+  }
+
+  ensureWorldLayer() {
+    const texScale = 2;
+    const size = WORLD * texScale;
+    if (!this.worldCanvas) {
+      this.worldCanvas = document.createElement('canvas');
+      this.worldCanvas.width = size;
+      this.worldCanvas.height = size;
+      this.worldDirty = true;
+    }
+    if (!this.worldDirty) return;
+    this.worldDirty = false;
+
+    const wctx = this.worldCanvas.getContext('2d');
+    wctx.setTransform(texScale, 0, 0, texScale, 0, 0);
+    wctx.clearRect(0, 0, WORLD, WORLD);
+
+    const savedCtx = this.ctx;
+    this.ctx = wctx;
+    try {
+      this.drawSea();
+      this.drawIslets();
+      this.drawCountries();
+      this.drawLakes();
+      this.drawRivers();
+      this.drawRoutes();
+      this.drawRoads();
+      this.drawStaticPlaces();
+    } finally {
+      this.ctx = savedCtx;
+    }
   }
 
   draw(now) {
     const { ctx, width, height, dpr } = this;
     if (!width || !height) return;
+    this.ensurePaperLayer();
+    this.ensureWorldLayer();
+
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    this.drawPaper();
+    ctx.drawImage(this.paperCanvas, 0, 0, width, height);
 
     const fade = this.reduced ? 1 : clamp((now - this.started) / 320, 0, 1);
     ctx.save();
@@ -1660,14 +1784,9 @@ export class Atlas {
     ctx.scale(scale, scale);
     ctx.translate(-WORLD / 2, -WORLD / 2);
 
-    this.drawSea();
-    this.drawIslets();
-    this.drawCountries();
-    this.drawLakes();
-    this.drawRivers();
-    this.drawRoutes();
-    this.drawRoads();
-    this.drawPlaces();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.worldCanvas, 0, 0, WORLD, WORLD);
+    this.drawPlaceOverlays();
 
     ctx.restore();
 
@@ -1683,41 +1802,6 @@ export class Atlas {
     this.drawCartouche();
     this.drawCompass();
     this.drawScale();
-  }
-
-  drawPaper() {
-    const { ctx, width, height } = this;
-    ctx.fillStyle = '#efe3c8';
-    ctx.fillRect(0, 0, width, height);
-    if (this.paper && this.paper.complete && this.paper.naturalWidth) {
-      const scale = Math.max(width / this.paper.naturalWidth, height / this.paper.naturalHeight);
-      const w = this.paper.naturalWidth * scale;
-      const h = this.paper.naturalHeight * scale;
-      ctx.globalAlpha = 0.9;
-      ctx.drawImage(this.paper, (width - w) / 2, (height - h) / 2, w, h);
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = 'rgba(247, 238, 216, 0.34)';
-      ctx.fillRect(0, 0, width, height);
-    }
-    if (!this.fibres) this.fibres = this.makeFibres();
-    if (this.fibres) {
-      ctx.globalAlpha = 0.05;
-      ctx.fillStyle = ctx.createPattern(this.fibres, 'repeat');
-      ctx.fillRect(0, 0, width, height);
-      ctx.globalAlpha = 1;
-    }
-    const vignette = ctx.createRadialGradient(
-      width / 2,
-      height / 2,
-      Math.min(width, height) * 0.34,
-      width / 2,
-      height / 2,
-      Math.max(width, height) * 0.74,
-    );
-    vignette.addColorStop(0, 'rgba(92, 66, 34, 0)');
-    vignette.addColorStop(1, 'rgba(92, 66, 34, 0.26)');
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, width, height);
   }
 
   makeFibres() {
@@ -1780,6 +1864,9 @@ export class Atlas {
 
   drawCountries() {
     const { ctx } = this;
+    const visibleLand = new Path2D();
+    let hasVisibleLand = false;
+
     for (const country of this.countries) {
       if (!country.path) continue;
       const dim = this.hidden.has(country.name);
@@ -1788,6 +1875,8 @@ export class Atlas {
       ctx.fill(country.path);
 
       if (!dim) {
+        visibleLand.addPath(country.path);
+        hasVisibleLand = true;
         // Hatching, angled per country so neighbours read as different lands.
         ctx.save();
         ctx.clip(country.path);
@@ -1803,10 +1892,20 @@ export class Atlas {
         }
         ctx.stroke();
         ctx.restore();
+      }
+      ctx.restore();
+    }
 
-        // Height shading: lowlands pale, ridges inked. Clipped to the country
-        // so a hidden folder takes its relief with it.
-        this.drawRelief(country);
+    // Draw relief and contours ONCE across all visible countries instead of per-country.
+    if (hasVisibleLand) {
+      this.drawRelief(visibleLand);
+    }
+
+    for (const country of this.countries) {
+      if (!country.path) continue;
+      const dim = this.hidden.has(country.name);
+      ctx.save();
+      if (!dim) {
         this.drawTerrainMarks(country);
 
         // Wilderness fills the land nobody settled.
@@ -1931,32 +2030,16 @@ export class Atlas {
     ctx.restore();
   }
 
-  drawPlaces() {
+  drawStaticPlaces() {
     const { ctx } = this;
     for (const place of this.places) {
       const dim = this.hidden.has(place.folder);
-      const collected = this.selection.has(place.index);
-      const selected = this.focus === place.index;
-      const hovered = this.hover === place.index;
-      const ink = collected ? RUBRIC : INK;
       const alpha = dim ? 0.18 : 1;
 
       ctx.save();
       ctx.globalAlpha = alpha;
 
-      if (selected || hovered) {
-        ctx.beginPath();
-        ctx.arc(place.x, place.y, place.r + 6, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(RUBRIC, selected ? 0.9 : 0.45);
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-      }
-
       if (place.stipple) {
-        // A 240-note folder is a field, not a wall of badges: solid ink dots
-        // read as stipple, and the old white discs stopped swallowing the land.
-        // In a large-vault overview the stipple is lighter still, so five
-        // towns do not merge into five black pills.
         ctx.beginPath();
         ctx.arc(
           place.x,
@@ -1966,7 +2049,7 @@ export class Atlas {
           Math.PI * 2,
         );
         ctx.fillStyle = rgba(
-          ink,
+          INK,
           this.overview ? (place.folderCount > 240 ? 0.2 : 0.24)
             : (place.folderCount > 240 ? 0.34 : 0.4),
         );
@@ -1979,12 +2062,12 @@ export class Atlas {
       ctx.arc(place.x, place.y, place.r, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(247, 238, 216, 0.92)';
       ctx.fill();
-      ctx.strokeStyle = rgba(ink, 0.92);
+      ctx.strokeStyle = rgba(INK, 0.92);
       ctx.lineWidth = 1.15;
       ctx.stroke();
 
       if (place.r > 4.6) {
-        ctx.strokeStyle = rgba(ink, 0.8);
+        ctx.strokeStyle = rgba(INK, 0.8);
         ctx.lineWidth = 1;
         for (let k = 0; k < 4; k++) {
           const angle = (Math.PI / 4) * (k * 2 + 1);
@@ -2000,14 +2083,61 @@ export class Atlas {
           ctx.stroke();
         }
       }
+      ctx.restore();
+    }
+  }
 
+  /** Fast dynamic pass: only draws rings for hovered, focused, or collected places. */
+  drawPlaceOverlays() {
+    const { ctx } = this;
+    const drawOverlay = (place, selected, hovered, collected) => {
+      if (!place) return;
+      const dim = this.hidden.has(place.folder);
+      ctx.save();
+      ctx.globalAlpha = dim ? 0.18 : 1;
+      if (selected || hovered) {
+        ctx.beginPath();
+        ctx.arc(place.x, place.y, place.r + 6, 0, Math.PI * 2);
+        ctx.strokeStyle = rgba(RUBRIC, selected ? 0.9 : 0.45);
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
       if (collected) {
+        ctx.beginPath();
+        ctx.arc(place.x, place.y, place.r, 0, Math.PI * 2);
+        ctx.strokeStyle = rgba(RUBRIC, 0.92);
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
         ctx.beginPath();
         ctx.arc(place.x, place.y, Math.max(1.4, place.r * 0.34), 0, Math.PI * 2);
         ctx.fillStyle = rgba(RUBRIC, 0.9);
         ctx.fill();
       }
       ctx.restore();
+    };
+
+    const visited = new Set();
+    if (this.focus != null) {
+      visited.add(this.focus);
+      drawOverlay(
+        this.position?.get(this.focus),
+        true,
+        this.hover === this.focus,
+        this.selection.has(this.focus),
+      );
+    }
+    if (this.hover != null && !visited.has(this.hover)) {
+      visited.add(this.hover);
+      drawOverlay(
+        this.position?.get(this.hover),
+        false,
+        true,
+        this.selection.has(this.hover),
+      );
+    }
+    for (const idx of this.selection) {
+      if (visited.has(idx)) continue;
+      drawOverlay(this.position?.get(idx), false, false, true);
     }
   }
 
@@ -2017,36 +2147,44 @@ export class Atlas {
     const scale = this.scale();
     // Country names first: they anchor the map. Big countries win a collision
     // with a small neighbour, or a 40-country map becomes a word cloud.
-    const named = [...this.countries]
-      .sort((a, b) => b.count - a.count)
-      .slice(0, this.overview ? 26 : this.countries.length);
+    const named = this.namedCountries || this.countries;
+    const size = Math.round(clamp(10 + scale * 6, 10, 20) * 2) / 2;
+    ctx.save();
+    ctx.font = `600 ${size}px ${SERIF}`;
+    ctx.letterSpacing = '1.5px';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     for (const country of named) {
       if (!country.polygon.length || !country.label) continue;
       const [x, y] = this.toScreen(country.label.x, country.label.y);
-      const text = country.name.toUpperCase();
-      const size = clamp(10 + scale * 6, 10, 20);
-      ctx.save();
-      ctx.font = `600 ${size}px ${SERIF}`;
-      ctx.letterSpacing = '1.5px';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const width = ctx.measureText(text).width;
-      const box = { x: x - width / 2 - 4, y: y - size, w: width + 8, h: size * 2 };
-      if (placed.some((other) => overlaps(box, other))) {
-        ctx.restore();
-        continue;
+      if (!country.upperName) country.upperName = country.name.toUpperCase();
+      if (country.cachedFontSize !== size) {
+        country.cachedFontSize = size;
+        country.cachedWidth = ctx.measureText(country.upperName).width;
       }
+      const width = country.cachedWidth;
+      const box = { x: x - width / 2 - 4, y: y - size, w: width + 8, h: size * 2 };
+      if (placed.some((other) => overlaps(box, other))) continue;
       ctx.globalAlpha = this.hidden.has(country.name) ? 0.3 : 0.78;
-      this.inkedText(text, x, y);
-      ctx.restore();
+      this.inkedText(country.upperName, x, y);
       placed.push(box);
     }
+    ctx.restore();
 
-    const candidates = this.places
-      .filter((place) => !this.hidden.has(place.folder))
-      .filter((place) => place.index === this.focus || place.index === this.hover || place.degree >= 4)
-      .sort((a, b) => b.pagerank - a.pagerank)
-      .slice(0, this.overview ? 8 : 22);
+    const limit = this.overview ? 8 : 22;
+    const candidates = [];
+    const seen = new Set();
+    const pushCandidate = (place) => {
+      if (!place || seen.has(place.index) || this.hidden.has(place.folder)) return;
+      seen.add(place.index);
+      candidates.push(place);
+    };
+    if (this.focus != null) pushCandidate(this.position?.get(this.focus));
+    if (this.hover != null) pushCandidate(this.position?.get(this.hover));
+    for (const place of this.rankedPlaces || []) {
+      if (candidates.length >= limit) break;
+      pushCandidate(place);
+    }
 
     ctx.save();
     ctx.font = `12px ${SERIF}`;
@@ -2054,7 +2192,10 @@ export class Atlas {
     ctx.textBaseline = 'top';
     for (const place of candidates) {
       const [x, y] = this.toScreen(place.x, place.y);
-      const width = ctx.measureText(place.title).width;
+      if (place.titleWidth == null) {
+        place.titleWidth = ctx.measureText(place.title).width;
+      }
+      const width = place.titleWidth;
       const box = { x: x - width / 2 - 3, y: y + 8, w: width + 6, h: 16 };
       if (placed.some((other) => overlaps(box, other))) continue;
       placed.push(box);

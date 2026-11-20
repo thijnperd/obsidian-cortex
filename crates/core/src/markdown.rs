@@ -450,6 +450,14 @@ fn clean_inline(line: &str) -> String {
     let mut text = line
         .trim_start_matches(['-', '*', '+', '>', ' '])
         .to_string();
+    if let Some(rest) = text.strip_prefix("[!") {
+        if let Some(end) = rest.find(']') {
+            text = rest[end + 1..]
+                .trim_start_matches(['+', '-'])
+                .trim_start()
+                .to_string();
+        }
+    }
     text = text.replace("**", "").replace("__", "").replace('`', "");
     // Wikilinks: keep the alias when there is one, otherwise the target.
     while let Some(start) = text.find("[[") {
@@ -582,8 +590,8 @@ mod tests {
 
     #[test]
     fn excerpt_skips_headings_and_markup() {
-        let parsed = parse("# Title\n\n**Bold** opening with [[Link|label]].");
-        assert_eq!(parsed.excerpt, "Bold opening with label.");
+        let parsed = parse("# Title\n\n> [!info] Chapter hub\n> **Bold** opening with [[Link|label]].");
+        assert_eq!(parsed.excerpt, "Chapter hub Bold opening with label.");
     }
 
     #[test]

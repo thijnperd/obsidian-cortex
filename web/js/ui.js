@@ -22,15 +22,62 @@ export function setStats(meta, overview = false) {
   element.hidden = false;
 }
 
-export function renderFolders(container, folders, hidden, onToggle, palette) {
+function cleanSnippet(raw) {
+  return String(raw || '')
+    .replace(/^\s*(?:>\s*)?\[?!?[a-zA-Z0-9_-]+\][+-]?\s*/i, '')
+    .trim();
+}
+
+export function renderFolders(
+  container,
+  folders,
+  hidden,
+  onToggle,
+  palette,
+  { nodes = [], expanded = new Set(), selectedId = null, onToggleExpand = null, onOpenNote = null } = {},
+) {
   container.innerHTML = '';
+  const notesByFolder = new Map();
+  for (let i = 0; i < nodes.length; i += 1) {
+    const node = nodes[i];
+    const list = notesByFolder.get(node.folder);
+    if (list) list.push({ node, index: i });
+    else notesByFolder.set(node.folder, [{ node, index: i }]);
+  }
+  for (const list of notesByFolder.values()) {
+    list.sort((a, b) => a.node.id.localeCompare(b.node.id));
+  }
+
   folders.forEach((folder) => {
+    const isExpanded = expanded.has(folder.name);
+    const group = document.createElement('div');
+    group.className = `folder-group${isExpanded ? ' is-open' : ''}`;
+    group.dataset.folderGroup = folder.name;
+
+    const row = document.createElement('div');
+    row.className = 'folder-row';
+
+    if (onToggleExpand) {
+      const expandBtn = document.createElement('button');
+      expandBtn.type = 'button';
+      expandBtn.className = 'folder-expand';
+      expandBtn.setAttribute('aria-expanded', String(isExpanded));
+      expandBtn.title = `${isExpanded ? 'Collapse' : 'Browse'} notes in ${folder.name}`;
+      expandBtn.setAttribute('aria-label', `${isExpanded ? 'Collapse' : 'Browse'} notes in ${folder.name}`);
+      expandBtn.textContent = isExpanded ? '▾' : '▸';
+      expandBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        onToggleExpand(folder.name);
+      });
+      row.appendChild(expandBtn);
+    }
+
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'folder-item';
     button.dataset.folder = folder.name;
     button.setAttribute('aria-pressed', String(!hidden.has(folder.name)));
-    button.title = `Show or hide ${folder.name}`;
+    button.title = `Show or hide ${folder.name} in the graph`;
 
     const dot = document.createElement('span');
     dot.className = 'folder-dot';
@@ -47,7 +94,41 @@ export function renderFolders(container, folders, hidden, onToggle, palette) {
 
     button.append(dot, name, count);
     button.addEventListener('click', () => onToggle(folder.name));
-    container.appendChild(button);
+    row.appendChild(button);
+    group.appendChild(row);
+
+    const folderNotes = notesByFolder.get(folder.name) || [];
+    if (isExpanded && folderNotes.length && onOpenNote) {
+      const list = document.createElement('div');
+      list.className = 'folder-notes';
+      for (const { node, index } of folderNotes) {
+        const noteBtn = document.createElement('button');
+        noteBtn.type = 'button';
+        noteBtn.className = `folder-note${node.id === selectedId ? ' is-active' : ''}`;
+        noteBtn.dataset.noteId = node.id;
+        noteBtn.title = `${node.title} (${node.degree || 0} links)`;
+
+        const parts = node.id.split('/');
+        const subfolder = parts.length > 2 ? parts.slice(1, -1).join('/') : '';
+        if (subfolder) {
+          const sub = document.createElement('span');
+          sub.className = 'folder-note-sub';
+          sub.textContent = subfolder;
+          noteBtn.appendChild(sub);
+        }
+
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'folder-note-title';
+        titleSpan.textContent = node.title;
+        noteBtn.appendChild(titleSpan);
+
+        noteBtn.addEventListener('click', () => onOpenNote(index));
+        list.appendChild(noteBtn);
+      }
+      group.appendChild(list);
+    }
+
+    container.appendChild(group);
   });
 }
 
@@ -382,7 +463,7 @@ export function renderPaletteHits(container, hits, active) {
         <button type="button" class="palette-hit${index === active ? ' is-active' : ''}" data-hit-index="${index}">
           <span class="palette-hit-title">${escapeHtml(hit.title)}</span>
           <span class="palette-hit-path">${escapeHtml(hit.folder)}</span>
-          <span class="palette-hit-snippet">${escapeHtml(hit.snippet || '')}</span>
+          <span class="palette-hit-snippet">${escapeHtml(cleanSnippet(hit.snippet || ''))}</span>
         </button>`;
     }
   });

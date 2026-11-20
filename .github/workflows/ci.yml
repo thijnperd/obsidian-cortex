@@ -90,7 +90,7 @@ jobs:
         run: |
           mkdir -p dist/screenshots
           cp -r site/. dist/
-          cp web/favicon.svg web/logo.svg web/apple-touch-icon.png dist/
+          cp web/favicon.ico web/favicon.svg web/logo.svg web/apple-touch-icon.png dist/
           cp docs/screenshots/medium/*.jpg dist/screenshots/
           cp docs/screenshots/v1-decision-trail.jpg dist/screenshots/decision-trail.jpg
           cargo run --release -p cortex --locked -- export demo --out dist/demo --title "Cortex Demo"

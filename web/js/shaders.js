@@ -120,12 +120,12 @@ void main() {
   }
   float born = smoothstep(data.w, data.w + 0.05, uReveal);
   float distance = max(clip.w, 0.35);
-  float size = aSize * uSizeScale * (0.35 + 0.65 * born) / distance;
-  size *= 0.86 + 0.20 * aFocus;
+  float size = max(aSize * 1.08, 0.72) * uSizeScale * (0.35 + 0.65 * born) / distance;
+  size *= 0.88 + 0.22 * aFocus;
   vec2 offset = aCorner * size * 2.0 / uViewport;
   gl_Position = clip;
   gl_Position.xy += offset * clip.w;
-  float twinkle = 0.82 + 0.18 * sin(uTime * 1.6 + aSeed * 6.2831);
+  float twinkle = 0.86 + 0.14 * sin(uTime * 1.6 + aSeed * 6.2831);
   float crowd = mix(uCrowd, uBrainCrowd, uMorph);
   vAlpha = born * aFocus * twinkle * mix(uDensity, crowd, uMorph);
 }`;
@@ -142,11 +142,11 @@ void main() {
   float r2 = dot(vUv, vUv);
   if (r2 > 1.0) discard;
   float r = sqrt(r2);
-  float core = pow(max(0.0, 1.0 - r), 6.0);
-  float halo = pow(max(0.0, 1.0 - r), 2.2) * 0.30;
-  float flare = exp(-abs(vUv.y) * 17.0) * pow(max(0.0, 1.0 - abs(vUv.x)), 3.0)
-              + exp(-abs(vUv.x) * 17.0) * pow(max(0.0, 1.0 - abs(vUv.y)), 3.0);
-  vec3 color = vColor * (core * 2.15 + halo) + vec3(1.0, 0.96, 0.90) * flare * 0.27;
+  float core = pow(max(0.0, 1.0 - r), 4.6);
+  float halo = pow(max(0.0, 1.0 - r), 2.0) * 0.36;
+  float flare = exp(-abs(vUv.y) * 16.0) * pow(max(0.0, 1.0 - abs(vUv.x)), 2.8)
+              + exp(-abs(vUv.x) * 16.0) * pow(max(0.0, 1.0 - abs(vUv.y)), 2.8);
+  vec3 color = vColor * (core * 2.35 + halo) + vec3(1.0, 0.96, 0.90) * flare * 0.32;
   fragColor = vec4(color, vAlpha);
 }`;
 

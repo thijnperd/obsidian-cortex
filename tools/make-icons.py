@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Draw the Cortex mark once and export every platform asset.
+"""Draw the Cortex studio mark once and export every platform asset.
 
-The mark is the supplied brain: one solid, gently lobed silhouette split by a
-vertical seam, with the thinking trail cut through it as a clean double band.
-Nothing here downloads anything; run it after changing the geometry:
+The mark combines Cortex's two core metaphors with Swiss geometric precision:
+- Two smooth, closed cerebral hemispheres (filled in deep slate and outlined in
+  warm ivory) separated by a clean central fissure.
+- A five-node constellation graph in warm sand (#ffd9a0) bridging the two
+  hemispheres.
 
-    python3 tools/make-icons.py
+Run after changing the geometry:
 
-Outputs live in assets/icons/ and web/. Requires Pillow.
+    python tools/make-icons.py
+
+Outputs live in assets/icons/, installer/, and web/. Requires Pillow.
 """
 
 from __future__ import annotations
@@ -22,143 +26,179 @@ ICONS = ROOT / "assets" / "icons"
 WEB = ROOT / "web"
 
 SIZE = 1024
-SS = 3  # supersampling factor
+SS = 4  # 4x supersampling
 
-CREAM = (247, 242, 232, 255)
-INK = (10, 11, 12, 255)
+PLATE_BG = (11, 13, 18, 255)        # #0b0d12 deep obsidian
+PLATE_INNER = (16, 19, 26, 255)     # #10131a studio surface
+PLATE_RIM = (48, 54, 68, 255)       # #303644 crisp hairline rim
+LOBE_FILL = (27, 32, 44, 255)       # #1b202c subtle hemisphere volume
+LOBE_STROKE = (236, 230, 218, 255)  # #ece6da warm ivory contour
+SAND = (255, 217, 160, 255)         # #ffd9a0 signature cortex accent
+CREAM = (248, 243, 233, 255)        # #f8f3e9 bright star core
+INK = (12, 14, 20, 255)             # #0c0e14 dark ink for light tray
 
-# A brain is a walnut, not a flower or a hexagon. Four large lobes per
-# hemisphere, a wider parietal middle, a narrower frontal top and a smooth
-# occipital base. Clockwise from the top of the longitudinal fissure.
-CONTROLS = [
-    (512, 158), (566, 146), (610, 150), (650, 172),
-    (680, 182), (706, 196), (730, 220), (744, 236),
-    (772, 252), (798, 276), (812, 304), (820, 330),
-    (834, 360), (842, 392), (845, 424), (846, 452),
-    (848, 488), (850, 520), (844, 556), (840, 588),
-    (828, 620), (818, 648), (800, 678), (790, 700),
-    (770, 726), (742, 754), (716, 774), (690, 794),
-    (652, 812), (620, 824), (570, 838), (550, 842),
-    (512, 838),
-    (474, 842), (454, 838), (404, 824),
-    (372, 812), (334, 794), (308, 774), (282, 754),
-    (254, 726), (230, 700), (220, 678), (202, 648),
-    (192, 620), (180, 588), (176, 556), (170, 520),
-    (172, 488), (174, 452), (175, 424), (182, 392),
-    (190, 360), (200, 330), (208, 304), (222, 276),
-    (250, 252), (278, 236), (294, 220), (318, 196),
-    (344, 182), (374, 172), (414, 150), (458, 146),
+# 5 constellation nodes: (x, y, radius, is_primary_hub)
+# Asymmetric, organic constellation spanning both hemispheres.
+NODES = [
+    (328, 344, 30, False),  # L-frontal
+    (272, 526, 44, True),   # L-temporal hub (warm-sand primary)
+    (342, 686, 28, False),  # L-occipital
+    (688, 376, 38, True),   # R-frontal hub
+    (718, 622, 32, False),  # R-parietal
+]
+
+EDGES = [
+    (0, 1),
+    (1, 2),
+    (3, 4),
+    (0, 3),  # upper callosal bridge
+    (1, 3),  # diagonal cross-hemisphere tract
+    (2, 4),  # lower callosal bridge
 ]
 
 
-def catmull_rom(points, steps: int = 8):
-    """Sample a closed Catmull-Rom spline through every control point."""
-    count = len(points)
-    sampled = []
-    for index in range(count):
-        p0 = points[(index - 1) % count]
-        p1 = points[index]
-        p2 = points[(index + 1) % count]
-        p3 = points[(index + 2) % count]
-        for step in range(steps):
-            t = step / steps
-            t2 = t * t
-            t3 = t2 * t
-            x = 0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t
-                       + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2
-                       + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3)
-            y = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t
-                       + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2
-                       + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3)
-            sampled.append((x, y))
-    return sampled
+def hemisphere_loop(side: int, steps: int = 160) -> list[tuple[float, float]]:
+    """Closed, smooth cerebral hemisphere silhouette (side = -1 left, +1 right).
 
-
-def brain_points():
-    return catmull_rom(CONTROLS)
-
-
-def spiral_points(steps: int = 420):
-    """The trail: one open sweep from the centre to the frontal edge."""
-    cx, cy = 512, 512
-    turns = 1.2
-    phase = math.radians(325 - turns * 360)
-    points = []
-    for index in range(steps + 1):
-        t = index / steps
-        angle = phase + t * turns * 2 * math.pi
-        radius = 82 + (280 - 82) * t
-        points.append((cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
-    return points
-
-
-def ribbon(points, width: float):
-    """Offset a centreline into a closed band polygon.
-
-    Pillow's thick `line` joints leave radial hairline spikes at this scale,
-    so the band is filled as geometry instead of stroked.
+    Uses a smooth D-shaped closed curve in polar coordinates around each lobe's
+    centroid: flat-ish medial wall along the central fissure, rounded frontal
+    and occipital poles, and three gentle gyri undulations along the lateral wall.
     """
-    left = []
-    right = []
-    for index, (x, y) in enumerate(points):
-        before = points[max(0, index - 1)]
-        after = points[min(len(points) - 1, index + 1)]
-        tx = after[0] - before[0]
-        ty = after[1] - before[1]
-        length = math.hypot(tx, ty) or 1.0
-        nx = -ty / length
-        ny = tx / length
-        left.append((x + nx * width / 2, y + ny * width / 2))
-        right.append((x - nx * width / 2, y - ny * width / 2))
-    return left + right[::-1]
+    pts = []
+    for i in range(steps):
+        t = i / steps
+        a = t * 2.0 * math.pi  # 0 = lateral (outer), pi = medial (fissure)
+        cos_a = math.cos(a)
+        sin_a = math.sin(a)
+
+        lateral = max(0.0, cos_a)
+        medial = max(0.0, -cos_a)
+
+        # Three distinct gyri lobes along the outer wall (frontal, parietal, occipital)
+        gyri = 1.0 + 0.068 * (lateral ** 1.35) * math.cos(3.0 * a)
+
+        # Slightly wider in the lower parietal/occipital half than the frontal pole
+        taper = 1.0 + 0.045 * sin_a
+
+        rx_outer = 286 * gyri * taper
+        rx_inner = 64
+        rx = rx_outer if cos_a >= 0 else rx_inner * (1.0 - 0.42 * (medial ** 2))
+
+        ry = 306 * (1.0 - 0.04 * (medial ** 2)) * (1.0 + 0.03 * math.cos(3.0 * a) * lateral)
+
+        cx = 512 + side * 86
+        cy = 514
+        x = cx + side * rx * cos_a
+        y = cy + ry * sin_a
+        pts.append((x, y))
+    return pts
 
 
-def draw_ribbon(draw: ImageDraw.ImageDraw, points, fill, width: int):
-    draw.polygon(ribbon(points, width), fill=fill)
-    radius = width / 2
-    for x, y in (points[0], points[-1]):
-        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=fill)
+def stroke_closed(draw: ImageDraw.ImageDraw, points, color, width: float):
+    pts = list(points) + [points[0]]
+    stroke_open(draw, pts, color, width)
 
 
-def draw_mark(size: int, ink: tuple[int, int, int, int]):
-    """Transparent canvas with the brain in `ink` and the trail cut out."""
+def stroke_open(draw: ImageDraw.ImageDraw, points, color, width: float):
+    r = width / 2.0
+    for i in range(len(points) - 1):
+        x0, y0 = points[i]
+        x1, y1 = points[i + 1]
+        dx = x1 - x0
+        dy = y1 - y0
+        length = math.hypot(dx, dy) or 1.0
+        nx = -dy / length * r
+        ny = dx / length * r
+        poly = [(x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny)]
+        draw.polygon(poly, fill=color)
+    for x, y in points:
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=color)
+
+
+def draw_mark(
+    size: int,
+    stroke_col: tuple[int, int, int, int],
+    accent_col: tuple[int, int, int, int],
+    lobe_fill: tuple[int, int, int, int] | None = None,
+    cutout_col: tuple[int, int, int, int] | None = None,
+) -> Image.Image:
+    """Render the brain + constellation mark at `size`."""
     work = size * SS
     scale = work / SIZE
     canvas = Image.new("RGBA", (work, work), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
 
-    mask = Image.new("L", (work, work), 0)
-    mask_draw = ImageDraw.Draw(mask)
-    mask_draw.polygon([(x * scale, y * scale) for x, y in brain_points()], fill=255)
+    # 1. Closed cerebral hemispheres
+    outline_w = max(2.0, 36 * scale)
+    for side in (-1, 1):
+        loop = [(x * scale, y * scale) for x, y in hemisphere_loop(side)]
+        if lobe_fill is not None:
+            draw.polygon(loop, fill=lobe_fill)
+        stroke_closed(draw, loop, stroke_col, outline_w)
 
-    trail = [(x * scale, y * scale) for x, y in spiral_points()]
-    # Outer white band, then the black centre that turns it into two ribbons.
-    draw_ribbon(mask_draw, trail, 0, max(2, round(104 * scale)))
-    mask_draw.polygon(ribbon(trail, max(1, round(34 * scale))), fill=255)
+        # One subtle interior sulcus arc per hemisphere for anatomical craft
+        if size >= 32:
+            sulcus = []
+            for i in range(28):
+                t = i / 27
+                ang = (-0.52 + 1.04 * t) * math.pi * 0.5
+                sx = (512 + side * (118 + 148 * math.cos(ang))) * scale
+                sy = (514 + 178 * math.sin(ang)) * scale
+                sulcus.append((sx, sy))
+            sulcus_col = (stroke_col[0], stroke_col[1], stroke_col[2], 72)
+            stroke_open(draw, sulcus, sulcus_col, max(1.2, 18 * scale))
 
-    # The seam: the mark is two hemispheres, not one blob.
-    seam = max(2, round(22 * scale))
-    mask_draw.line(
-        [(512 * scale, 116 * scale), (512 * scale, 914 * scale)],
-        fill=0,
-        width=seam,
-    )
-    canvas.paste(Image.new("RGBA", (work, work), ink), (0, 0), mask)
+    # 2. Constellation graph edges
+    edge_w = max(1.6, 22 * scale)
+    for ia, ib in EDGES:
+        xa, ya, _, _ = NODES[ia]
+        xb, yb, _, _ = NODES[ib]
+        stroke_open(draw, [(xa * scale, ya * scale), (xb * scale, yb * scale)], accent_col, edge_w)
+
+    # 3. Constellation star nodes
+    for x, y, rad, is_hub in NODES:
+        cx, cy = x * scale, y * scale
+        r = max(2.0, rad * scale)
+        if cutout_col is not None:
+            halo = r + max(1.0, 12 * scale)
+            draw.ellipse((cx - halo, cy - halo, cx + halo, cy + halo), fill=cutout_col)
+        col = accent_col if is_hub else stroke_col
+        draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=col)
+        if is_hub and size >= 32:
+            core_r = r * 0.42
+            draw.ellipse((cx - core_r, cy - core_r, cx + core_r, cy + core_r), fill=CREAM)
+
     return canvas.resize((size, size), Image.LANCZOS)
 
 
 def plated(size: int) -> Image.Image:
-    """The app icon: warm plate, ink mark, generous optical margin."""
-    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    """The desktop & web app icon: deep obsidian squircle plate, hairline rim, brain-constellation."""
+    work = size * SS
+    scale = work / SIZE
+    canvas = Image.new("RGBA", (work, work), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
-    inset = round(size * 0.054)
-    radius = round(size * 0.232)
+
+    inset = round(work * 0.055)
+    radius = round(work * 0.225)
     draw.rounded_rectangle(
-        (inset, inset, size - inset, size - inset), radius=radius, fill=CREAM
+        (inset, inset, work - inset, work - inset),
+        radius=radius,
+        fill=PLATE_BG,
+        outline=PLATE_RIM,
+        width=max(2, round(16 * scale)),
     )
-    inner = round(size * 0.90)
-    mark = draw_mark(inner, INK)
-    canvas.alpha_composite(mark, ((size - inner) // 2, (size - inner) // 2))
-    return canvas
+    inner_inset = inset + max(2, round(18 * scale))
+    inner_radius = max(2, radius - round(14 * scale))
+    draw.rounded_rectangle(
+        (inner_inset, inner_inset, work - inner_inset, work - inner_inset),
+        radius=inner_radius,
+        fill=PLATE_INNER,
+    )
+
+    plate = canvas.resize((size, size), Image.LANCZOS)
+    mark = draw_mark(size, LOBE_STROKE, SAND, lobe_fill=LOBE_FILL, cutout_col=LOBE_FILL)
+    plate.alpha_composite(mark, (0, 0))
+    return plate
 
 
 def save_png(image: Image.Image, path: Path):
@@ -167,61 +207,56 @@ def save_png(image: Image.Image, path: Path):
     print(f"  {path.relative_to(ROOT)}")
 
 
-def svg_path() -> str:
-    points = CONTROLS
-
-    def fmt(point):
-        return f"{point[0]:.1f} {point[1]:.1f}"
-
-    # Catmull-Rom to cubic Bezier, closed. The control points are the shape;
-    # the PNG path samples the same spline, so the two cannot drift apart.
-    path = f"M {fmt(points[0])}"
-    count = len(points)
-    for index in range(count):
-        p0 = points[(index - 1) % count]
-        p1 = points[index]
-        p2 = points[(index + 1) % count]
-        p3 = points[(index + 2) % count]
-        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
-        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
-        path += f" C {fmt(c1)} {fmt(c2)} {fmt(p2)}"
-    return f"{path} Z"
+def _svg_loop_path(side: int) -> str:
+    pts = hemisphere_loop(side, steps=96)
+    d = f"M {pts[0][0]:.1f} {pts[0][1]:.1f}"
+    for x, y in pts[1:]:
+        d += f" L {x:.1f} {y:.1f}"
+    return d + " Z"
 
 
-def svg_spiral() -> str:
-    points = spiral_points()
-    return "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in points)
-
-
-def svg_mask() -> str:
-    return f'''  <defs>
-    <mask id="cortex-trail">
-      <rect width="1024" height="1024" fill="#fff" />
-      <path d="{svg_path()}" fill="#fff" />
-      <path d="{svg_spiral()}" fill="none" stroke="#000" stroke-width="104" stroke-linecap="round" />
-      <path d="{svg_spiral()}" fill="none" stroke="#fff" stroke-width="34" />
-      <line x1="512" y1="116" x2="512" y2="914" stroke="#000" stroke-width="22" />
-    </mask>
-  </defs>'''
-
-
-def svg_mark() -> str:
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Cortex">
-{svg_mask()}
-  <path d="{svg_path()}" fill="#f2ead9" mask="url(#cortex-trail)" />
-</svg>
-'''
+def _svg_sulcus_path(side: int) -> str:
+    pts = []
+    for i in range(24):
+        t = i / 23
+        ang = (-0.52 + 1.04 * t) * math.pi * 0.5
+        sx = 512 + side * (118 + 148 * math.cos(ang))
+        sy = 514 + 178 * math.sin(ang)
+        pts.append((sx, sy))
+    d = f"M {pts[0][0]:.1f} {pts[0][1]:.1f}"
+    for x, y in pts[1:]:
+        d += f" L {x:.1f} {y:.1f}"
+    return d
 
 
 def svg_plate() -> str:
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Cortex">
-  <rect x="55" y="55" width="914" height="914" rx="238" fill="#f7f2e8" />
-  <svg x="51" y="51" width="922" height="922" viewBox="0 0 1024 1024">
-{svg_mask()}
-    <path d="{svg_path()}" fill="#0a0b0c" mask="url(#cortex-trail)" />
-  </svg>
-</svg>
-'''
+    left_d = _svg_loop_path(-1)
+    right_d = _svg_loop_path(1)
+    left_s = _svg_sulcus_path(-1)
+    right_s = _svg_sulcus_path(1)
+    parts = [
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Cortex">',
+        '  <rect x="56" y="56" width="912" height="912" rx="230" fill="#0b0d12" stroke="#303644" stroke-width="16" />',
+        '  <rect x="74" y="74" width="876" height="876" rx="216" fill="#10131a" />',
+        f'  <path d="{left_d}" fill="#1b202c" stroke="#ece6da" stroke-width="36" stroke-linejoin="round" />',
+        f'  <path d="{right_d}" fill="#1b202c" stroke="#ece6da" stroke-width="36" stroke-linejoin="round" />',
+        f'  <path d="{left_s}" fill="none" stroke="#ece6da" stroke-opacity="0.28" stroke-width="18" stroke-linecap="round" />',
+        f'  <path d="{right_s}" fill="none" stroke="#ece6da" stroke-opacity="0.28" stroke-width="18" stroke-linecap="round" />',
+    ]
+    for ia, ib in EDGES:
+        xa, ya, _, _ = NODES[ia]
+        xb, yb, _, _ = NODES[ib]
+        parts.append(
+            f'  <line x1="{xa}" y1="{ya}" x2="{xb}" y2="{yb}" stroke="#ffd9a0" stroke-width="22" stroke-linecap="round" />'
+        )
+    for x, y, rad, is_hub in NODES:
+        parts.append(f'  <circle cx="{x}" cy="{y}" r="{rad + 12}" fill="#1b202c" />')
+        col = "#ffd9a0" if is_hub else "#ece6da"
+        parts.append(f'  <circle cx="{x}" cy="{y}" r="{rad}" fill="{col}" />')
+        if is_hub:
+            parts.append(f'  <circle cx="{x}" cy="{y}" r="{rad * 0.42:.1f}" fill="#f8f3e9" />')
+    parts.append("</svg>\n")
+    return "\n".join(parts)
 
 
 def main():
@@ -230,7 +265,7 @@ def main():
     master = plated(SIZE)
     save_png(master, ICONS / "cortex-1024.png")
     for size in (512, 256, 128, 96, 64, 48, 40, 32, 24, 20, 16):
-        image = master if size == SIZE else master.resize((size, size), Image.LANCZOS)
+        image = plated(size)
         save_png(image, ICONS / f"cortex-{size}.png")
 
     print("windows .ico")
@@ -240,6 +275,8 @@ def main():
     print("  assets/icons/cortex.ico")
     master.save(ROOT / "installer" / "cortex.ico", "ICO", sizes=ico_sizes)
     print("  installer/cortex.ico")
+    master.save(WEB / "favicon.ico", "ICO", sizes=[(16, 16), (32, 32), (48, 48)])
+    print("  web/favicon.ico")
 
     print("macos .icns")
     master.save(
@@ -250,26 +287,29 @@ def main():
     print("  assets/icons/cortex.icns")
 
     print("tray + window")
-    light = draw_mark(64, (255, 255, 255, 255))
-    save_png(light, ICONS / "tray-light-64.png")
-    light32 = light.resize((32, 32), Image.LANCZOS)
+    light64 = draw_mark(64, LOBE_STROKE, SAND)
+    save_png(light64, ICONS / "tray-light-64.png")
+    light32 = draw_mark(32, LOBE_STROKE, SAND)
     save_png(light32, ICONS / "tray-light-32.png")
     (ICONS / "tray-light-32.rgba").write_bytes(light32.tobytes())
-    dark = draw_mark(64, INK)
-    save_png(dark, ICONS / "tray-dark-64.png")
-    dark32 = dark.resize((32, 32), Image.LANCZOS)
+
+    dark64 = draw_mark(64, INK, (154, 75, 22, 255))
+    save_png(dark64, ICONS / "tray-dark-64.png")
+    dark32 = draw_mark(32, INK, (154, 75, 22, 255))
     save_png(dark32, ICONS / "tray-dark-32.png")
     (ICONS / "tray-dark-32.rgba").write_bytes(dark32.tobytes())
-    window = draw_mark(64, (255, 255, 255, 255))
-    save_png(draw_mark(256, (255, 255, 255, 255)), ICONS / "cortex-window.png")
-    (ICONS / "cortex-window-64.rgba").write_bytes(window.tobytes())
+
+    window64 = plated(64)
+    save_png(plated(256), ICONS / "cortex-window.png")
+    (ICONS / "cortex-window-64.rgba").write_bytes(window64.tobytes())
 
     print("web")
-    (WEB / "logo.svg").write_text(svg_mark(), encoding="utf-8")
+    svg = svg_plate()
+    (WEB / "logo.svg").write_text(svg, encoding="utf-8")
     print("  web/logo.svg")
-    (WEB / "favicon.svg").write_text(svg_plate(), encoding="utf-8")
+    (WEB / "favicon.svg").write_text(svg, encoding="utf-8")
     print("  web/favicon.svg")
-    save_png(master.resize((180, 180), Image.LANCZOS), WEB / "apple-touch-icon.png")
+    save_png(plated(180), WEB / "apple-touch-icon.png")
 
 
 if __name__ == "__main__":

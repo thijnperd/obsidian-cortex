@@ -189,8 +189,13 @@ export function buildAppearValues(nodes) {
   }
   days.forEach((day, index) => {
     // Undated notes are older than anything else: born at the start, so they are
-    // visible in every view instead of never arriving.
-    appear[index] = day === null ? 0 : clamp((day - min) / (max - min), 0, 1);
+    // visible in every view instead of never arriving. Cap at 0.90 so
+    // smoothstep(appear, appear + 0.05, 1.0) reaches 1.0 for every note on the
+    // newest date (rule: every note must survive the reveal animation).
+    const order = count > 1 ? (index / (count - 1)) * 0.04 : 0;
+    appear[index] = day === null
+      ? order
+      : clamp(((day - min) / (max - min)) * 0.86 + order, 0, 0.9);
   });
   return appear;
 }
