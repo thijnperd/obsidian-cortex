@@ -590,7 +590,8 @@ mod tests {
 
     #[test]
     fn excerpt_skips_headings_and_markup() {
-        let parsed = parse("# Title\n\n> [!info] Chapter hub\n> **Bold** opening with [[Link|label]].");
+        let parsed =
+            parse("# Title\n\n> [!info] Chapter hub\n> **Bold** opening with [[Link|label]].");
         assert_eq!(parsed.excerpt, "Chapter hub Bold opening with label.");
     }
 
