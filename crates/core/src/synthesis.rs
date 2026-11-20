@@ -199,7 +199,8 @@ fn build_idea(lines: &mut Vec<String>, evidence: &[Evidence]) {
     lines.push("## Situation".to_string());
     lines.push(String::new());
     let comparisons = comparison_bullets(evidence);
-    if !comparisons.is_empty() {
+    let has_comparisons = !comparisons.is_empty();
+    if has_comparisons {
         lines.extend(comparisons);
     }
     let mut claim_count = 0usize;
@@ -213,7 +214,7 @@ fn build_idea(lines: &mut Vec<String>, evidence: &[Evidence]) {
             claim_count += 1;
         }
     }
-    if comparisons.is_empty() && claim_count == 0 {
+    if !has_comparisons && claim_count == 0 {
         lines.push("What is true today, and who feels it?".to_string());
         lines.push(String::new());
         lines.push("- ".to_string());
@@ -224,7 +225,9 @@ fn build_idea(lines: &mut Vec<String>, evidence: &[Evidence]) {
     lines.push(String::new());
     for (title, line_no, text) in find_tensions(evidence).into_iter().take(3) {
         let link = escape_link(&title);
-        lines.push(format!("- [ ] load-bearing ([[{link}]] L{line_no}): {text}"));
+        lines.push(format!(
+            "- [ ] load-bearing ([[{link}]] L{line_no}): {text}"
+        ));
     }
     lines.push("- [ ] load-bearing: ".to_string());
     lines.push("- [ ] cosmetic: ".to_string());
@@ -270,7 +273,9 @@ fn comparison_bullets(evidence: &[Evidence]) -> Vec<String> {
 
     if let Some((first, last)) = date_span(evidence) {
         let count = evidence.len();
-        out.push(format!("- **Span:** {first} to {last} across {count} notes."));
+        out.push(format!(
+            "- **Span:** {first} to {last} across {count} notes."
+        ));
     }
 
     let tags = shared_tags(evidence);
