@@ -239,6 +239,8 @@ struct NoteRef {
     title: String,
     folder: String,
     weight: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    snippet: Option<String>,
 }
 
 /// Builds the app, the remembered vault (if any) and one watcher per vault.
@@ -1162,28 +1164,36 @@ async fn api_note(State(state): State<AppState>, Query(query): Query<NoteQuery>)
         .nth(index)
         .unwrap_or_default()
         .into_iter()
-        .take(16)
-        .map(|(source, weight)| NoteRef {
-            id: snapshot.vault.notes[source].id.clone(),
-            title: snapshot.vault.notes[source].title.clone(),
-            folder: snapshot.vault.notes[source].folder.clone(),
-            weight,
+        .take(24)
+        .map(|(source, weight)| {
+            let src_note = &snapshot.vault.notes[source];
+            NoteRef {
+                id: src_note.id.clone(),
+                title: src_note.title.clone(),
+                folder: src_note.folder.clone(),
+                weight,
+                snippet: mention_snippet(&src_note.body, &note.title, &src_note.excerpt),
+            }
         })
         .collect::<Vec<_>>();
 
     let mentions = snapshot
         .vault
-        .unlinked_mentions(index, &note.title, 6)
+        .unlinked_mentions(index, &note.title, 12)
         .into_iter()
-        .map(|source| NoteRef {
-            id: snapshot.vault.notes[source].id.clone(),
-            title: snapshot.vault.notes[source].title.clone(),
-            folder: snapshot.vault.notes[source].folder.clone(),
-            weight: 0,
+        .map(|source| {
+            let src_note = &snapshot.vault.notes[source];
+            NoteRef {
+                id: src_note.id.clone(),
+                title: src_note.title.clone(),
+                folder: src_note.folder.clone(),
+                weight: 0,
+                snippet: mention_snippet(&src_note.body, &note.title, &src_note.excerpt),
+            }
         })
         .collect::<Vec<_>>();
 
-    let related = related_notes(&snapshot.vault, index, 6);
+    let related = related_notes(&snapshot.vault, index, 8);
 
     let mut seen = HashSet::new();
     let evidence = note
@@ -1192,12 +1202,16 @@ async fn api_note(State(state): State<AppState>, Query(query): Query<NoteQuery>)
         .filter_map(|link| snapshot.vault.resolve(&link.target))
         .filter(|target| *target != index)
         .filter(|target| seen.insert(*target))
-        .take(16)
-        .map(|target| NoteRef {
-            id: snapshot.vault.notes[target].id.clone(),
-            title: snapshot.vault.notes[target].title.clone(),
-            folder: snapshot.vault.notes[target].folder.clone(),
-            weight: 0,
+        .take(24)
+        .map(|target| {
+            let tgt_note = &snapshot.vault.notes[target];
+            NoteRef {
+                id: tgt_note.id.clone(),
+                title: tgt_note.title.clone(),
+                folder: tgt_note.folder.clone(),
+                weight: 0,
+                snippet: Some(tgt_note.excerpt.clone()),
+            }
         })
         .collect::<Vec<_>>();
     let supersedes = note
@@ -1210,6 +1224,7 @@ async fn api_note(State(state): State<AppState>, Query(query): Query<NoteQuery>)
             title: snapshot.vault.notes[target].title.clone(),
             folder: snapshot.vault.notes[target].folder.clone(),
             weight: 0,
+            snippet: None,
         });
 
     // Read the raw file for editing so frontmatter survives a save.
@@ -1279,8 +1294,30 @@ fn related_notes(vault: &Vault, target: usize, limit: usize) -> Vec<NoteRef> {
             title: vault.notes[index].title.clone(),
             folder: vault.notes[index].folder.clone(),
             weight: 0,
+            snippet: Some(vault.notes[index].excerpt.clone()),
         })
         .collect()
+}
+
+fn mention_snippet(body: &str, needle: &str, fallback: &str) -> Option<String> {
+    let lower_needle = needle.to_lowercase();
+    if !lower_needle.is_empty() {
+        for line in body.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            if trimmed.to_lowercase().contains(&lower_needle) {
+                let clean: String = trimmed.chars().take(160).collect();
+                return Some(clean);
+            }
+        }
+    }
+    if fallback.is_empty() {
+        None
+    } else {
+        Some(fallback.to_string())
+    }
 }
 
 fn has_write_header(headers: &HeaderMap) -> bool {

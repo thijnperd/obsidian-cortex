@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases"><img alt="Version 2.0.0" src="https://img.shields.io/badge/version-2.0.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases"><img alt="Version 2.2.0" src="https://img.shields.io/badge/version-2.2.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
   <img alt="Licensed MIT" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-101216?style=flat-square&amp;labelColor=0a0b0d">
 </p>
@@ -46,7 +46,7 @@ are; deleting the folder is the uninstall.
 
 | Platform | File |
 | --- | --- |
-| Windows x86-64 | `CortexSetup-2.0.0.exe`, or `cortex-windows-x86_64.zip` to run unpacked |
+| Windows x86-64 | `CortexSetup-2.2.0.exe`, or `cortex-windows-x86_64.zip` to run unpacked |
 | macOS (Apple silicon) | `Cortex.app` inside `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
@@ -194,6 +194,15 @@ Hidden folders dim instead of disappearing, so the context stays on screen.
 Clicking a `[[link]]`, a backlink or an unlinked mention opens that note in
 place, and the arrows walk back through the chain.
 
+## Notes studio
+
+The **Notes** tab is a three-pane workspace for writing: a filterable note list
+(All, Pinned, Recent or one folder; sort by recent, A-Z, links or length), the
+editor, and a connections pane with backlinks, unlinked mentions and related
+notes, each with a one-line snippet. **+ New** or 
+ starts a note; quick capture
+files a title straight into the Inbox. Everything is still plain Markdown on disk.
+
 ## Editing
 
 **Edit** opens the note as plain Markdown in a textarea. What you type is what
@@ -209,6 +218,11 @@ gets saved, frontmatter and wikilinks included.
 | Ordered / bullet / task list | `Ctrl Shift 7`, `Ctrl Shift 8`, `Ctrl Shift 9` |
 | Blockquote | `Ctrl Shift .` |
 | Indent / outdent | `Tab` / `Shift Tab` |
+| Toggle task checkbox | `Ctrl L`, or `Ctrl Enter` on a task line |
+| Duplicate line or selection | `Ctrl Shift D` |
+| Move line up / down | `Alt Up` / `Alt Down` |
+| Insert block | `/` at the start of a line: headings, tasks, tally boxes, callouts, table, math, code, quote, divider, today's date, wikilink |
+| Shortcut cheat sheet | `?` |
 
 `⌘` replaces `Ctrl` on macOS. Typing `[` inserts `[]` with the caret inside;
 parentheses, braces and quotes do the same. Typing a closing character in front
@@ -371,7 +385,7 @@ opens it, and it rotates once at 1 MiB. If `cortex` says nothing at all, run
 ## License
 
 MIT. See [LICENSE](LICENSE); security reports follow [SECURITY.md](SECURITY.md),
-and the 2.0.0 notes are in [docs/releases/v2.0.0.md](docs/releases/v2.0.0.md).
+and the 2.2.0 notes are in [docs/releases/v2.2.0.md](docs/releases/v2.2.0.md).
 The in-app icons are [Tabler Icons](https://tabler.io/icons), MIT licensed, with
 the notice in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

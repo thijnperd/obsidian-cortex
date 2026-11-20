@@ -22,10 +22,94 @@ export function setStats(meta, overview = false) {
   element.hidden = false;
 }
 
-function cleanSnippet(raw) {
+export function cleanSnippet(raw) {
   return String(raw || '')
     .replace(/^\s*(?:>\s*)?\[?!?[a-zA-Z0-9_-]+\][+-]?\s*/i, '')
     .trim();
+}
+
+/**
+ * Format a contextual snippet and highlight occurrences of `[[targetTitle]]` or `targetTitle`.
+ */
+export function highlightMentionSnippet(rawSnippet, targetTitle) {
+  const text = cleanSnippet(rawSnippet);
+  if (!text) return '';
+  if (!targetTitle) return escapeHtml(text);
+
+  const escapedTarget = targetTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`(\\[\\[${escapedTarget}(?:\\|[^\\]]+)?\\]\\]|${escapedTarget})`, 'ig');
+  const parts = text.split(pattern);
+  return parts
+    .map((part, idx) => (idx % 2 === 1
+      ? `<mark class="mention-highlight">${escapeHtml(part)}</mark>`
+      : escapeHtml(part)))
+    .join('');
+}
+
+export function renderPinnedSidebar(
+  container,
+  blockEl,
+  pinnedIds,
+  nodesById,
+  selectedId,
+  { showEmptyHint = false, onOpen, onUnpin } = {},
+) {
+  if (!container || !blockEl) return;
+  container.innerHTML = '';
+  const validNotes = (pinnedIds || [])
+    .map((id) => nodesById.get(id))
+    .filter(Boolean);
+
+  if (!validNotes.length) {
+    if (showEmptyHint) {
+      blockEl.hidden = false;
+      const hint = document.createElement('p');
+      hint.className = 'pinned-empty';
+      hint.textContent = 'Pin any note (p) to keep it here for instant access.';
+      container.appendChild(hint);
+    } else {
+      blockEl.hidden = true;
+    }
+    return;
+  }
+
+  blockEl.hidden = false;
+  for (const node of validNotes) {
+    const row = document.createElement('div');
+    row.className = `pinned-row${node.id === selectedId ? ' is-active' : ''}`;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pinned-item';
+    btn.title = `${node.title} (${node.folder})`;
+
+    const title = document.createElement('span');
+    title.className = 'pinned-title';
+    title.textContent = node.title;
+
+    const folder = document.createElement('span');
+    folder.className = 'pinned-folder';
+    folder.textContent = node.folder;
+
+    btn.append(title, folder);
+    btn.addEventListener('click', () => onOpen?.(node.id));
+    row.appendChild(btn);
+
+    if (onUnpin) {
+      const unpin = document.createElement('button');
+      unpin.type = 'button';
+      unpin.className = 'pinned-unpin';
+      unpin.title = `Unpin ${node.title}`;
+      unpin.setAttribute('aria-label', `Unpin ${node.title}`);
+      unpin.textContent = '×';
+      unpin.addEventListener('click', (event) => {
+        event.stopPropagation();
+        onUnpin(node.id);
+      });
+      row.appendChild(unpin);
+    }
+    container.appendChild(row);
+  }
 }
 
 export function renderFolders(
@@ -432,19 +516,30 @@ export function renderLaunch(container, vaults, { onOpen, onForget }) {
   if (recents) recents.hidden = vaults.length === 0;
 }
 
-function connectionItemsHtml(notes, empty) {
+function connectionItemsHtml(notes, empty, { targetTitle = '', allowLinkMention = false } = {}) {
   const items = (notes || [])
-    .map(
-      (note) =>
+    .map((note) => {
+      const snippetHtml = note.snippet
+        ? `<span class="relation-snippet">${highlightMentionSnippet(note.snippet, targetTitle)}</span>`
+        : '';
+      const linkBtn = allowLinkMention
+        ? `<button type="button" class="relation-link-btn" data-link-mention-id="${escapeHtml(note.id)}" title="Convert this plain-text mention into [[${escapeHtml(targetTitle)}]]">Link</button>`
+        : '';
+      return (
+        `<div class="relation-card">` +
+        `<div class="relation-top">` +
         `<button type="button" class="relation" data-note-id="${escapeHtml(note.id)}">` +
         `<span class="relation-title">${escapeHtml(note.title)}</span>` +
-        `<span class="relation-folder">${escapeHtml(note.folder)}</span></button>`,
-    )
+        `<span class="relation-folder">${escapeHtml(note.folder)}</span></button>` +
+        `${linkBtn}</div>` +
+        `${snippetHtml}</div>`
+      );
+    })
     .join('');
   return items || `<p class="empty">${escapeHtml(empty)}</p>`;
 }
 
-function connectionsHtml(detail) {
+function connectionsHtml(detail, writable = false) {
   const groups = [];
   if (detail.kind && detail.evidence) {
     groups.push({
@@ -499,7 +594,10 @@ function connectionsHtml(detail) {
       return (
         `<div class="connections-panel" role="tabpanel" aria-labelledby="conn-tab-${group.id}" ` +
         `data-conn-panel="${group.id}"${hiddenAttr}${tabIndexAttr}>` +
-        `<div class="connections-list">${connectionItemsHtml(group.notes, group.empty)}</div></div>`
+        `<div class="connections-list">${connectionItemsHtml(group.notes, group.empty, {
+          targetTitle: detail.title,
+          allowLinkMention: writable && group.id === 'mentions',
+        })}</div></div>`
       );
     })
     .join('');
@@ -567,13 +665,16 @@ function decisionTrail(detail) {
     </section>`;
 }
 
-export function panelHtml(detail, markdownHtml) {
+export function panelHtml(detail, markdownHtml, writable = false) {
   const tags = (detail.tags || [])
     .map((tag) => `<span class="note-tag">#${escapeHtml(tag)}</span>`)
     .join('');
+  const words = Number(detail.words) || 0;
+  const readMin = Math.max(1, Math.round(words / 200));
   const meta = [
     detail.created || 'Undated',
-    `${Number(detail.words) || 0} words`,
+    `${words} words`,
+    `${readMin} min read`,
     `${detail.backlinks.length} ${detail.backlinks.length === 1 ? 'backlink' : 'backlinks'}`,
   ]
     .map((part) => `<span>${escapeHtml(part)}</span>`)
@@ -586,137 +687,603 @@ export function panelHtml(detail, markdownHtml) {
       ${tags ? `<div class="note-tags">${tags}</div>` : ''}
       ${decisionTrail(detail)}
       <div class="prose" id="note-prose">${markdownHtml}</div>
-      ${connectionsHtml(detail)}
+      ${connectionsHtml(detail, writable)}
     </div>
   `;
 }
 
-export function editorHtml(detail, draft) {
+export function editorToolbarHtml() {
   const tools = [
     ['bold', 'i-bold', `Bold (${key('B')})`],
     ['italic', 'i-italic', `Italic (${key('I')})`],
     ['heading', 'i-heading', `Heading (${key('2')})`],
-    ['wikilink', 'i-link', `Wikilink (${key('K')})`],
+    ['wikilink', 'i-link', `Link to note [[ (${key('K')})`],
     ['code', 'i-code', `Inline code (${key('E')})`],
     ['bullet', 'i-list', 'Bullet list'],
-    ['task', 'i-checklist', 'Task list'],
+    ['task', 'i-checklist', `Task checkbox (${key('L')})`],
+    ['callout', 'i-callout', 'Obsidian callout block (/callout)'],
+    ['table', 'i-table', 'Markdown table (/table)'],
+    ['math', 'i-math', 'LaTeX math block (/math)'],
     ['quote', 'i-quote', 'Blockquote'],
   ];
-  const bar = tools
+  return tools
     .map(
       ([cmd, icon, label]) =>
         `<button type="button" class="editor-tool" data-edit-cmd="${cmd}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">` +
         `<svg class="icon" aria-hidden="true"><use href="#${icon}"></use></svg></button>`,
     )
     .join('');
+}
 
+export function editorHtml(detail, draft) {
+  const bar = editorToolbarHtml();
   return `
     <div class="panel-article panel-article-edit">
       <p class="note-crumb">Editing · ${escapeHtml(detail.folder)}</p>
       <h1 class="note-title">${escapeHtml(detail.title)}</h1>
       <div class="editor-bar" role="toolbar" aria-label="Markdown formatting">${bar}</div>
-      <textarea class="editor" id="note-editor" spellcheck="false" aria-label="Note source" aria-describedby="editor-hint">${escapeHtml(draft)}</textarea>
-      <p class="editor-hint" id="editor-hint">${key('B')} bold · ${key('I')} italic · ${key('K')} wikilink · ${key('E')} code · ${key('S')} save · Esc cancel</p>
+      <div class="editor-host">
+        <textarea class="editor" id="note-editor" spellcheck="false" aria-label="Note source" aria-describedby="editor-hint">${escapeHtml(draft)}</textarea>
+      </div>
+      <p class="editor-hint" id="editor-hint">Type <code>[[</code> to link notes · <code>/</code> for commands · ${key('L')} task · ${key('S')} save · Esc cancel</p>
     </div>
   `;
 }
 
-export function renderPaletteHits(container, hits, active) {
-  if (!hits.length) {
-    container.innerHTML = '<p class="palette-empty">No notes or commands match that.</p>';
+/**
+ * Extract hierarchical headings from a Markdown document body for the Notion-style
+ * floating mini-outline rail and the right inspector's Outline tab.
+ */
+export function extractOutlineHeadings(raw) {
+  const lines = String(raw || '').replace(/\r\n?/g, '\n').split('\n');
+  let i = 0;
+  if (lines[0] === '---') {
+    i = 1;
+    while (i < lines.length && lines[i] !== '---') i += 1;
+    i += 1;
+  }
+  const headings = [];
+  let inFence = false;
+  for (; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.trimStart().startsWith('```')) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const match = /^(#{1,4})\s+(.+)$/.exec(line);
+    if (match) {
+      const level = match[1].length;
+      const text = match[2]
+        .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => alias || target)
+        .replace(/[*_`~]/g, '')
+        .trim();
+      if (text) {
+        headings.push({ level, text, index: headings.length, line: i });
+      }
+    }
+  }
+  return headings;
+}
+
+/**
+ * Extract frontmatter key/value pairs from `---\n...\n---` for the studio property bar.
+ */
+export function extractFrontmatterProperties(raw) {
+  const lines = String(raw || '').replace(/\r\n?/g, '\n').split('\n');
+  if (lines[0] !== '---') return [];
+  const props = [];
+  for (let i = 1; i < lines.length; i += 1) {
+    if (lines[i] === '---') break;
+    const match = /^([a-zA-Z0-9_-]+)\s*:\s*(.+)$/.exec(lines[i].trim());
+    if (match) {
+      props.push({ key: match[1], value: match[2].trim() });
+    }
+  }
+  return props;
+}
+
+/**
+ * Render the left-hand Notes Studio feed (Astrocortex & Notion style).
+ */
+export function renderNotesStudioList(
+  container,
+  notes,
+  {
+    activeId = null,
+    pinnedSet = new Set(),
+    recentIds = [],
+    palette = [],
+    folderColorMap = new Map(),
+    sortBy = 'recent',
+    onSelectNote,
+    onTogglePin,
+  } = {},
+) {
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!notes.length) {
+    const empty = document.createElement('div');
+    empty.className = 'notes-feed-empty';
+    empty.innerHTML =
+      '<p>No notes match this filter.</p>' +
+      '<p class="notes-feed-empty-sub">Press <kbd>n</kbd> to create a new note or clear the filter above.</p>';
+    container.appendChild(empty);
     return;
   }
 
-  let html = '';
-  let lastKind = null;
-  const hasBothKinds = hits.some((h) => h.kind === 'command') && hits.some((h) => h.kind !== 'command');
+  const recentRank = new Map();
+  recentIds.forEach((id, idx) => recentRank.set(id, idx));
 
-  hits.forEach((hit, index) => {
-    const kind = hit.kind === 'command' ? 'command' : 'note';
-    if (kind !== lastKind && (hasBothKinds || kind === 'command')) {
-      html += `<p class="palette-group">${kind === 'command' ? 'Commands' : 'Notes'}</p>`;
-      lastKind = kind;
-    }
-    if (kind === 'command') {
-      const kbd = hit.shortcut ? `<kbd class="palette-hit-kbd">${escapeHtml(hit.shortcut)}</kbd>` : '';
-      const sub = hit.subtitle ? `<span class="palette-hit-snippet">${escapeHtml(hit.subtitle)}</span>` : '';
-      html += `
-        <button type="button" class="palette-hit palette-hit-command${index === active ? ' is-active' : ''}" data-hit-index="${index}">
-          <span class="palette-hit-main">
-            <svg class="icon palette-hit-icon" aria-hidden="true"><use href="#i-bolt"></use></svg>
-            <span class="palette-hit-title">${escapeHtml(hit.title)}</span>
-          </span>
-          <span class="palette-hit-path">${kbd}</span>
-          ${sub}
-        </button>`;
+  let currentSection = null;
+  for (const note of notes) {
+    const isPinned = pinnedSet.has(note.id);
+    let bucket = '';
+    if (sortBy === 'recent') {
+      if (isPinned) bucket = 'Pinned';
+      else if (recentRank.has(note.id)) bucket = 'Recently opened';
+      else if (note.created) bucket = note.created.slice(0, 7);
+      else bucket = note.folder || 'Vault';
+    } else if (sortBy === 'title') {
+      bucket = (note.title || '#').trim().charAt(0).toUpperCase();
+    } else if (sortBy === 'links') {
+      bucket = (note.degree || 0) >= 8 ? 'Hub notes' : 'Connected notes';
     } else {
-      html += `
-        <button type="button" class="palette-hit${index === active ? ' is-active' : ''}" data-hit-index="${index}">
-          <span class="palette-hit-title">${escapeHtml(hit.title)}</span>
-          <span class="palette-hit-path">${escapeHtml(hit.folder)}</span>
-          <span class="palette-hit-snippet">${escapeHtml(cleanSnippet(hit.snippet || ''))}</span>
-        </button>`;
+      bucket = note.folder || 'Vault';
     }
+
+    if (bucket !== currentSection) {
+      currentSection = bucket;
+      const header = document.createElement('div');
+      header.className = 'notes-feed-group';
+      header.textContent = bucket;
+      container.appendChild(header);
+    }
+
+    const card = document.createElement('div');
+    card.className = `notes-card${note.id === activeId ? ' is-active' : ''}${isPinned ? ' is-pinned' : ''}`;
+    card.setAttribute('role', 'listitem');
+    card.dataset.noteId = note.id;
+
+    const mainBtn = document.createElement('button');
+    mainBtn.type = 'button';
+    mainBtn.className = 'notes-card-main';
+
+    const topRow = document.createElement('div');
+    topRow.className = 'notes-card-top';
+    const titleEl = document.createElement('span');
+    titleEl.className = 'notes-card-title';
+    titleEl.textContent = note.title;
+    topRow.appendChild(titleEl);
+    if (note.created) {
+      const dateEl = document.createElement('span');
+      dateEl.className = 'notes-card-date';
+      dateEl.textContent = note.created;
+      topRow.appendChild(dateEl);
+    }
+
+    const excerptText = cleanSnippet(note.snippet || '');
+    const excerptEl = document.createElement('p');
+    excerptEl.className = 'notes-card-excerpt';
+    excerptEl.textContent = excerptText || 'Empty note — click to start writing…';
+
+    const metaRow = document.createElement('div');
+    metaRow.className = 'notes-card-meta';
+
+    const folderBadge = document.createElement('span');
+    folderBadge.className = 'notes-card-folder';
+    const dot = document.createElement('span');
+    dot.className = 'notes-card-dot';
+    const colorIdx = folderColorMap.get(note.folder) ?? 0;
+    const rgb = palette[colorIdx % (palette.length || 1)] || [0.85, 0.47, 0.34];
+    dot.style.background = `rgb(${Math.round(rgb[0] * 255)}, ${Math.round(rgb[1] * 255)}, ${Math.round(rgb[2] * 255)})`;
+    const folderName = document.createElement('span');
+    folderName.textContent = note.folder || 'root';
+    folderBadge.append(dot, folderName);
+
+    const stats = document.createElement('span');
+    stats.className = 'notes-card-stats';
+    const deg = Number(note.degree) || (note.links?.length || 0);
+    const words = Number(note.words) || 0;
+    stats.textContent = `${words}w · ${deg} ${deg === 1 ? 'link' : 'links'}`;
+
+    metaRow.append(folderBadge, stats);
+    mainBtn.append(topRow, excerptEl, metaRow);
+    mainBtn.addEventListener('click', () => onSelectNote?.(note.id));
+    card.appendChild(mainBtn);
+
+    if (onTogglePin) {
+      const pinBtn = document.createElement('button');
+      pinBtn.type = 'button';
+      pinBtn.className = `notes-card-pin${isPinned ? ' is-pinned' : ''}`;
+      pinBtn.title = isPinned ? `Unpin ${note.title}` : `Pin ${note.title}`;
+      pinBtn.setAttribute('aria-label', pinBtn.title);
+      pinBtn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg>';
+      pinBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        onTogglePin(note.id);
+      });
+      card.appendChild(pinBtn);
+    }
+
+    container.appendChild(card);
+  }
+}
+
+/**
+ * Render the Obsidian-style open note tabs strip at the top of the Notes Studio.
+ */
+export function renderNotesStudioTabs(
+  container,
+  tabIds,
+  activeId,
+  nodesById,
+  { dirtyId = null, pinnedSet = new Set(), onSelectTab, onCloseTab } = {},
+) {
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (const id of tabIds) {
+    const node = nodesById.get(id);
+    if (!node) continue;
+    const isActive = id === activeId;
+    const isDirty = id === dirtyId;
+    const isPinned = pinnedSet.has(id);
+
+    const tab = document.createElement('div');
+    tab.className = `notes-tab${isActive ? ' is-active' : ''}${isDirty ? ' is-dirty' : ''}`;
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', String(isActive));
+
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'notes-tab-btn';
+    openBtn.title = `${node.title} (${node.folder})`;
+
+    if (isPinned) {
+      const pinDot = document.createElement('span');
+      pinDot.className = 'notes-tab-pin';
+      pinDot.textContent = '•';
+      openBtn.appendChild(pinDot);
+    }
+
+    const label = document.createElement('span');
+    label.className = 'notes-tab-title';
+    label.textContent = node.title;
+    openBtn.appendChild(label);
+
+    openBtn.addEventListener('click', () => onSelectTab?.(id));
+    openBtn.addEventListener('auxclick', (event) => {
+      if (event.button === 1) {
+        event.preventDefault();
+        onCloseTab?.(id);
+      }
+    });
+    tab.appendChild(openBtn);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'notes-tab-close';
+    closeBtn.title = `Close ${node.title} tab`;
+    closeBtn.setAttribute('aria-label', `Close ${node.title} tab`);
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      onCloseTab?.(id);
+    });
+    tab.appendChild(closeBtn);
+
+    container.appendChild(tab);
+  }
+}
+
+/**
+ * Render the center Notes Studio document canvas in Read, Split, or Edit mode.
+ */
+export function renderNotesStudioCanvas(
+  container,
+  detail,
+  {
+    viewMode = 'read',
+    draft = '',
+    markdownHtml = '',
+    writable = false,
+    folderRgb = [0.85, 0.47, 0.34],
+  } = {},
+) {
+  if (!container) return;
+  if (!detail) {
+    container.innerHTML = `
+      <div class="notes-empty-state">
+        <h2>Select a note or create a new one</h2>
+        <p>Choose any note from the list on the left, press <kbd>n</kbd> to create a note with a starter template, or press <kbd>s</kbd> to jump to a random note.</p>
+      </div>`;
+    return;
+  }
+
+  const words = Number(detail.words) || 0;
+  const readMin = Math.max(1, Math.round(words / 200));
+  const outLinks = (detail.links || []).length;
+  const inLinks = (detail.backlinks || []).length;
+  const totalLinks = outLinks + inLinks;
+  const tagsHtml = (detail.tags || [])
+    .map((tag) => `<button type="button" class="note-tag studio-tag-chip" data-filter-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}</button>`)
+    .join('');
+
+  const props = extractFrontmatterProperties(draft || detail.body || '');
+  const propsHtml = props.length
+    ? `<div class="studio-frontmatter" aria-label="Note properties">` +
+      props
+        .map(
+          (p) =>
+            `<span class="studio-prop"><span class="studio-prop-key">${escapeHtml(p.key)}</span>` +
+            `<span class="studio-prop-val">${escapeHtml(p.value)}</span></span>`,
+        )
+        .join('') +
+      `</div>`
+    : '';
+
+  const headerHtml = `
+    <header class="studio-doc-head">
+      <div class="studio-breadcrumbs">
+        <button type="button" class="studio-folder-crumb" data-filter-folder="${escapeHtml(detail.folder)}">
+          <span class="studio-crumb-dot" id="studio-crumb-dot"></span>
+          <span>${escapeHtml(detail.folder || 'root')}</span>
+        </button>
+        <span class="studio-crumb-sep">/</span>
+        <span class="studio-note-crumb">${escapeHtml(detail.path || detail.id)}</span>
+      </div>
+      <div class="studio-meta-row">
+        <span>${escapeHtml(detail.created || 'Undated')}</span>
+        <span data-studio-words>${words} words</span>
+        <span data-studio-readtime>~${readMin} min read</span>
+        <span>${totalLinks} ${totalLinks === 1 ? 'link' : 'links'} (${inLinks} in · ${outLinks} out)</span>
+        ${tagsHtml ? `<div class="studio-tags">${tagsHtml}</div>` : ''}
+      </div>
+      ${propsHtml}
+      ${decisionTrail(detail)}
+    </header>
+  `;
+
+  const effectiveMode = !writable ? 'read' : viewMode;
+
+  let bodyHtml = '';
+  if (effectiveMode === 'read') {
+    const editPrompt = writable
+      ? `<div class="studio-read-bar">` +
+        `<h1 class="studio-doc-title">${escapeHtml(detail.title)}</h1>` +
+        `<button type="button" class="text-button studio-quick-edit" data-switch-editor-mode="split" title="Switch to Live Split editor (${key('E')})">Edit note (${escapeHtml(key('E'))})</button>` +
+        `</div>`
+      : `<h1 class="studio-doc-title">${escapeHtml(detail.title)}</h1>`;
+
+    bodyHtml = `
+      <article class="studio-article studio-article-read">
+        ${headerHtml}
+        ${editPrompt}
+        <div class="prose studio-prose" id="studio-prose">${markdownHtml}</div>
+      </article>
+    `;
+  } else if (effectiveMode === 'split') {
+    bodyHtml = `
+      <div class="studio-split-layout">
+        <section class="studio-editor-col" aria-label="Markdown editor">
+          ${headerHtml}
+          <div class="editor-bar studio-editor-bar" role="toolbar" aria-label="Markdown formatting">${editorToolbarHtml()}</div>
+          <div class="editor-host studio-editor-host">
+            <textarea class="editor studio-editor" id="studio-editor" spellcheck="false" aria-label="Note Markdown source">${escapeHtml(draft)}</textarea>
+          </div>
+          <p class="editor-hint studio-editor-hint">Auto-saving enabled · <code>[[</code> link note · <code>/</code> slash menu · ${key('L')} toggle checkbox · ${key('E')} cycle mode</p>
+        </section>
+        <section class="studio-preview-col" aria-label="Live preview">
+          <div class="studio-preview-kicker">Live preview · interactive tasks &amp; tallies</div>
+          <h1 class="studio-doc-title">${escapeHtml(detail.title)}</h1>
+          <div class="prose studio-prose" id="studio-prose">${markdownHtml}</div>
+        </section>
+      </div>
+    `;
+  } else {
+    bodyHtml = `
+      <article class="studio-article studio-article-edit">
+        ${headerHtml}
+        <div class="editor-bar studio-editor-bar" role="toolbar" aria-label="Markdown formatting">${editorToolbarHtml()}</div>
+        <div class="editor-host studio-editor-host">
+          <textarea class="editor studio-editor studio-editor-full" id="studio-editor" spellcheck="false" aria-label="Note Markdown source">${escapeHtml(draft)}</textarea>
+        </div>
+        <p class="editor-hint studio-editor-hint">Auto-saving enabled · <code>[[</code> link note · <code>/</code> slash commands · ${key('L')} toggle checkbox · Alt+↑/↓ move line · ${key('E')} read mode</p>
+      </article>
+    `;
+  }
+
+  container.innerHTML = bodyHtml;
+  const dot = container.querySelector('#studio-crumb-dot');
+  if (dot && folderRgb) {
+    dot.style.background = `rgb(${Math.round(folderRgb[0] * 255)}, ${Math.round(folderRgb[1] * 255)}, ${Math.round(folderRgb[2] * 255)})`;
+  }
+}
+
+/**
+ * Render the Notion-style right-edge floating mini-outline rail (tick marks that
+ * expand on hover into an interactive Table of Contents).
+ */
+export function renderNotesMiniOutline(container, headings, onJumpHeading) {
+  if (!container) return;
+  container.innerHTML = '';
+  if (!headings || headings.length < 2) {
+    container.hidden = true;
+    return;
+  }
+  container.hidden = false;
+
+  const ticks = document.createElement('div');
+  ticks.className = 'mini-outline-ticks';
+  ticks.setAttribute('aria-hidden', 'true');
+
+  const popover = document.createElement('div');
+  popover.className = 'mini-outline-card';
+
+  const cardTitle = document.createElement('p');
+  cardTitle.className = 'mini-outline-kicker';
+  cardTitle.textContent = 'On this page';
+  popover.appendChild(cardTitle);
+
+  headings.forEach((h, idx) => {
+    const tick = document.createElement('span');
+    tick.className = `mini-outline-tick is-h${h.level}`;
+    ticks.appendChild(tick);
+
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = `mini-outline-item is-h${h.level}`;
+    item.textContent = h.text;
+    item.addEventListener('click', () => onJumpHeading?.(idx, h));
+    popover.appendChild(item);
   });
 
-  container.innerHTML = html;
-  const activeElement = container.querySelector('.is-active');
-  if (activeElement) activeElement.scrollIntoView({ block: 'nearest' });
+  container.append(ticks, popover);
 }
 
-let toastTimer = null;
-export function toast(message, duration = 3200) {
-  const element = document.getElementById('toast');
-  element.textContent = message;
-  element.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    element.hidden = true;
-  }, duration);
-}
+/**
+ * Render the right-hand Notes Studio Connections & Outline inspector pane.
+ */
+export function renderNotesStudioInspector(
+  container,
+  detail,
+  {
+    activeTab = 'backlinks',
+    headings = [],
+    writable = false,
+    onOpenNote,
+    onLinkMention,
+    onJumpHeading,
+  } = {},
+) {
+  if (!container) return;
+  container.innerHTML = '';
 
-export function setBootStatus(message) {
-  const element = document.getElementById('boot-status');
-  if (element) element.textContent = message;
-}
+  const backlinksCountEl = document.getElementById('notes-backlinks-count');
+  const mentionsCountEl = document.getElementById('notes-mentions-count');
+  if (backlinksCountEl) backlinksCountEl.textContent = String((detail?.backlinks || []).length);
+  if (mentionsCountEl) mentionsCountEl.textContent = String((detail?.mentions || []).length);
 
-export function hideBoot() {
-  const element = document.getElementById('boot');
-  if (!element) return;
-  element.classList.add('is-done');
-  setTimeout(() => {
-    element.hidden = true;
-  }, 500);
-}
+  if (!detail) {
+    container.innerHTML = '<p class="empty">Open a note to see its linked mentions, unlinked mentions, and outline.</p>';
+    return;
+  }
 
-export function setCrumbs(text) {
-  const element = document.getElementById('panel-crumbs');
-  if (element) element.textContent = text;
-}
+  if (activeTab === 'backlinks') {
+    const list = detail.backlinks || [];
+    const wrap = document.createElement('div');
+    wrap.className = 'inspector-section';
+    const kicker = document.createElement('p');
+    kicker.className = 'inspector-kicker';
+    kicker.textContent = `Linked mentions (${list.length})`;
+    wrap.appendChild(kicker);
 
-export function setModeButtons(mode) {
-  document.querySelectorAll('.view[data-mode]').forEach((button) => {
-    const active = button.dataset.mode === mode;
-    button.classList.toggle('is-active', active);
-    button.setAttribute('aria-pressed', String(active));
+    if (!list.length) {
+      const empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = `No notes link to [[${detail.title}]] yet.`;
+      wrap.appendChild(empty);
+    } else {
+      const cards = document.createElement('div');
+      cards.className = 'inspector-cards';
+      cards.innerHTML = connectionItemsHtml(list, '', { targetTitle: detail.title });
+      wrap.appendChild(cards);
+    }
+    container.appendChild(wrap);
+  } else if (activeTab === 'mentions') {
+    const list = detail.mentions || [];
+    const wrap = document.createElement('div');
+    wrap.className = 'inspector-section';
+    const kicker = document.createElement('p');
+    kicker.className = 'inspector-kicker';
+    kicker.textContent = `Unlinked mentions (${list.length})`;
+    wrap.appendChild(kicker);
+
+    if (!list.length) {
+      const empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = `No unlinked plain-text mentions of “${detail.title}”.`;
+      wrap.appendChild(empty);
+    } else {
+      const help = document.createElement('p');
+      help.className = 'inspector-help';
+      help.textContent = writable
+        ? 'Notes that mention this title without [[brackets]]. Click Link to convert to a wikilink.'
+        : 'Notes that mention this title in plain text.';
+      wrap.appendChild(help);
+
+      const cards = document.createElement('div');
+      cards.className = 'inspector-cards';
+      cards.innerHTML = connectionItemsHtml(list, '', {
+        targetTitle: detail.title,
+        allowLinkMention: writable,
+      });
+      wrap.appendChild(cards);
+    }
+    container.appendChild(wrap);
+  } else if (activeTab === 'links') {
+    const wrap = document.createElement('div');
+    wrap.className = 'inspector-section';
+
+    if (detail.evidence && detail.evidence.length) {
+      const k1 = document.createElement('p');
+      k1.className = 'inspector-kicker';
+      k1.textContent = `Cited sources (${detail.evidence.length})`;
+      const c1 = document.createElement('div');
+      c1.className = 'inspector-cards';
+      c1.innerHTML = connectionItemsHtml(detail.evidence, '');
+      wrap.append(k1, c1);
+    }
+
+    const related = detail.related || [];
+    const k2 = document.createElement('p');
+    k2.className = 'inspector-kicker';
+    k2.textContent = `Related notes (${related.length})`;
+    const c2 = document.createElement('div');
+    c2.className = 'inspector-cards';
+    c2.innerHTML = connectionItemsHtml(related, 'No shared neighbors yet.');
+    wrap.append(k2, c2);
+    container.appendChild(wrap);
+  } else if (activeTab === 'outline') {
+    const wrap = document.createElement('div');
+    wrap.className = 'inspector-section';
+    const kicker = document.createElement('p');
+    kicker.className = 'inspector-kicker';
+    kicker.textContent = `Document outline (${headings.length})`;
+    wrap.appendChild(kicker);
+
+    if (!headings.length) {
+      const empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = 'Add # Heading 1, ## Heading 2, or ### Heading 3 sections to build an outline.';
+      wrap.appendChild(empty);
+    } else {
+      const tree = document.createElement('div');
+      tree.className = 'inspector-outline';
+      headings.forEach((h, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `inspector-outline-item is-h${h.level}`;
+        btn.textContent = h.text;
+        btn.addEventListener('click', () => onJumpHeading?.(idx, h));
+        tree.appendChild(btn);
+      });
+      wrap.appendChild(tree);
+    }
+    container.appendChild(wrap);
+  }
+
+  container.querySelectorAll('[data-note-id]').forEach((btn) => {
+    btn.addEventListener('click', () => onOpenNote?.(btn.dataset.noteId));
   });
-}
-
-export function showTooltip(node, x, y) {
-  const element = document.getElementById('tooltip');
-  element.hidden = false;
-  element.querySelector('.tooltip-title').textContent = node.title;
-  element.querySelector('.tooltip-meta').textContent = `${node.folder} · ${node.degree} links`;
-  const rect = element.getBoundingClientRect();
-  const left = Math.min(Math.max(12, x + 14), window.innerWidth - rect.width - 12);
-  const top = Math.min(Math.max(12, y + 14), window.innerHeight - rect.height - 12);
-  element.style.left = `${left}px`;
-  element.style.top = `${top}px`;
-}
-
-export function hideTooltip() {
-  const element = document.getElementById('tooltip');
-  if (element) element.hidden = true;
+  container.querySelectorAll('[data-link-mention-id]').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      onLinkMention?.(btn.dataset.linkMentionId);
+    });
+  });
 }
 
 const STATUS_LABELS = { open: 'Open', refining: 'Refining' };
@@ -925,8 +1492,6 @@ export function renderBento(container, graph, hidden, { onOpen, onFolder, palett
     cell.className = 'bento-cell';
     cell.dataset.folder = folder.name;
     if (hidden.has(folder.name)) cell.classList.add('is-off');
-    // One anchor tile and two wide tiles per board: a readable hierarchy that
-    // does not turn a seven-folder vault into seven identical cards.
     if (rank === 0) cell.classList.add('is-large');
     else if (rank < 3) cell.classList.add('is-wide');
 
@@ -952,8 +1517,6 @@ export function renderBento(container, graph, hidden, { onOpen, onFolder, palett
 
     const meta = document.createElement('p');
     meta.className = 'bento-meta';
-    // The notes below already carry their titles; repeating the first one here
-    // only added a truncated line to every small box.
     meta.textContent = `${Math.round(share * 100)}% of the vault`;
     cell.appendChild(meta);
 

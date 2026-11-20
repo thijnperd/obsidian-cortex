@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.0 - Notes studio
+
+- **Notes studio tab:** filterable, sortable, pinnable note list; editor; connections pane with snippets for backlinks, mentions and related notes.
+- **Slash menu and editor shortcuts:** `/` inserts headings, tasks, tally boxes, callouts, tables, math, code, quotes, dividers, today's date and wikilinks; `Ctrl L` toggles tasks, `Ctrl Shift D` duplicates a line, `Alt Up/Down` moves it; `?` opens a shortcut cheat sheet.
+- **Quick capture** into the Inbox and a **Create note** option for unresolved links.
+- Server: note connections now carry a `snippet` field.
+- Version 2.2.0 across the binary, installer, README, landing site.
+
 ## 2.0.0 — Precision Editorial Studio
 
 ### Studio shell & themes

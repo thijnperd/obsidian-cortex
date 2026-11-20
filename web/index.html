@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="dark" />
   <script src="./js/theme.js"></script>
-  <meta name="description" content="Cortex turns a folder of Markdown into a brain you can see, with a record of why you decided what you decided." />
+  <meta name="description" content="Cortex turns a folder of Markdown into a native note-taking studio and a 3D brain you can see, with a record of why you decided what you decided." />
   <title>Cortex — your notes, as a brain</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="icon" href="./favicon.ico" sizes="32x32" />
@@ -42,12 +42,111 @@
     <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6l11 0" /><path d="M9 12l11 0" /><path d="M9 18l11 0" /><path d="M5 6l0 .01" /><path d="M5 12l0 .01" /><path d="M5 18l0 .01" /></symbol>
     <symbol id="i-checklist" viewBox="0 0 24 24"><path d="M9.615 20h-2.615a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8" /><path d="M14 19l2 2l4 -4" /><path d="M9 8h4" /><path d="M9 12h2" /></symbol>
     <symbol id="i-quote" viewBox="0 0 24 24"><path d="M10 11h-4a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h3a1 1 0 0 1 1 1v6c0 2.667 -1.333 4.333 -4 5" /><path d="M19 11h-4a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h3a1 1 0 0 1 1 1v6c0 2.667 -1.333 4.333 -4 5" /></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M15 4.5l-4 4l-4 1.5l-1.5 1.5l7 7l1.5 -1.5l1.5 -4l4 -4" /><path d="M9 15l-4.5 4.5" /><path d="M14.5 4l5.5 5.5" /></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><path d="M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z" /><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1" /></symbol>
+    <symbol id="i-notes" viewBox="0 0 24 24"><path d="M5 3m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z" /><path d="M9 7l6 0" /><path d="M9 11l6 0" /><path d="M9 15l4 0" /></symbol>
+    <symbol id="i-table" viewBox="0 0 24 24"><path d="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14z" /><path d="M3 10h18" /><path d="M10 3v18" /></symbol>
+    <symbol id="i-math" viewBox="0 0 24 24"><path d="M18 4h-11l6 8l-6 8h11" /></symbol>
+    <symbol id="i-callout" viewBox="0 0 24 24"><path d="M12 9h.01" /><path d="M11 12h1v4h1" /><path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9 -9 9s-9 -1.8 -9 -9s1.8 -9 9 -9z" /></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z" /></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><path d="M2 6m0 2a2 2 0 0 1 2 -2h16a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2z" /><path d="M6 10l0 .01" /><path d="M10 10l0 .01" /><path d="M14 10l0 .01" /><path d="M18 10l0 .01" /><path d="M6 14l0 .01" /><path d="M18 14l0 .01" /><path d="M10 14l4 .01" /></symbol>
+    <symbol id="i-columns" viewBox="0 0 24 24"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z" /><path d="M12 4v16" /></symbol>
   </svg>
 
   <canvas id="stage" aria-label="Graph of notes"></canvas>
   <div class="labels" id="labels"></div>
   <canvas id="atlas" class="atlas" tabindex="0" hidden
     aria-label="Map of notes. Arrow keys pan, plus and minus zoom, zero resets, Enter opens the highlighted place."></canvas>
+
+  <section class="notes-studio" id="notes-studio" hidden aria-label="Notes studio">
+    <aside class="notes-list-pane" id="notes-list-pane" aria-label="Note list">
+      <header class="notes-list-head">
+        <div class="notes-list-title-wrap">
+          <h2 class="notes-list-title" id="notes-list-title">All notes</h2>
+          <span class="notes-list-count" id="notes-list-count">0</span>
+        </div>
+        <div class="notes-list-actions">
+          <button class="text-button" id="notes-sort" type="button" title="Cycle sort order">Recent</button>
+          <button class="btn btn-primary btn-compact" id="notes-new-btn" type="button" title="New note (n)">+ New</button>
+        </div>
+      </header>
+
+      <div class="notes-filter-wrap">
+        <svg class="icon notes-filter-icon" aria-hidden="true"><use href="#i-search"></use></svg>
+        <input class="notes-filter-input" id="notes-filter" type="search" placeholder="Filter notes by title, tag or text…" autocomplete="off" spellcheck="false" aria-label="Filter notes" />
+      </div>
+
+      <div class="notes-scopes" id="notes-scopes" role="tablist" aria-label="Note filter scope">
+        <button class="notes-scope is-active" data-scope="all" type="button">All</button>
+        <button class="notes-scope" data-scope="pinned" type="button">Pinned</button>
+        <button class="notes-scope" data-scope="recent" type="button">Recent</button>
+        <button class="notes-scope" id="notes-scope-folder" data-scope="folder" type="button" hidden></button>
+      </div>
+
+      <form class="notes-quick-form" id="notes-quick-form" hidden>
+        <input class="notes-quick-input" id="notes-quick-input" type="text" placeholder="Quick capture to Inbox… (↵)" autocomplete="off" maxlength="140" aria-label="Quick capture note title" />
+      </form>
+
+      <div class="notes-feed" id="notes-feed" role="list"></div>
+    </aside>
+
+    <div class="notes-main-pane" id="notes-main-pane">
+      <header class="notes-tabs-bar">
+        <button class="icon-button" id="notes-toggle-list" type="button" title="Toggle notes list" aria-label="Toggle notes list" aria-pressed="true">
+          <svg class="icon" aria-hidden="true"><use href="#i-sidebar"></use></svg>
+        </button>
+
+        <div class="notes-tabs" id="notes-tabs" role="tablist" aria-label="Open note tabs"></div>
+        <button class="icon-button notes-tab-add" id="notes-tab-new" type="button" title="New note (n)" aria-label="New note">
+          <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+        </button>
+
+        <div class="notes-toolbar-right">
+          <span class="notes-save-status" id="notes-save-status">Saved</span>
+          <div class="notes-view-modes" id="notes-view-modes" role="group" aria-label="Note editor mode">
+            <button class="notes-mode-btn is-active" data-editor-mode="read" type="button" title="Reading view (Ctrl/⌘+E)">Read</button>
+            <button class="notes-mode-btn" data-editor-mode="split" type="button" title="Live side-by-side editor &amp; preview (Ctrl/⌘+E)">Split</button>
+            <button class="notes-mode-btn" data-editor-mode="edit" type="button" title="Direct source editor (Ctrl/⌘+E)">Edit</button>
+          </div>
+          <button class="icon-button" id="notes-pin-btn" type="button" title="Pin note (p)" aria-label="Pin note" aria-pressed="false">
+            <svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg>
+          </button>
+          <button class="icon-button" id="notes-copy-link" type="button" title="Copy [[Wikilink]]" aria-label="Copy wikilink">
+            <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
+          </button>
+          <button class="icon-button" id="notes-reveal-file" type="button" title="Reveal Markdown file in folder" aria-label="Reveal in folder">
+            <svg class="icon" aria-hidden="true"><use href="#i-external-link"></use></svg>
+          </button>
+          <button class="icon-button" id="notes-locate-graph" type="button" title="Locate in 3D Graph" aria-label="Locate in 3D Graph">
+            <svg class="icon" aria-hidden="true"><use href="#i-compass"></use></svg>
+          </button>
+          <button class="icon-button" id="notes-zen-btn" type="button" title="Zen distraction-free mode (z)" aria-label="Zen mode" aria-pressed="false">
+            <svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg>
+          </button>
+          <button class="icon-button" id="notes-toggle-inspector" type="button" title="Toggle connections &amp; outline inspector" aria-label="Toggle connections inspector" aria-pressed="true">
+            <svg class="icon" aria-hidden="true"><use href="#i-columns"></use></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="notes-workspace" id="notes-workspace">
+        <div class="notes-canvas" id="notes-canvas"></div>
+        <nav class="notes-mini-outline" id="notes-mini-outline" aria-label="Document outline" hidden></nav>
+      </div>
+    </div>
+
+    <aside class="notes-inspector-pane" id="notes-inspector-pane" aria-label="Connections and outline">
+      <header class="notes-inspector-head">
+        <div class="notes-inspector-tabs" id="notes-inspector-tabs" role="tablist">
+          <button class="notes-inspector-tab is-active" data-inspector-tab="backlinks" type="button">Backlinks <span id="notes-backlinks-count">0</span></button>
+          <button class="notes-inspector-tab" data-inspector-tab="mentions" type="button">Mentions <span id="notes-mentions-count">0</span></button>
+          <button class="notes-inspector-tab" data-inspector-tab="links" type="button">Links</button>
+          <button class="notes-inspector-tab" data-inspector-tab="outline" type="button">Outline</button>
+        </div>
+      </header>
+      <div class="notes-inspector-body" id="notes-inspector-body"></div>
+    </aside>
+  </section>
 
   <section class="decisions" id="decisions" hidden aria-labelledby="decisions-title">
     <header class="decisions-head">
@@ -83,6 +182,7 @@
     </div>
 
     <div class="views" role="group" aria-label="View">
+      <button class="view" data-mode="notes" type="button" aria-pressed="false">Notes</button>
       <button class="view is-active" data-mode="universe" type="button" aria-pressed="true">Graph</button>
       <button class="view" data-mode="brain" type="button" aria-pressed="false">Brain</button>
       <button class="view" data-mode="replay" type="button" aria-pressed="false">Timeline</button>
@@ -101,12 +201,14 @@
         <svg class="icon tour-icon-replay" aria-hidden="true" hidden><use href="#i-refresh"></use></svg>
         <span id="tour-label">Tour</span>
       </button>
+      <button class="icon-button" id="surprise-note" type="button" title="Surprise me — open a random note (s)" aria-label="Surprise me"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg></button>
+      <button class="icon-button" id="today-note" type="button" title="Today's note (t)" aria-label="Today's note" hidden><svg class="icon" aria-hidden="true"><use href="#i-calendar-day"></use></svg></button>
+      <button class="icon-button" id="new-note" type="button" title="New note (n)" aria-label="New note" hidden><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg></button>
+      <button class="icon-button" id="shortcuts-button" type="button" title="Keyboard shortcuts &amp; slash commands (?)" aria-label="Keyboard shortcuts"><svg class="icon" aria-hidden="true"><use href="#i-keyboard"></use></svg></button>
       <button class="icon-button theme-toggle" id="theme-toggle" type="button" title="Switch theme" aria-label="Switch theme">
         <svg class="icon theme-icon-sun" aria-hidden="true"><use href="#i-sun"></use></svg>
         <svg class="icon theme-icon-moon" aria-hidden="true"><use href="#i-moon"></use></svg>
       </button>
-      <button class="icon-button" id="today-note" type="button" title="Today's note (t)" aria-label="Today's note" hidden><svg class="icon" aria-hidden="true"><use href="#i-calendar-day"></use></svg></button>
-      <button class="icon-button" id="new-note" type="button" title="New note (n)" aria-label="New note" hidden><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg></button>
       <button class="icon-button" id="settings-button" type="button" title="Vault settings" aria-label="Vault settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg></button>
     </div>
   </header>
@@ -129,6 +231,11 @@
       <h2 class="block-title">Vaults</h2>
       <ul class="vault-list" id="vault-list"></ul>
       <button class="text-button" id="add-vault" type="button">Open another folder…</button>
+    </section>
+
+    <section class="block block-pinned" id="pinned-block" hidden aria-label="Pinned notes">
+      <h2 class="block-title">Pinned</h2>
+      <div class="pinned-list" id="pinned-list"></div>
     </section>
 
     <section class="block block-folders">
@@ -156,7 +263,7 @@
       </div>
     </section>
 
-    <p class="sidebar-hint" id="hint">Drag to orbit · scroll to zoom · <kbd>[</kbd> sidebar · <kbd data-mod="K"></kbd> palette</p>
+    <p class="sidebar-hint" id="hint">Drag to orbit · <kbd>0</kbd> notes · <kbd>n</kbd> new · <kbd>?</kbd> shortcuts · <kbd data-mod="K"></kbd> palette</p>
     <div class="resize-handle resize-handle-sidebar" id="sidebar-resize" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0" title="Drag to resize · double-click to reset"></div>
   </aside>
 
@@ -169,6 +276,9 @@
       </div>
       <p class="panel-crumbs" id="panel-crumbs"></p>
       <div class="panel-head-actions">
+        <button class="icon-button" id="panel-open-studio" type="button" title="Open in full Notes Studio (0)" aria-label="Open in Notes Studio">
+          <svg class="icon" aria-hidden="true"><use href="#i-notes"></use></svg>
+        </button>
         <button class="icon-button" id="panel-expand" type="button" title="Focus reader" aria-label="Expand note reader" aria-pressed="false">
           <svg class="icon panel-icon-expand" aria-hidden="true"><use href="#i-expand"></use></svg>
           <svg class="icon panel-icon-compress" aria-hidden="true" hidden><use href="#i-compress"></use></svg>
@@ -232,6 +342,7 @@
         <section class="settings-section">
           <h3>Opens in</h3>
           <div class="choice-row" id="settings-views" role="group" aria-label="Opening view">
+            <button class="choice" data-mode="notes" type="button" aria-pressed="false">Notes</button>
             <button class="choice" data-mode="universe" type="button" aria-pressed="false">Graph</button>
             <button class="choice" data-mode="brain" type="button" aria-pressed="false">Brain</button>
             <button class="choice" data-mode="replay" type="button" aria-pressed="false">Timeline</button>
@@ -312,15 +423,100 @@
     </form>
   </div>
 
+  <div class="compose" id="quick-note-modal" hidden>
+    <form class="compose-box quick-note-box" id="quick-note-form" role="dialog" aria-modal="true" aria-labelledby="quick-note-heading">
+      <header class="quick-note-head">
+        <div>
+          <p class="compose-kicker" id="quick-note-kicker">Native studio</p>
+          <h2 class="quick-note-title" id="quick-note-heading">Create a new note</h2>
+        </div>
+        <button class="icon-button" id="quick-note-close" type="button" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+      </header>
+
+      <div class="quick-note-grid">
+        <div class="quick-note-field">
+          <label class="field-label" for="quick-note-title">Title</label>
+          <input class="field-input" id="quick-note-title" type="text" placeholder="e.g. Session 14 — Siege of Kalaman" autocomplete="off" maxlength="120" required />
+        </div>
+        <div class="quick-note-field">
+          <label class="field-label" for="quick-note-folder">Folder</label>
+          <input class="field-input" id="quick-note-folder" type="text" list="quick-note-folder-list" placeholder="Root (or type folder path)" autocomplete="off" />
+          <datalist id="quick-note-folder-list"></datalist>
+        </div>
+      </div>
+
+      <label class="field-label">Starter template</label>
+      <div class="choice-row quick-note-templates" id="quick-note-templates" role="group" aria-label="Note template">
+        <button class="choice is-active" data-note-tpl="blank" type="button" aria-pressed="true">Blank</button>
+        <button class="choice" data-note-tpl="session" type="button" aria-pressed="false">Session / Log</button>
+        <button class="choice" data-note-tpl="lore" type="button" aria-pressed="false">Wiki / Callout</button>
+        <button class="choice" data-note-tpl="npc" type="button" aria-pressed="false">Character / NPC</button>
+        <button class="choice" data-note-tpl="location" type="button" aria-pressed="false">Place / Atlas</button>
+      </div>
+
+      <label class="field-label" for="quick-note-body">Initial thoughts (optional — supports <code>[[Wikilinks]]</code> &amp; <code>/slash</code> commands)</label>
+      <textarea class="field-input quick-note-textarea" id="quick-note-body" rows="4" placeholder="Jot a quick thought or leave empty to open in the studio editor…"></textarea>
+
+      <div class="compose-actions">
+        <button class="btn" id="quick-note-cancel" type="button">Cancel</button>
+        <button class="btn btn-primary" type="submit">Create &amp; open</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="settings" id="shortcuts-modal" hidden>
+    <div class="settings-box shortcuts-box" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
+      <header class="settings-head">
+        <h2 id="shortcuts-title">Keyboard shortcuts &amp; studio QoL</h2>
+        <button class="icon-button" id="shortcuts-close" type="button" aria-label="Close shortcuts"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+      </header>
+      <div class="settings-body shortcuts-grid">
+        <section class="settings-section">
+          <h3>Views &amp; navigation</h3>
+          <dl class="shortcut-list">
+            <div><dt><kbd>0</kbd> / <kbd>w</kbd></dt><dd>Notes Studio workspace</dd></div>
+            <div><dt><kbd>1</kbd> … <kbd>6</kbd></dt><dd>Graph · Brain · Timeline · Atlas · Bento · Decisions</dd></div>
+            <div><dt><kbd data-mod="K"></kbd> or <kbd>/</kbd></dt><dd>Search notes &amp; run commands</dd></div>
+            <div><dt><kbd>n</kbd></dt><dd>New note (with folder &amp; template picker)</dd></div>
+            <div><dt><kbd>q</kbd></dt><dd>Quick capture note to Inbox</dd></div>
+            <div><dt><kbd>t</kbd></dt><dd>Open or create Today's daily note</dd></div>
+            <div><dt><kbd>s</kbd></dt><dd>Surprise me (jump to a random note)</dd></div>
+            <div><dt><kbd>p</kbd></dt><dd>Pin / unpin current note to sidebar</dd></div>
+            <div><dt><kbd>z</kbd></dt><dd>Toggle Zen distraction-free reading/writing</dd></div>
+            <div><dt><kbd>[</kbd></dt><dd>Toggle left vault sidebar</dd></div>
+            <div><dt><kbd>?</kbd></dt><dd>Open this shortcuts &amp; slash reference</dd></div>
+          </dl>
+        </section>
+
+        <section class="settings-section">
+          <h3>Editor &amp; Markdown QoL</h3>
+          <dl class="shortcut-list">
+            <div><dt><code>[[</code></dt><dd>Live wikilink autocomplete popover</dd></div>
+            <div><dt><code>/</code></dt><dd>Notion-style slash command menu (<code>/table</code>, <code>/callout</code>, <code>/math</code>, <code>/tally</code>…)</dd></div>
+            <div><dt><kbd data-mod="E"></kbd></dt><dd>Cycle Read · Live Split · Source Edit mode</dd></div>
+            <div><dt><kbd data-mod="S"></kbd></dt><dd>Save immediately (Notes Studio also auto-saves)</dd></div>
+            <div><dt><kbd data-mod="L"></kbd> / <kbd data-mod="↵"></kbd></dt><dd>Toggle task <code>- [ ]</code> or tally <code>☐/☑</code> on current line</dd></div>
+            <div><dt><kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></dt><dd>Move current line up or down</dd></div>
+            <div><dt><kbd data-mod="⇧D"></kbd></dt><dd>Duplicate current line or selection</dd></div>
+            <div><dt><kbd data-mod="B"></kbd> / <kbd data-mod="I"></kbd></dt><dd>Bold <code>**text**</code> / Italic <code>*text*</code></dd></div>
+            <div><dt><kbd data-mod="K"></kbd></dt><dd>Wrap selection in <code>[[Wikilink]]</code></dd></div>
+            <div><dt><kbd data-mod="1"></kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Toggle Heading 1, 2, or 3</dd></div>
+            <div><dt>Paste URL</dt><dd>Pasting a URL over selected text creates <code>[text](url)</code></dd></div>
+          </dl>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <div class="launch" id="launch" hidden>
     <div class="launch-inner">
       <header class="launch-brand">
         <img class="launch-logo" src="./logo.svg" width="40" height="40" alt="" />
         <span class="launch-wordmark">Cortex</span>
-        <span class="launch-tag">v2.1 · local-first</span>
+        <span class="launch-tag">v2.2 · local-first</span>
       </header>
       <h1 class="launch-title">Pick up where you left off.</h1>
-      <p class="launch-sub">Six views of the folder you already have, and a record of why you decided what you decided. Nothing is copied, moved or synced.</p>
+      <p class="launch-sub">A native Markdown note studio and six visual views of the folder you already have. Nothing is copied, moved or synced.</p>
 
       <section class="launch-recents" id="launch-recents" hidden>
         <div class="launch-label"><span>Recent vaults</span><span>notes</span></div>
@@ -339,6 +535,7 @@
         <fieldset class="launch-views">
           <legend class="field-label">Open in</legend>
           <div class="choice-row" id="launch-views">
+            <label class="choice"><input type="radio" name="launch-view" value="notes" /><span>Notes</span></label>
             <label class="choice"><input type="radio" name="launch-view" value="brain" checked /><span>Brain</span></label>
             <label class="choice"><input type="radio" name="launch-view" value="universe" /><span>Graph</span></label>
             <label class="choice"><input type="radio" name="launch-view" value="replay" /><span>Timeline</span></label>

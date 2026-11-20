@@ -64,6 +64,24 @@ const state = {
   addingCustomTally: false,
   sidebarCollapsed: false,
   panelExpanded: false,
+  surpriseSeed: 0,
+  quickNoteTemplate: 'blank',
+  studio: {
+    tabs: [],
+    activeId: null,
+    viewMode: 'read',
+    scope: 'all',
+    folderFilter: null,
+    filterQuery: '',
+    sortBy: 'recent',
+    listCollapsed: false,
+    inspectorCollapsed: false,
+    zenMode: false,
+    inspectorTab: 'backlinks',
+    dirty: false,
+    autoSaveTimer: null,
+    saving: false,
+  },
   time: 0,
   dragging: false,
   dragMoved: false,
@@ -140,6 +158,50 @@ const els = {
   panelClose: document.getElementById('panel-close'),
   panelBack: document.getElementById('panel-back'),
   panelForward: document.getElementById('panel-forward'),
+  panelOpenStudio: document.getElementById('panel-open-studio'),
+  pinnedBlock: document.getElementById('pinned-block'),
+  pinnedList: document.getElementById('pinned-list'),
+  surpriseNote: document.getElementById('surprise-note'),
+  shortcutsButton: document.getElementById('shortcuts-button'),
+  shortcutsModal: document.getElementById('shortcuts-modal'),
+  shortcutsClose: document.getElementById('shortcuts-close'),
+  quickNoteModal: document.getElementById('quick-note-modal'),
+  quickNoteForm: document.getElementById('quick-note-form'),
+  quickNoteTitle: document.getElementById('quick-note-title'),
+  quickNoteFolder: document.getElementById('quick-note-folder'),
+  quickNoteFolderList: document.getElementById('quick-note-folder-list'),
+  quickNoteTemplates: document.getElementById('quick-note-templates'),
+  quickNoteBody: document.getElementById('quick-note-body'),
+  quickNoteClose: document.getElementById('quick-note-close'),
+  quickNoteCancel: document.getElementById('quick-note-cancel'),
+  notesStudio: document.getElementById('notes-studio'),
+  notesListPane: document.getElementById('notes-list-pane'),
+  notesListTitle: document.getElementById('notes-list-title'),
+  notesListCount: document.getElementById('notes-list-count'),
+  notesSort: document.getElementById('notes-sort'),
+  notesNewBtn: document.getElementById('notes-new-btn'),
+  notesFilter: document.getElementById('notes-filter'),
+  notesScopes: document.getElementById('notes-scopes'),
+  notesScopeFolder: document.getElementById('notes-scope-folder'),
+  notesQuickForm: document.getElementById('notes-quick-form'),
+  notesQuickInput: document.getElementById('notes-quick-input'),
+  notesFeed: document.getElementById('notes-feed'),
+  notesToggleList: document.getElementById('notes-toggle-list'),
+  notesTabs: document.getElementById('notes-tabs'),
+  notesTabNew: document.getElementById('notes-tab-new'),
+  notesSaveStatus: document.getElementById('notes-save-status'),
+  notesViewModes: document.getElementById('notes-view-modes'),
+  notesPinBtn: document.getElementById('notes-pin-btn'),
+  notesCopyLink: document.getElementById('notes-copy-link'),
+  notesRevealFile: document.getElementById('notes-reveal-file'),
+  notesLocateGraph: document.getElementById('notes-locate-graph'),
+  notesZenBtn: document.getElementById('notes-zen-btn'),
+  notesToggleInspector: document.getElementById('notes-toggle-inspector'),
+  notesCanvas: document.getElementById('notes-canvas'),
+  notesMiniOutline: document.getElementById('notes-mini-outline'),
+  notesInspectorPane: document.getElementById('notes-inspector-pane'),
+  notesInspectorTabs: document.getElementById('notes-inspector-tabs'),
+  notesInspectorBody: document.getElementById('notes-inspector-body'),
   palette: document.getElementById('palette'),
   paletteInput: document.getElementById('palette-input'),
   paletteResults: document.getElementById('palette-results'),
@@ -383,7 +445,7 @@ function launchView() {
   return checked ? checked.value : 'universe';
 }
 
-const VIEWS = new Set(['universe', 'brain', 'replay', 'atlas', 'bento', 'decisions']);
+const VIEWS = new Set(['notes', 'universe', 'brain', 'replay', 'atlas', 'bento', 'decisions']);
 
 /// A marketing link can name the view it wants: `?view=brain`.
 function requestedView() {
@@ -570,6 +632,47 @@ function wire() {
   els.panelClose.addEventListener('click', closePanel);
   els.panelBack.addEventListener('click', goBack);
   els.panelForward.addEventListener('click', goForward);
+  if (els.panelOpenStudio) {
+    els.panelOpenStudio.addEventListener('click', () => {
+      const targetId = state.detail?.id || (state.selected != null ? state.graph?.nodes[state.selected]?.id : null);
+      setMode('notes');
+      if (targetId) openNoteInStudio(targetId);
+    });
+  }
+  if (els.surpriseNote) {
+    els.surpriseNote.addEventListener('click', openRandomNote);
+  }
+  if (els.shortcutsButton) {
+    els.shortcutsButton.addEventListener('click', openShortcutsModal);
+  }
+  if (els.shortcutsClose) {
+    els.shortcutsClose.addEventListener('click', closeShortcutsModal);
+  }
+  if (els.shortcutsModal) {
+    els.shortcutsModal.addEventListener('click', (event) => {
+      if (event.target === els.shortcutsModal) closeShortcutsModal();
+    });
+  }
+  if (els.quickNoteForm) {
+    els.quickNoteForm.addEventListener('submit', submitQuickNoteModal);
+  }
+  if (els.quickNoteClose) {
+    els.quickNoteClose.addEventListener('click', closeQuickNoteModal);
+  }
+  if (els.quickNoteCancel) {
+    els.quickNoteCancel.addEventListener('click', closeQuickNoteModal);
+  }
+  if (els.quickNoteModal) {
+    els.quickNoteModal.addEventListener('click', (event) => {
+      if (event.target === els.quickNoteModal) closeQuickNoteModal();
+    });
+  }
+  if (els.quickNoteTemplates) {
+    els.quickNoteTemplates.querySelectorAll('[data-note-tpl]').forEach((btn) => {
+      btn.addEventListener('click', () => setQuickNoteTemplate(btn.dataset.noteTpl));
+    });
+  }
+  wireNotesStudioEvents();
   els.selection.querySelectorAll('[data-template]').forEach((button) => {
     button.addEventListener('click', () => openCompose(button.dataset.template));
   });
@@ -582,7 +685,7 @@ function wire() {
   });
   els.replayRange.addEventListener('input', onScrub);
   els.replayPlay.addEventListener('click', startReplay);
-  els.newNote.addEventListener('click', createNote);
+  els.newNote.addEventListener('click', () => openQuickNoteModal());
   els.todayNote.addEventListener('click', openDaily);
   els.paletteInput.addEventListener('input', () => {
     state.palette.query = els.paletteInput.value;
@@ -899,11 +1002,13 @@ function applyGraph(graph) {
   ui.setStats(graph.meta, overview);
   ui.renderDecisions(els.decisionsBoard, graph.structures, openDecision);
   syncBento();
-  renderSidebarFolders();
   buildLookup();
   buildIncoming();
+  renderSidebarPinned();
+  renderSidebarFolders();
   renderSidebarTallies();
   if (state.live) preloadTallyNotes();
+  initStudioForVault();
 
   if (!state.renderer) {
     state.renderer = new Renderer(els.canvas);
@@ -1118,8 +1223,8 @@ function loop(now) {
     if (state.atlas) state.atlas.tick(now);
     return;
   }
-  // The boards are DOM: no scene to draw, and no reason to keep paying for one.
-  if (state.mode === 'decisions' || state.mode === 'bento') return;
+  // The boards and Notes Studio are DOM: no scene to draw, and no reason to keep paying for one.
+  if (state.mode === 'decisions' || state.mode === 'bento' || state.mode === 'notes') return;
 
   state.time += dt;
 
@@ -1336,22 +1441,30 @@ function setMode(mode, { persist = true, animate = true } = {}) {
   ui.setModeButtons(mode);
   syncSettingsViews();
 
+  const notesMode = mode === 'notes';
   const atlasMode = mode === 'atlas';
   const boardMode = mode === 'decisions';
   const bentoMode = mode === 'bento';
-  const domMode = boardMode || bentoMode;
+  const domMode = boardMode || bentoMode || notesMode;
   els.replay.hidden = mode !== 'replay';
   els.canvas.hidden = atlasMode || domMode;
   els.labels.hidden = atlasMode || domMode;
   els.atlas.hidden = !atlasMode;
   els.decisions.hidden = !boardMode;
   els.bento.hidden = !bentoMode;
+  if (els.notesStudio) els.notesStudio.hidden = !notesMode;
+  document.body.classList.toggle('mode-notes', notesMode);
   document.body.classList.toggle('mode-atlas', atlasMode);
   document.body.classList.toggle('mode-decisions', boardMode);
   document.body.classList.toggle('mode-bento', bentoMode);
   document.body.classList.toggle('mode-replay', mode === 'replay');
 
-  if (atlasMode) {
+  if (notesMode) {
+    if (!els.panel.hidden) els.panel.hidden = true;
+    ensureStudioActiveNote();
+    renderNotesStudio();
+    renderSidebarPinned();
+  } else if (atlasMode) {
     const atlas = ensureAtlas();
     syncAtlas();
     atlas.setRoads(prefs.get('cortex.atlas.roads', true));
@@ -1431,6 +1544,14 @@ function toggleFolderExpand(name) {
 }
 
 function toggleFolder(name) {
+  if (state.mode === 'notes') {
+    if (state.studio.scope === 'folder' && state.studio.folderFilter === name) {
+      setStudioScope('all');
+    } else {
+      setStudioFolderFilter(name);
+    }
+    return;
+  }
   if (state.hidden.has(name)) state.hidden.delete(name);
   else state.hidden.add(name);
   if (state.hidden.has(name) && state.folderFocus === name) clearFolderFocus();
@@ -1442,6 +1563,9 @@ function toggleFolder(name) {
 
 function resetFolders() {
   state.hidden.clear();
+  if (state.mode === 'notes') {
+    setStudioScope('all');
+  }
   ui.syncFolders(state.hidden);
   state.renderer.setFolderFilter(state.hidden);
   if (state.atlas) state.atlas.setHidden(state.hidden);
@@ -1651,7 +1775,13 @@ async function toggleNoteBallotPip(noteId, pipIndex, linkedPlayerTarget = null) 
     }
   }
 
-  if (state.detail && !state.editing) {
+  if (state.detail && state.detail.id === noteId) {
+    state.draft = updated;
+  }
+  if (state.mode === 'notes' && state.detail) {
+    const scroll = els.notesCanvas ? els.notesCanvas.scrollTop : 0;
+    renderNotesStudioDocument({ preserveScroll: scroll });
+  } else if (state.detail && !state.editing) {
     const scroll = els.panelBody.scrollTop;
     renderPanel(state.detail, { preserveScroll: scroll });
   }
@@ -1666,7 +1796,13 @@ async function toggleNoteTaskPip(noteId, taskIndex) {
   if (!source) return;
   const updated = toggleNthTaskBox(source, taskIndex);
   await persistModifiedNoteSource(noteId, updated);
-  if (state.detail && state.detail.id === noteId && !state.editing) {
+  if (state.detail && state.detail.id === noteId) {
+    state.draft = updated;
+  }
+  if (state.mode === 'notes' && state.detail && state.detail.id === noteId) {
+    const scroll = els.notesCanvas ? els.notesCanvas.scrollTop : 0;
+    renderNotesStudioDocument({ preserveScroll: scroll });
+  } else if (state.detail && state.detail.id === noteId && !state.editing) {
     const scroll = els.panelBody.scrollTop;
     renderPanel(state.detail, { preserveScroll: scroll });
   }
@@ -2530,11 +2666,26 @@ function onKeyDown(event) {
     showLaunch();
     return;
   }
+  if (mod && event.key.toLowerCase() === 'e') {
+    if (!typing || event.shiftKey) {
+      event.preventDefault();
+      if (state.mode === 'notes') {
+        cycleStudioEditorMode();
+      } else if (state.detail && state.live) {
+        if (state.editing) cancelEdit();
+        else requestEdit();
+      }
+      return;
+    }
+  }
   if (event.key === 'Escape') {
-    if (!els.settings.hidden) closeSettings();
+    if (els.shortcutsModal && !els.shortcutsModal.hidden) closeShortcutsModal();
+    else if (els.quickNoteModal && !els.quickNoteModal.hidden) closeQuickNoteModal();
+    else if (!els.settings.hidden) closeSettings();
     else if (!els.compose.hidden) closeCompose();
     else if (state.palette.open) closePalette();
     else if (state.launching && state.vaultId) hideLaunch();
+    else if (state.mode === 'notes' && state.studio.zenMode) toggleStudioZen(false);
     else if (!els.panel.hidden && state.panelExpanded) setPanelExpanded(false);
     else if (!els.panel.hidden) closePanel();
     else if (state.local) clearLocalGraph();
@@ -2544,12 +2695,18 @@ function onKeyDown(event) {
   }
   if (typing || state.launching || !state.graph) return;
 
-  if (event.key === '/') {
+  if (event.key === '?') {
+    event.preventDefault();
+    openShortcutsModal();
+  } else if (event.key === '/') {
     event.preventDefault();
     openPalette();
   } else if (event.key === '[') {
     event.preventDefault();
     toggleSidebar();
+  } else if (event.key === '0' || event.key.toLowerCase() === 'w') {
+    event.preventDefault();
+    setMode('notes');
   } else if (event.key === '1') setMode('universe');
   else if (event.key === '2') setMode('brain');
   else if (event.key === '3') setMode('replay');
@@ -2563,17 +2720,32 @@ function onKeyDown(event) {
   else if (event.key.toLowerCase() === 'l' && state.selected != null) {
     if (state.local) clearLocalGraph();
     else showLocalGraph(state.selected);
-  } else if (event.key.toLowerCase() === 'n' && state.live) createNote();
-  else if (event.key.toLowerCase() === 't' && state.live) openDaily();
-  else if (event.key.toLowerCase() === 'y' && state.detail) focusDecisionTrail();
+  } else if (event.key.toLowerCase() === 'n') {
+    event.preventDefault();
+    openQuickNoteModal();
+  } else if (event.key.toLowerCase() === 'q') {
+    event.preventDefault();
+    triggerQuickCapture();
+  } else if (event.key.toLowerCase() === 't' && state.live) openDaily();
+  else if (event.key.toLowerCase() === 's') {
+    event.preventDefault();
+    openRandomNote();
+  } else if (event.key.toLowerCase() === 'p') {
+    event.preventDefault();
+    togglePinCurrentNote();
+  } else if (event.key.toLowerCase() === 'z' && state.mode === 'notes') {
+    event.preventDefault();
+    toggleStudioZen();
+  } else if (event.key.toLowerCase() === 'y' && state.detail) focusDecisionTrail();
   else if (event.key.toLowerCase() === 'c' && state.selected != null) {
     toggleSelection(state.selected);
-    if (state.detail) renderPanel(state.detail);
-  } else if (event.key.toLowerCase() === 'f' || event.key === '0') {
+    if (state.detail && state.mode !== 'notes') renderPanel(state.detail);
+  } else if (event.key.toLowerCase() === 'f') {
     clearFolderFocus({ resetCamera: false });
     state.camera.yaw = 0.55;
     state.camera.pitch = 0.22;
     state.camera.frame(state.mode);
+    if (state.atlas && state.mode === 'atlas') state.atlas.fit();
   }
 }
 
@@ -2631,14 +2803,27 @@ async function openNote(index, { record = true } = {}) {
   const wasLocal = Boolean(state.local);
   state.selected = index;
   if (wasLocal) showLocalGraph(index);
-  state.renderer.setFocus(index);
+  if (state.renderer) state.renderer.setFocus(index);
   if (state.atlas) state.atlas.setFocus(index);
   if (record) pushHistory(node.id);
+  recordRecentNote(node.id);
+  ensureTabInStudio(node.id, true);
   const detail = await getDetail(node);
   if (!detail || token !== openToken) return;
   state.detail = detail;
+  state.draft = detail.raw ?? detail.markdown ?? '';
   state.editing = false;
-  renderPanel(detail);
+  state.studio.dirty = false;
+  renderSidebarPinned();
+  document.querySelectorAll('.folder-note').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.noteId === detail.id);
+  });
+  if (state.mode === 'notes') {
+    els.panel.hidden = true;
+    renderNotesStudio();
+  } else {
+    renderPanel(detail);
+  }
 }
 
 async function getDetail(node) {
@@ -2656,28 +2841,76 @@ async function getDetail(node) {
   return localDetail(node);
 }
 
+function extractLocalMentionSnippet(body, needle, fallback = '') {
+  const raw = String(body || '');
+  const lowerNeedle = String(needle || '').toLowerCase();
+  if (raw && lowerNeedle) {
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed === '---' || trimmed.startsWith('```')) continue;
+      if (trimmed.toLowerCase().includes(lowerNeedle)) {
+        const clean = trimmed.replace(/^#+\s*/, '').replace(/^>\s*/, '');
+        return clean.length > 160 ? `${clean.slice(0, 160)}…` : clean;
+      }
+    }
+  }
+  const fb = String(fallback || '').trim();
+  return fb || undefined;
+}
+
 function localDetail(node) {
   const card = state.graph.structures?.cards?.find((item) => item.id === node.id);
-  const backlinks = (state.incoming.get(node.id) || [])
-    .map(({ source, weight }) => ({
-      id: state.graph.nodes[source].id,
-      title: state.graph.nodes[source].title,
-      folder: state.graph.nodes[source].folder,
-      weight,
-    }))
-    .slice(0, 16);
+  const incomingList = state.incoming.get(node.id) || [];
+  const linkedSourceSet = new Set([node.id]);
+  const backlinks = incomingList
+    .map(({ source, weight }) => {
+      const srcNode = state.graph.nodes[source];
+      linkedSourceSet.add(srcNode.id);
+      return {
+        id: srcNode.id,
+        title: srcNode.title,
+        folder: srcNode.folder,
+        weight,
+        snippet: extractLocalMentionSnippet(srcNode.body, node.title, srcNode.excerpt),
+      };
+    })
+    .slice(0, 24);
+
+  const mentions = [];
+  const lowerTitle = (node.title || '').toLowerCase();
+  if (lowerTitle.length >= 3) {
+    for (const other of state.graph.nodes) {
+      if (linkedSourceSet.has(other.id)) continue;
+      if ((other.links || []).includes(node.id)) continue;
+      const body = other.body || other.excerpt || '';
+      if (body.toLowerCase().includes(lowerTitle)) {
+        mentions.push({
+          id: other.id,
+          title: other.title,
+          folder: other.folder,
+          weight: 1,
+          snippet: extractLocalMentionSnippet(body, node.title, other.excerpt),
+        });
+        if (mentions.length >= 16) break;
+      }
+    }
+  }
+
   const related = relatedFromGraph(node.id);
   return {
     id: node.id,
     title: node.title,
     folder: node.folder,
+    path: `${node.id}.md`,
     created: node.created,
     words: node.words,
     tags: node.tags,
+    links: node.links || [],
     markdown: node.body || node.excerpt,
-    raw: null,
+    body: node.body || node.excerpt,
+    raw: node.body || node.excerpt,
     backlinks,
-    mentions: [],
+    mentions,
     related,
     kind: card?.kind,
     status: card?.status,
@@ -2712,8 +2945,18 @@ function relatedFromGraph(id) {
     .slice(0, 6)
     .map(({ candidate }) => {
       const node = state.graph.nodes[candidate];
-      return { id: node.id, title: node.title, folder: node.folder, weight: 0 };
+      return {
+        id: node.id,
+        title: node.title,
+        folder: node.folder,
+        weight: 0,
+        snippet: node.excerpt || undefined,
+      };
     });
+}
+
+function isVaultWritable() {
+  return (state.live && !state.readOnly) || !state.live;
 }
 
 function renderPanel(detail, { preserveScroll = null } = {}) {
@@ -2724,7 +2967,7 @@ function renderPanel(detail, { preserveScroll = null } = {}) {
     markdown = markdown.slice(heading[0].length);
   }
   const html = renderMarkdown(markdown, (target) => Boolean(resolveTarget(target)));
-  els.panelBody.innerHTML = ui.panelHtml(detail, html);
+  els.panelBody.innerHTML = ui.panelHtml(detail, html, isVaultWritable());
   els.panelBody.scrollTop = preserveScroll !== null ? preserveScroll : 0;
   els.panel.hidden = false;
   ui.setCrumbs(`${state.meta.title} / ${detail.folder}`);
@@ -2739,6 +2982,17 @@ function renderPanel(detail, { preserveScroll = null } = {}) {
     edit.addEventListener('click', requestEdit);
     els.panelActions.appendChild(edit);
   }
+  const studioBtn = document.createElement('button');
+  studioBtn.type = 'button';
+  studioBtn.className = 'btn';
+  studioBtn.textContent = 'Notes Studio';
+  studioBtn.title = 'Open this note in the full 3-pane Notes Studio (0)';
+  studioBtn.addEventListener('click', () => {
+    setMode('notes');
+    openNoteInStudio(detail.id);
+  });
+  els.panelActions.appendChild(studioBtn);
+
   const collect = document.createElement('button');
   collect.type = 'button';
   collect.className = 'btn';
@@ -2774,7 +3028,35 @@ function renderPanel(detail, { preserveScroll = null } = {}) {
   status.textContent = state.live ? '' : 'static demo';
   els.panelActions.appendChild(status);
 
-  els.panelBody.querySelectorAll('.wikilink').forEach((link) => {
+  wireProseInteractions(els.panelBody, detail.id);
+
+  document.querySelectorAll('.folder-note').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.noteId === detail.id);
+  });
+  els.panelBody.querySelectorAll('[data-note-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const index = nodeIndex(button.dataset.noteId);
+      if (index >= 0) openNote(index);
+    });
+  });
+  els.panelBody.querySelectorAll('[data-link-mention-id]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      linkUnlinkedMention(button.dataset.linkMentionId, detail.title);
+    });
+  });
+
+  els.panelBody.querySelectorAll('.confidence-fill[data-confidence]').forEach((bar) => {
+    bar.style.setProperty('--confidence', `${bar.dataset.confidence}%`);
+  });
+
+  wireConnectionTabs(els.panelBody.querySelector('#note-connections'));
+  renderSidebarTallies();
+}
+
+function wireProseInteractions(container, noteId) {
+  if (!container) return;
+  container.querySelectorAll('.wikilink').forEach((link) => {
     link.addEventListener('click', async (event) => {
       event.preventDefault();
       const rawTarget = link.dataset.target || '';
@@ -2796,7 +3078,14 @@ function renderPanel(detail, { preserveScroll = null } = {}) {
       }
       const id = resolveTarget(rawTarget);
       if (!id) {
-        ui.toast(`No note called “${rawTarget}” yet`);
+        if (isVaultWritable()) {
+          const currentFolder = state.detail?.folder && state.detail.folder !== '(root)'
+            ? state.detail.folder
+            : null;
+          openQuickNoteModal({ title: rawTarget, folder: currentFolder });
+        } else {
+          ui.toast(`No note called “${rawTarget}” yet`);
+        }
         return;
       }
       const index = nodeIndex(id);
@@ -2804,38 +3093,21 @@ function renderPanel(detail, { preserveScroll = null } = {}) {
     });
   });
 
-  document.querySelectorAll('.folder-note').forEach((btn) => {
-    btn.classList.toggle('is-active', btn.dataset.noteId === detail.id);
-  });
-  els.panelBody.querySelectorAll('[data-note-id]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const index = nodeIndex(button.dataset.noteId);
-      if (index >= 0) openNote(index);
-    });
-  });
-
-  els.panelBody.querySelectorAll('.tally-pip[data-pip-index]').forEach((btn) => {
+  container.querySelectorAll('.tally-pip[data-pip-index]').forEach((btn) => {
     btn.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      toggleNoteBallotPip(detail.id, Number(btn.dataset.pipIndex));
+      toggleNoteBallotPip(noteId, Number(btn.dataset.pipIndex));
     });
   });
 
-  els.panelBody.querySelectorAll('.task-box[data-task-index]').forEach((btn) => {
+  container.querySelectorAll('.task-box[data-task-index]').forEach((btn) => {
     btn.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      toggleNoteTaskPip(detail.id, Number(btn.dataset.taskIndex));
+      toggleNoteTaskPip(noteId, Number(btn.dataset.taskIndex));
     });
   });
-
-  els.panelBody.querySelectorAll('.confidence-fill[data-confidence]').forEach((bar) => {
-    bar.style.setProperty('--confidence', `${bar.dataset.confidence}%`);
-  });
-
-  wireConnectionTabs(els.panelBody.querySelector('#note-connections'));
-  renderSidebarTallies();
 }
 
 function wireConnectionTabs(root) {
@@ -2944,6 +3216,7 @@ function requestEdit() {
       },
       onSave: saveEdits,
       onCancel: cancelEdit,
+      getNotes: () => state.graph?.nodes || [],
     });
     els.panelBody.querySelectorAll('[data-edit-cmd]').forEach((button) => {
       button.addEventListener('mousedown', (event) => {
@@ -2979,22 +3252,7 @@ async function saveEdits() {
 }
 
 async function createNote() {
-  if (!state.live) return;
-  try {
-    const result = await api.saveNote(
-      { title: 'Untitled', content: '---\ntags: []\n---\n\n# Untitled\n\n' },
-      state.vaultId,
-    );
-    state.version = result.version;
-    await refreshGraph();
-    const index = nodeIndex(result.id);
-    if (index >= 0) {
-      await openNote(index);
-      requestEdit();
-    }
-  } catch (error) {
-    ui.toast(error.message || 'Could not create a note');
-  }
+  openQuickNoteModal();
 }
 
 async function openDaily() {
@@ -3013,10 +3271,988 @@ async function openDaily() {
     }
     await openNote(index);
     ui.toast(result.created ? 'Today’s note ready' : 'Today’s note');
-    if (result.created) requestEdit();
+    if (result.created) {
+      if (state.mode === 'notes') setStudioEditorMode('split');
+      else requestEdit();
+    }
   } catch (error) {
     ui.toast(error.message || 'Could not open today’s note');
   }
+}
+
+/* ---------- notes studio, pinned notes, templates & qol ---------- */
+
+function pinnedNotesKey() {
+  return `cortex.pinned.${vaultStorageKey()}`;
+}
+
+function recentNotesKey() {
+  return `cortex.recent.${vaultStorageKey()}`;
+}
+
+function studioTabsKey() {
+  return `cortex.studio.tabs.${vaultStorageKey()}`;
+}
+
+function getPinnedIds() {
+  return prefs.get(pinnedNotesKey(), []);
+}
+
+function getRecentIds() {
+  return prefs.get(recentNotesKey(), []);
+}
+
+function recordRecentNote(noteId) {
+  if (!noteId) return;
+  const list = getRecentIds().filter((id) => id !== noteId);
+  list.unshift(noteId);
+  prefs.set(recentNotesKey(), list.slice(0, 24));
+}
+
+function togglePinNote(noteId) {
+  if (!noteId) return;
+  const list = getPinnedIds();
+  const idx = list.indexOf(noteId);
+  const pinned = idx < 0;
+  if (pinned) list.unshift(noteId);
+  else list.splice(idx, 1);
+  prefs.set(pinnedNotesKey(), list);
+  renderSidebarPinned();
+  if (state.mode === 'notes') {
+    renderNotesStudioFeed();
+    renderNotesStudioHeaderControls();
+    renderNotesStudioTabsBar();
+  }
+  const node = state.graph?.nodes.find((n) => n.id === noteId);
+  ui.toast(pinned ? `Pinned “${node?.title || noteId}”` : `Unpinned “${node?.title || noteId}”`);
+}
+
+function togglePinCurrentNote() {
+  const id = state.detail?.id || state.studio.activeId;
+  if (!id) {
+    ui.toast('Open a note first to pin it');
+    return;
+  }
+  togglePinNote(id);
+}
+
+function renderSidebarPinned() {
+  if (!state.graph || !els.pinnedList || !els.pinnedBlock) return;
+  const nodesById = new Map(state.graph.nodes.map((n) => [n.id, n]));
+  const selectedId = state.detail?.id || (state.selected != null ? state.graph.nodes[state.selected]?.id : null);
+  ui.renderPinnedSidebar(
+    els.pinnedList,
+    els.pinnedBlock,
+    getPinnedIds(),
+    nodesById,
+    selectedId,
+    {
+      showEmptyHint: state.mode === 'notes',
+      onOpen: (id) => {
+        const idx = nodeIndex(id);
+        if (idx >= 0) openNote(idx);
+      },
+      onUnpin: (id) => togglePinNote(id),
+    },
+  );
+}
+
+function initStudioForVault() {
+  if (!state.graph) return;
+  const nodesById = new Map(state.graph.nodes.map((n) => [n.id, n]));
+  const savedTabs = prefs.get(studioTabsKey(), []).filter((id) => nodesById.has(id));
+  state.studio.tabs = savedTabs;
+  state.studio.viewMode = prefs.get('cortex.studio.viewMode', 'read');
+  if (!state.studio.activeId || !nodesById.has(state.studio.activeId)) {
+    state.studio.activeId = savedTabs[0] || null;
+  }
+  if (state.mode === 'notes') {
+    ensureStudioActiveNote();
+    renderNotesStudio();
+  }
+}
+
+function ensureTabInStudio(noteId, makeActive = true) {
+  if (!noteId) return;
+  if (!state.studio.tabs.includes(noteId)) {
+    state.studio.tabs.push(noteId);
+    if (state.studio.tabs.length > 12) state.studio.tabs.shift();
+  }
+  if (makeActive) state.studio.activeId = noteId;
+  prefs.set(studioTabsKey(), state.studio.tabs);
+}
+
+function closeStudioTab(noteId) {
+  const idx = state.studio.tabs.indexOf(noteId);
+  if (idx < 0) return;
+  state.studio.tabs.splice(idx, 1);
+  prefs.set(studioTabsKey(), state.studio.tabs);
+  if (state.studio.activeId === noteId) {
+    const nextId = state.studio.tabs[idx] || state.studio.tabs[idx - 1] || null;
+    state.studio.activeId = nextId;
+    if (nextId) {
+      openNoteInStudio(nextId);
+      return;
+    }
+    state.detail = null;
+    state.selected = null;
+  }
+  renderNotesStudio();
+}
+
+function ensureStudioActiveNote() {
+  if (!state.graph || !state.graph.nodes.length) return;
+  if (state.detail && nodeIndex(state.detail.id) >= 0) {
+    ensureTabInStudio(state.detail.id, true);
+    return;
+  }
+  const candidateId = state.studio.activeId
+    || getPinnedIds()[0]
+    || getRecentIds()[0]
+    || [...state.graph.nodes].sort((a, b) => (b.pagerank || 0) - (a.pagerank || 0))[0]?.id;
+  if (candidateId) {
+    openNoteInStudio(candidateId);
+  }
+}
+
+async function openNoteInStudio(noteId) {
+  const idx = nodeIndex(noteId);
+  if (idx < 0) return;
+  await openNote(idx);
+}
+
+function filteredStudioNotes() {
+  if (!state.graph) return [];
+  const pinnedSet = new Set(getPinnedIds());
+  const recentIds = getRecentIds();
+  const recentSet = new Set(recentIds);
+  const recentRank = new Map(recentIds.map((id, i) => [id, i]));
+  const q = (state.studio.filterQuery || '').trim().toLowerCase();
+
+  let list = state.graph.nodes.filter((node) => {
+    if (state.studio.scope === 'pinned' && !pinnedSet.has(node.id)) return false;
+    if (state.studio.scope === 'recent' && !recentSet.has(node.id)) return false;
+    if (state.studio.scope === 'folder' && state.studio.folderFilter && node.folder !== state.studio.folderFilter) {
+      return false;
+    }
+    if (!q) return true;
+    return (
+      node.title.toLowerCase().includes(q)
+      || (node.folder || '').toLowerCase().includes(q)
+      || (node.tags || []).some((t) => t.toLowerCase().includes(q))
+      || (node.excerpt || '').toLowerCase().includes(q)
+      || (node.body || '').toLowerCase().includes(q)
+    );
+  });
+
+  const sortBy = state.studio.sortBy;
+  list = [...list].sort((a, b) => {
+    if (sortBy === 'title') {
+      return a.title.localeCompare(b.title);
+    }
+    if (sortBy === 'links') {
+      return (b.degree || 0) - (a.degree || 0) || a.title.localeCompare(b.title);
+    }
+    if (sortBy === 'words') {
+      return (b.words || 0) - (a.words || 0) || a.title.localeCompare(b.title);
+    }
+    // Default 'recent': pinned first, then recently opened, then created date desc, then pagerank
+    const pinDiff = (pinnedSet.has(b.id) ? 1 : 0) - (pinnedSet.has(a.id) ? 1 : 0);
+    if (pinDiff !== 0) return pinDiff;
+    const rA = recentRank.has(a.id) ? recentRank.get(a.id) : 9999;
+    const rB = recentRank.has(b.id) ? recentRank.get(b.id) : 9999;
+    if (rA !== rB) return rA - rB;
+    const dateDiff = String(b.created || '').localeCompare(String(a.created || ''));
+    if (dateDiff !== 0) return dateDiff;
+    return (b.pagerank || 0) - (a.pagerank || 0);
+  });
+
+  return list.map((node) => ({
+    ...node,
+    snippet: node.excerpt || (node.body || '').slice(0, 140),
+  }));
+}
+
+function folderColorMap() {
+  const map = new Map();
+  for (const f of state.graph?.meta?.folders || []) {
+    map.set(f.name, f.color ?? 0);
+  }
+  return map;
+}
+
+function renderNotesStudioFeed() {
+  if (!els.notesFeed || !state.graph) return;
+  const notes = filteredStudioNotes();
+  const scopeTitles = {
+    all: 'All notes',
+    pinned: 'Pinned notes',
+    recent: 'Recent notes',
+    folder: state.studio.folderFilter || 'Folder',
+  };
+  if (els.notesListTitle) {
+    els.notesListTitle.textContent = scopeTitles[state.studio.scope] || 'All notes';
+  }
+  if (els.notesListCount) {
+    els.notesListCount.textContent = String(notes.length);
+  }
+  if (els.notesSort) {
+    const sortLabels = { recent: 'Recent', title: 'A–Z', links: 'Links', words: 'Length' };
+    els.notesSort.textContent = `↕ ${sortLabels[state.studio.sortBy] || 'Recent'}`;
+  }
+  if (els.notesScopes) {
+    els.notesScopes.querySelectorAll('.notes-scope').forEach((btn) => {
+      const active = btn.dataset.scope === state.studio.scope;
+      btn.classList.toggle('is-active', active);
+    });
+  }
+  if (els.notesScopeFolder) {
+    if (state.studio.folderFilter) {
+      els.notesScopeFolder.hidden = false;
+      els.notesScopeFolder.textContent = state.studio.folderFilter;
+    } else {
+      els.notesScopeFolder.hidden = true;
+    }
+  }
+
+  ui.renderNotesStudioList(els.notesFeed, notes, {
+    activeId: state.detail?.id || state.studio.activeId,
+    pinnedSet: new Set(getPinnedIds()),
+    recentIds: getRecentIds(),
+    palette: PALETTE,
+    folderColorMap: folderColorMap(),
+    sortBy: state.studio.sortBy,
+    onSelectNote: (id) => openNoteInStudio(id),
+    onTogglePin: (id) => togglePinNote(id),
+  });
+}
+
+function renderNotesStudioTabsBar() {
+  if (!els.notesTabs || !state.graph) return;
+  const nodesById = new Map(state.graph.nodes.map((n) => [n.id, n]));
+  ui.renderNotesStudioTabs(
+    els.notesTabs,
+    state.studio.tabs,
+    state.detail?.id || state.studio.activeId,
+    nodesById,
+    {
+      dirtyId: state.studio.dirty ? state.detail?.id : null,
+      pinnedSet: new Set(getPinnedIds()),
+      onSelectTab: (id) => openNoteInStudio(id),
+      onCloseTab: (id) => closeStudioTab(id),
+    },
+  );
+}
+
+function renderNotesStudioHeaderControls() {
+  const detail = state.detail;
+  const pinned = detail ? getPinnedIds().includes(detail.id) : false;
+  if (els.notesPinBtn) {
+    els.notesPinBtn.classList.toggle('is-active', pinned);
+    els.notesPinBtn.setAttribute('aria-pressed', String(pinned));
+    els.notesPinBtn.title = pinned ? 'Unpin note (p)' : 'Pin note to sidebar (p)';
+  }
+  if (els.notesViewModes) {
+    const writable = isVaultWritable();
+    els.notesViewModes.querySelectorAll('[data-editor-mode]').forEach((btn) => {
+      const mode = btn.dataset.editorMode;
+      const active = (writable ? state.studio.viewMode : 'read') === mode;
+      btn.classList.toggle('is-active', active);
+      btn.disabled = !writable && mode !== 'read';
+    });
+  }
+  if (els.notesSaveStatus) {
+    if (!isVaultWritable()) {
+      els.notesSaveStatus.textContent = 'Read-only';
+      els.notesSaveStatus.dataset.state = 'readonly';
+    } else if (state.studio.saving) {
+      els.notesSaveStatus.textContent = 'Saving…';
+      els.notesSaveStatus.dataset.state = 'saving';
+    } else if (state.studio.dirty) {
+      els.notesSaveStatus.textContent = 'Editing…';
+      els.notesSaveStatus.dataset.state = 'dirty';
+    } else {
+      els.notesSaveStatus.textContent = 'Saved';
+      els.notesSaveStatus.dataset.state = 'saved';
+    }
+  }
+}
+
+function prepareStudioProseHtml(rawMarkdown, title) {
+  let markdown = String(rawMarkdown || '');
+  const heading = /^\s*#\s+(.+)\r?\n/.exec(markdown);
+  if (heading && title && heading[1].trim().toLowerCase() === title.trim().toLowerCase()) {
+    markdown = markdown.slice(heading[0].length);
+  }
+  return renderMarkdown(markdown, (target) => Boolean(resolveTarget(target)));
+}
+
+function renderNotesStudioDocument({ preserveScroll = null } = {}) {
+  if (!els.notesCanvas) return;
+  const detail = state.detail;
+  const draft = state.draft ?? detail?.raw ?? detail?.markdown ?? '';
+  const html = detail ? prepareStudioProseHtml(draft, detail.title) : '';
+  const fMap = folderColorMap();
+  const cIdx = detail ? (fMap.get(detail.folder) ?? 0) : 0;
+  const folderRgb = PALETTE[cIdx % PALETTE.length];
+
+  ui.renderNotesStudioCanvas(els.notesCanvas, detail, {
+    viewMode: state.studio.viewMode,
+    draft,
+    markdownHtml: html,
+    writable: isVaultWritable(),
+    folderRgb,
+  });
+
+  if (preserveScroll !== null) {
+    els.notesCanvas.scrollTop = preserveScroll;
+  }
+
+  if (!detail) {
+    if (els.notesMiniOutline) els.notesMiniOutline.hidden = true;
+    renderNotesStudioInspectorPane([]);
+    return;
+  }
+
+  const proseEl = els.notesCanvas.querySelector('#studio-prose');
+  if (proseEl) {
+    wireProseInteractions(proseEl, detail.id);
+    // Tag rendered headings for smooth outline scrolling
+    proseEl.querySelectorAll('h1, h2, h3, h4').forEach((hEl, idx) => {
+      hEl.dataset.outlineIdx = String(idx);
+    });
+    if (state.studio.viewMode === 'read' && isVaultWritable()) {
+      proseEl.addEventListener('dblclick', (event) => {
+        if (event.target.closest('button, a, .wikilink, .tally-pip, .task-box')) return;
+        setStudioEditorMode('split');
+      });
+    }
+  }
+
+  els.notesCanvas.querySelectorAll('[data-filter-folder]').forEach((btn) => {
+    btn.addEventListener('click', () => setStudioFolderFilter(btn.dataset.filterFolder));
+  });
+  els.notesCanvas.querySelectorAll('[data-filter-tag]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.studio.filterQuery = btn.dataset.filterTag;
+      if (els.notesFilter) els.notesFilter.value = state.studio.filterQuery;
+      renderNotesStudioFeed();
+    });
+  });
+  els.notesCanvas.querySelectorAll('[data-switch-editor-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => setStudioEditorMode(btn.dataset.switchEditorMode));
+  });
+  els.notesCanvas.querySelectorAll('[data-note-id]').forEach((btn) => {
+    btn.addEventListener('click', () => openNoteInStudio(btn.dataset.noteId));
+  });
+  els.notesCanvas.querySelectorAll('.confidence-fill[data-confidence]').forEach((bar) => {
+    bar.style.setProperty('--confidence', `${bar.dataset.confidence}%`);
+  });
+
+  const textarea = els.notesCanvas.querySelector('#studio-editor');
+  if (textarea) {
+    attachEditor(textarea, {
+      onChange: () => onStudioEditorInput(textarea),
+      onSave: () => saveStudioDraft({ quiet: false }),
+      onCancel: () => setStudioEditorMode('read'),
+      getNotes: () => state.graph?.nodes || [],
+    });
+    els.notesCanvas.querySelectorAll('[data-edit-cmd]').forEach((button) => {
+      button.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+      });
+      button.addEventListener('click', () => {
+        runEditorCommand(textarea, button.dataset.editCmd);
+      });
+    });
+  }
+
+  const headings = ui.extractOutlineHeadings(draft);
+  ui.renderNotesMiniOutline(els.notesMiniOutline, headings, jumpToStudioHeading);
+  renderNotesStudioInspectorPane(headings);
+}
+
+function jumpToStudioHeading(headingIdx, heading) {
+  if (!els.notesCanvas) return;
+  const proseEl = els.notesCanvas.querySelector('#studio-prose');
+  if (proseEl) {
+    const targets = proseEl.querySelectorAll('h1, h2, h3, h4');
+    const match = [...targets].find(
+      (el) => el.textContent.trim().toLowerCase() === heading.text.toLowerCase(),
+    ) || targets[headingIdx];
+    if (match) {
+      match.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      match.classList.remove('is-flash');
+      void match.offsetWidth;
+      match.classList.add('is-flash');
+      return;
+    }
+  }
+  const textarea = els.notesCanvas.querySelector('#studio-editor');
+  if (textarea && heading?.line != null) {
+    const lines = textarea.value.split('\n');
+    let offset = 0;
+    for (let i = 0; i < Math.min(heading.line, lines.length); i += 1) {
+      offset += lines[i].length + 1;
+    }
+    textarea.focus();
+    textarea.setSelectionRange(offset, offset);
+  }
+}
+
+function renderNotesStudioInspectorPane(headings = null) {
+  if (!els.notesInspectorBody) return;
+  const detail = state.detail;
+  const draft = state.draft ?? detail?.raw ?? detail?.markdown ?? '';
+  const list = headings || (detail ? ui.extractOutlineHeadings(draft) : []);
+
+  if (els.notesInspectorTabs) {
+    els.notesInspectorTabs.querySelectorAll('[data-inspector-tab]').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.inspectorTab === state.studio.inspectorTab);
+    });
+  }
+
+  ui.renderNotesStudioInspector(els.notesInspectorBody, detail, {
+    activeTab: state.studio.inspectorTab,
+    headings: list,
+    writable: isVaultWritable(),
+    onOpenNote: (id) => openNoteInStudio(id),
+    onLinkMention: (sourceId) => {
+      if (detail) linkUnlinkedMention(sourceId, detail.title);
+    },
+    onJumpHeading: jumpToStudioHeading,
+  });
+}
+
+function renderNotesStudio() {
+  if (!els.notesStudio || !state.graph) return;
+  els.notesStudio.classList.toggle('is-list-collapsed', state.studio.listCollapsed);
+  els.notesStudio.classList.toggle('is-inspector-collapsed', state.studio.inspectorCollapsed);
+  els.notesStudio.classList.toggle('is-zen', state.studio.zenMode);
+  renderNotesStudioFeed();
+  renderNotesStudioTabsBar();
+  renderNotesStudioHeaderControls();
+  renderNotesStudioDocument();
+}
+
+function onStudioEditorInput(textarea) {
+  state.draft = textarea.value;
+  state.studio.dirty = true;
+  renderNotesStudioHeaderControls();
+  renderNotesStudioTabsBar();
+
+  // Live word count & reading time update
+  const words = state.draft.trim() ? state.draft.trim().split(/\s+/).length : 0;
+  const readMin = Math.max(1, Math.round(words / 200));
+  els.notesCanvas?.querySelectorAll('[data-studio-words]').forEach((el) => {
+    el.textContent = `${words} words`;
+  });
+  els.notesCanvas?.querySelectorAll('[data-studio-readtime]').forEach((el) => {
+    el.textContent = `~${readMin} min read`;
+  });
+
+  // Live split preview: update right-hand prose & outline immediately without touching the textarea!
+  const proseEl = els.notesCanvas?.querySelector('#studio-prose');
+  if (proseEl && state.detail) {
+    proseEl.innerHTML = prepareStudioProseHtml(state.draft, state.detail.title);
+    wireProseInteractions(proseEl, state.detail.id);
+  }
+  const headings = ui.extractOutlineHeadings(state.draft);
+  ui.renderNotesMiniOutline(els.notesMiniOutline, headings, jumpToStudioHeading);
+  if (state.studio.inspectorTab === 'outline') {
+    renderNotesStudioInspectorPane(headings);
+  }
+
+  clearTimeout(state.studio.autoSaveTimer);
+  state.studio.autoSaveTimer = setTimeout(() => {
+    saveStudioDraft({ quiet: true });
+  }, 850);
+}
+
+async function saveStudioDraft({ quiet = true } = {}) {
+  clearTimeout(state.studio.autoSaveTimer);
+  if (!state.detail || !isVaultWritable()) return;
+  const noteId = state.detail.id;
+  const content = state.draft ?? state.detail.raw ?? state.detail.markdown ?? '';
+
+  state.studio.saving = true;
+  renderNotesStudioHeaderControls();
+
+  try {
+    if (state.live && !state.readOnly) {
+      const result = await api.saveNote({ id: noteId, content }, state.vaultId);
+      state.version = result.version;
+      state.cache.delete(noteId);
+      const fresh = await api.fetchNote(noteId, state.vaultId);
+      state.cache.set(noteId, fresh);
+      if (state.detail && state.detail.id === noteId) {
+        state.detail = fresh;
+      }
+      const idx = nodeIndex(noteId);
+      if (idx >= 0 && state.graph.nodes[idx]) {
+        state.graph.nodes[idx].words = fresh.words;
+        state.graph.nodes[idx].tags = fresh.tags || [];
+      }
+    } else {
+      await persistModifiedNoteSource(noteId, content);
+      const idx = nodeIndex(noteId);
+      if (idx >= 0) {
+        state.detail = localDetail(state.graph.nodes[idx]);
+      }
+    }
+    state.studio.dirty = false;
+    state.studio.saving = false;
+    renderNotesStudioHeaderControls();
+    renderNotesStudioTabsBar();
+    renderNotesStudioFeed();
+    renderNotesStudioInspectorPane();
+    renderSidebarTallies();
+    if (!quiet) ui.toast('Saved');
+  } catch (error) {
+    state.studio.saving = false;
+    renderNotesStudioHeaderControls();
+    if (!quiet) ui.toast(error.message || 'Could not save note');
+  }
+}
+
+function setStudioEditorMode(mode) {
+  const valid = mode === 'split' || mode === 'edit' ? mode : 'read';
+  if (!isVaultWritable() && valid !== 'read') {
+    ui.toast('This vault is open read-only');
+    return;
+  }
+  if (state.studio.dirty) {
+    saveStudioDraft({ quiet: true });
+  }
+  state.studio.viewMode = valid;
+  prefs.set('cortex.studio.viewMode', valid);
+  renderNotesStudioHeaderControls();
+  renderNotesStudioDocument();
+  if (valid !== 'read') {
+    const ta = els.notesCanvas?.querySelector('#studio-editor');
+    if (ta) ta.focus();
+  }
+}
+
+function cycleStudioEditorMode() {
+  const order = ['read', 'split', 'edit'];
+  const next = order[(order.indexOf(state.studio.viewMode) + 1) % order.length];
+  setStudioEditorMode(next);
+}
+
+function setStudioScope(scope) {
+  state.studio.scope = scope;
+  if (scope !== 'folder') state.studio.folderFilter = null;
+  renderNotesStudioFeed();
+}
+
+function setStudioFolderFilter(folderName) {
+  state.studio.folderFilter = folderName;
+  state.studio.scope = 'folder';
+  renderNotesStudioFeed();
+}
+
+function toggleStudioZen(force) {
+  state.studio.zenMode = typeof force === 'boolean' ? force : !state.studio.zenMode;
+  if (els.notesStudio) els.notesStudio.classList.toggle('is-zen', state.studio.zenMode);
+  if (els.notesZenBtn) {
+    els.notesZenBtn.classList.toggle('is-active', state.studio.zenMode);
+    els.notesZenBtn.setAttribute('aria-pressed', String(state.studio.zenMode));
+  }
+}
+
+function wireNotesStudioEvents() {
+  if (els.notesFilter) {
+    els.notesFilter.addEventListener('input', () => {
+      state.studio.filterQuery = els.notesFilter.value;
+      renderNotesStudioFeed();
+    });
+  }
+  if (els.notesScopes) {
+    els.notesScopes.querySelectorAll('[data-scope]').forEach((btn) => {
+      btn.addEventListener('click', () => setStudioScope(btn.dataset.scope));
+    });
+  }
+  if (els.notesSort) {
+    els.notesSort.addEventListener('click', () => {
+      const order = ['recent', 'title', 'links', 'words'];
+      state.studio.sortBy = order[(order.indexOf(state.studio.sortBy) + 1) % order.length];
+      renderNotesStudioFeed();
+    });
+  }
+  if (els.notesNewBtn) {
+    els.notesNewBtn.addEventListener('click', () => openQuickNoteModal());
+  }
+  if (els.notesTabNew) {
+    els.notesTabNew.addEventListener('click', () => openQuickNoteModal());
+  }
+  if (els.notesToggleList) {
+    els.notesToggleList.addEventListener('click', () => {
+      state.studio.listCollapsed = !state.studio.listCollapsed;
+      els.notesToggleList.setAttribute('aria-pressed', String(!state.studio.listCollapsed));
+      if (els.notesStudio) els.notesStudio.classList.toggle('is-list-collapsed', state.studio.listCollapsed);
+    });
+  }
+  if (els.notesToggleInspector) {
+    els.notesToggleInspector.addEventListener('click', () => {
+      state.studio.inspectorCollapsed = !state.studio.inspectorCollapsed;
+      els.notesToggleInspector.setAttribute('aria-pressed', String(!state.studio.inspectorCollapsed));
+      if (els.notesStudio) els.notesStudio.classList.toggle('is-inspector-collapsed', state.studio.inspectorCollapsed);
+    });
+  }
+  if (els.notesViewModes) {
+    els.notesViewModes.querySelectorAll('[data-editor-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => setStudioEditorMode(btn.dataset.editorMode));
+    });
+  }
+  if (els.notesPinBtn) {
+    els.notesPinBtn.addEventListener('click', togglePinCurrentNote);
+  }
+  if (els.notesCopyLink) {
+    els.notesCopyLink.addEventListener('click', async () => {
+      if (!state.detail) return;
+      const link = `[[${state.detail.title}]]`;
+      try {
+        await navigator.clipboard.writeText(link);
+        ui.toast(`Copied ${link} to clipboard`);
+      } catch {
+        ui.toast(link);
+      }
+    });
+  }
+  if (els.notesRevealFile) {
+    els.notesRevealFile.addEventListener('click', async () => {
+      if (!state.detail) return;
+      if (!state.live) {
+        ui.toast(`Path: ${state.detail.path || `${state.detail.id}.md`}`);
+        return;
+      }
+      try {
+        await api.revealInFolder(state.detail.id, state.vaultId);
+      } catch (error) {
+        ui.toast(error.message || 'Could not reveal file');
+      }
+    });
+  }
+  if (els.notesLocateGraph) {
+    els.notesLocateGraph.addEventListener('click', () => {
+      if (!state.detail) return;
+      const idx = nodeIndex(state.detail.id);
+      if (idx >= 0) {
+        setMode('universe');
+        showLocalGraph(idx);
+      }
+    });
+  }
+  if (els.notesZenBtn) {
+    els.notesZenBtn.addEventListener('click', () => toggleStudioZen());
+  }
+  if (els.notesInspectorTabs) {
+    els.notesInspectorTabs.querySelectorAll('[data-inspector-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.studio.inspectorTab = btn.dataset.inspectorTab;
+        renderNotesStudioInspectorPane();
+      });
+    });
+  }
+  if (els.notesQuickForm) {
+    els.notesQuickForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const rawTitle = (els.notesQuickInput?.value || '').trim();
+      if (!rawTitle) return;
+      els.notesQuickInput.value = '';
+      els.notesQuickForm.hidden = true;
+      await createNoteWithTemplate({
+        title: rawTitle,
+        folder: 'Inbox',
+        template: 'blank',
+        body: '',
+      });
+    });
+  }
+}
+
+/**
+ * Replace the first unlinked plain-text occurrence of `targetTitle` in `sourceMarkdown`
+ * with `[[targetTitle]]`, skipping YAML frontmatter, fenced code blocks, headings, and existing `[[...]]`.
+ */
+function replaceFirstUnlinkedMention(sourceMarkdown, targetTitle) {
+  const lines = String(sourceMarkdown || '').split('\n');
+  let i = 0;
+  if (lines[0]?.trim() === '---') {
+    i = 1;
+    while (i < lines.length && lines[i].trim() !== '---') i += 1;
+    i += 1;
+  }
+  const escaped = targetTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const wordRegex = new RegExp(`(^|[^\\w\\[])(${escaped})(?=$|[^\\w\\]])`, 'i');
+  let inFence = false;
+
+  for (; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.trimStart().startsWith('```')) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
+    // Split line by existing [[...]] so we never replace inside an existing wikilink
+    const parts = line.split(/(\[\[[^\]]+\]\])/g);
+    for (let p = 0; p < parts.length; p += 2) {
+      const seg = parts[p];
+      const match = wordRegex.exec(seg);
+      if (match) {
+        const before = seg.slice(0, match.index + match[1].length);
+        const matchedText = match[2];
+        const after = seg.slice(match.index + match[0].length);
+        const linkText = matchedText === targetTitle
+          ? `[[${targetTitle}]]`
+          : `[[${targetTitle}|${matchedText}]]`;
+        parts[p] = `${before}${linkText}${after}`;
+        lines[i] = parts.join('');
+        return { changed: true, content: lines.join('\n') };
+      }
+    }
+  }
+  return { changed: false, content: sourceMarkdown };
+}
+
+async function linkUnlinkedMention(sourceId, targetTitle) {
+  if (!sourceId || !targetTitle || !isVaultWritable()) return;
+  try {
+    const idx = nodeIndex(sourceId);
+    if (idx < 0) return;
+    const srcNode = state.graph.nodes[idx];
+    const srcDetail = await getDetail(srcNode);
+    const raw = srcDetail?.raw ?? srcDetail?.markdown ?? srcNode.body ?? '';
+    const { changed, content } = replaceFirstUnlinkedMention(raw, targetTitle);
+    if (!changed) {
+      ui.toast(`Could not find an unlinked mention of “${targetTitle}” in ${srcNode.title}`);
+      return;
+    }
+
+    if (state.live && !state.readOnly) {
+      const res = await api.saveNote({ id: sourceId, content }, state.vaultId);
+      state.version = res.version;
+      state.cache.delete(sourceId);
+      if (state.detail) state.cache.delete(state.detail.id);
+      await refreshGraph();
+    } else {
+      await persistModifiedNoteSource(sourceId, content);
+      if (!srcNode.links.includes(state.detail.id)) {
+        srcNode.links.push(state.detail.id);
+        state.graph.edges.push({
+          source: idx,
+          target: nodeIndex(state.detail.id),
+          weight: 1,
+        });
+        buildIncoming();
+      }
+    }
+
+    if (state.detail) {
+      const currentIdx = nodeIndex(state.detail.id);
+      if (currentIdx >= 0) await openNote(currentIdx, { record: false });
+    }
+    ui.toast(`Linked [[${targetTitle}]] in “${srcNode.title}”`);
+  } catch (error) {
+    ui.toast(error.message || 'Could not link mention');
+  }
+}
+
+function buildTemplateContent(template, title, extraBody = '') {
+  const today = new Date().toISOString().slice(0, 10);
+  const body = extraBody.trim();
+  switch (template) {
+    case 'session':
+      return (
+        `---\ncreated: ${today}\ntags: [session, log]\n---\n\n` +
+        `# ${title}\n\n` +
+        `> [!INFO] Session summary\n` +
+        `> ${body || 'Key outcome or cliffhanger from this session.'}\n\n` +
+        `## Key events\n- [ ] \n\n` +
+        `## People & places encountered\n- \n\n` +
+        `## Tallies & highlights\n` +
+        `| Character | Moment | Points |\n| --- | --- | --- |\n|  |  | \u2610 \u2610 \u2610 |\n\n` +
+        `## Open threads for next time\n- \n`
+      );
+    case 'lore':
+      return (
+        `---\ncreated: ${today}\ntags: [lore, wiki]\n---\n\n` +
+        `# ${title}\n\n` +
+        `> [!INFO] Overview\n` +
+        `> ${body || 'One-sentence summary of what this topic is and why it matters.'}\n\n` +
+        `## Details\n\n\n` +
+        `## Connections\n- Related: \n`
+      );
+    case 'npc':
+      return (
+        `---\ncreated: ${today}\ntags: [npc, character]\n---\n\n` +
+        `# ${title}\n\n` +
+        `> [!TIP] Role & demeanour\n` +
+        `> ${body || 'How they come across at the table: voice, posture, and first impression.'}\n\n` +
+        `| Attribute | Detail |\n| --- | --- |\n| Affiliation |  |\n| Location |  |\n| Status | Active |\n\n` +
+        `## What they want\n\n\n` +
+        `## Relationships & hooks\n- \n`
+      );
+    case 'location':
+      return (
+        `---\ncreated: ${today}\ntags: [location, atlas]\n---\n\n` +
+        `# ${title}\n\n` +
+        `> [!INFO] Sights & atmosphere\n` +
+        `> ${body || 'What you see, hear, and notice first upon arriving.'}\n\n` +
+        `## Landmarks & features\n- \n\n` +
+        `## Connected roads & routes\n- \n`
+      );
+    case 'blank':
+    default:
+      return (
+        `---\ncreated: ${today}\ntags: []\n---\n\n` +
+        `# ${title}\n\n` +
+        `${body ? `${body}\n` : ''}`
+      );
+  }
+}
+
+function setQuickNoteTemplate(tpl) {
+  state.quickNoteTemplate = tpl || 'blank';
+  if (els.quickNoteTemplates) {
+    els.quickNoteTemplates.querySelectorAll('[data-note-tpl]').forEach((btn) => {
+      const active = btn.dataset.noteTpl === state.quickNoteTemplate;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+  }
+}
+
+function openQuickNoteModal({ title = '', folder = null, template = 'blank' } = {}) {
+  if (!isVaultWritable()) {
+    ui.toast('This vault is open read-only');
+    return;
+  }
+  if (!els.quickNoteModal) return;
+  setQuickNoteTemplate(template);
+  if (els.quickNoteFolderList && state.graph) {
+    els.quickNoteFolderList.innerHTML = (state.graph.meta.folders || [])
+      .filter((f) => f.name && f.name !== '(root)')
+      .map((f) => `<option value="${f.name}"></option>`)
+      .join('');
+  }
+  const defaultFolder = folder !== null
+    ? folder
+    : (state.studio.scope === 'folder' && state.studio.folderFilter && state.studio.folderFilter !== '(root)'
+      ? state.studio.folderFilter
+      : '');
+  if (els.quickNoteTitle) els.quickNoteTitle.value = title;
+  if (els.quickNoteFolder) els.quickNoteFolder.value = defaultFolder;
+  if (els.quickNoteBody) els.quickNoteBody.value = '';
+  els.quickNoteModal.hidden = false;
+  setTimeout(() => els.quickNoteTitle?.focus(), 0);
+}
+
+function closeQuickNoteModal() {
+  if (els.quickNoteModal) els.quickNoteModal.hidden = true;
+}
+
+async function submitQuickNoteModal(event) {
+  event.preventDefault();
+  const title = (els.quickNoteTitle?.value || '').trim();
+  if (!title) return;
+  const folder = (els.quickNoteFolder?.value || '').trim().replace(/^\/+|\/+$/g, '');
+  const body = els.quickNoteBody?.value || '';
+  const template = state.quickNoteTemplate || 'blank';
+  closeQuickNoteModal();
+  await createNoteWithTemplate({ title, folder, template, body });
+}
+
+async function createNoteWithTemplate({ title, folder = '', template = 'blank', body = '' }) {
+  const cleanFolder = folder && folder !== '(root)' ? folder : '';
+  const relId = cleanFolder ? `${cleanFolder}/${title}` : title;
+  const content = buildTemplateContent(template, title, body);
+
+  if (state.live && !state.readOnly) {
+    try {
+      const result = await api.saveNote({ id: relId, title, content }, state.vaultId);
+      state.version = result.version;
+      await refreshGraph();
+      const index = nodeIndex(result.id);
+      if (index >= 0) {
+        setMode('notes');
+        await openNote(index);
+        setStudioEditorMode('split');
+        ui.toast(`Created “${title}”`);
+      }
+    } catch (error) {
+      ui.toast(error.message || 'Could not create note');
+    }
+    return;
+  }
+
+  // Static mode local note creation so demo & static users can test the full workflow too
+  if (!state.live && state.graph) {
+    const folderName = cleanFolder || '(root)';
+    const newNode = {
+      id: relId,
+      title,
+      folder: folderName,
+      created: new Date().toISOString().slice(0, 10),
+      words: content.split(/\s+/).filter(Boolean).length,
+      tags: [],
+      links: [],
+      degree: 0,
+      pagerank: 0.01,
+      x: 0,
+      y: 0,
+      z: 0,
+      bx: 0,
+      by: 0,
+      bz: 0,
+      color: 0,
+      size: 1,
+      appear: 0.5,
+      excerpt: body || title,
+      body: content,
+    };
+    state.graph.nodes.unshift(newNode);
+    await persistModifiedNoteSource(relId, content);
+    buildLookup();
+    setMode('notes');
+    await openNote(0);
+    setStudioEditorMode('split');
+    ui.toast(`Created “${title}” (saved in browser)`);
+  }
+}
+
+function triggerQuickCapture() {
+  if (state.mode === 'notes' && els.notesQuickForm) {
+    els.notesQuickForm.hidden = !els.notesQuickForm.hidden;
+    if (!els.notesQuickForm.hidden) {
+      els.notesQuickInput?.focus();
+    }
+    return;
+  }
+  openQuickNoteModal({ folder: 'Inbox', template: 'blank' });
+}
+
+function openRandomNote() {
+  if (!state.graph || !state.graph.nodes.length) return;
+  const nodes = state.graph.nodes;
+  // Golden-ratio deterministic step through the vault so every press visits a distinct note
+  state.surpriseSeed = (state.surpriseSeed + Math.max(1, Math.floor(nodes.length * 0.6180339887))) % nodes.length;
+  const idx = state.surpriseSeed;
+  openNote(idx);
+  ui.toast(`Surprise note: “${nodes[idx].title}”`);
+}
+
+function openShortcutsModal() {
+  if (!els.shortcutsModal) return;
+  els.shortcutsModal.hidden = false;
+  els.shortcutsClose?.focus();
+}
+
+function closeShortcutsModal() {
+  if (!els.shortcutsModal) return;
+  els.shortcutsModal.hidden = true;
 }
 
 /* ---------- collection ---------- */
@@ -3121,6 +4357,74 @@ async function submitCompose(event) {
 function buildPaletteCommands() {
   const rendered = effectiveTheme();
   const commands = [
+    {
+      kind: 'command',
+      id: 'cmd:view:notes',
+      title: 'Switch to Notes Studio',
+      subtitle: 'Full native Markdown note-taking studio with backlinks, outline & live split preview',
+      keywords: 'view notes studio write editor markdown obsidian notion astrocortex',
+      shortcut: '0',
+      pinned: state.mode !== 'notes',
+      run: () => setMode('notes'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:note:new',
+      title: 'Create new note (with folder & template)',
+      subtitle: 'Blank, Session log, Wiki callout, Character/NPC, or Place/Atlas note',
+      keywords: 'new create note template folder session npc lore location',
+      shortcut: 'n',
+      pinned: true,
+      run: () => openQuickNoteModal(),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:note:quick',
+      title: 'Quick capture to Inbox',
+      subtitle: 'Jot a fast note directly into Inbox',
+      keywords: 'quick capture inbox jot note',
+      shortcut: 'q',
+      run: () => triggerQuickCapture(),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:note:surprise',
+      title: 'Surprise me — open a random note',
+      subtitle: 'Rediscover an existing note from your vault',
+      keywords: 'surprise random note serendipity discover',
+      shortcut: 's',
+      run: () => openRandomNote(),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:note:pin',
+      title: 'Pin / unpin current note',
+      subtitle: 'Keep important notes at the top of the left sidebar',
+      keywords: 'pin unpin favorite bookmark note sidebar',
+      shortcut: 'p',
+      run: () => togglePinCurrentNote(),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:studio:mode',
+      title: 'Cycle editor mode (Read · Live Split · Source Edit)',
+      subtitle: 'Switch between reading view, side-by-side live preview, and source editor',
+      keywords: 'editor split preview read source mode',
+      shortcut: key('E'),
+      run: () => {
+        if (state.mode !== 'notes') setMode('notes');
+        cycleStudioEditorMode();
+      },
+    },
+    {
+      kind: 'command',
+      id: 'cmd:shortcuts',
+      title: 'Keyboard shortcuts & slash commands',
+      subtitle: 'Reference sheet for studio shortcuts, [[wikilinks, and /slash commands',
+      keywords: 'shortcuts keyboard help slash commands reference',
+      shortcut: '?',
+      run: () => openShortcutsModal(),
+    },
     {
       kind: 'command',
       id: 'cmd:view:brain',
