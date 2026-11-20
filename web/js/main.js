@@ -131,6 +131,7 @@ const els = {
   settingsMcpConfig: document.getElementById('settings-mcp-config'),
   settingsMcpStatus: document.getElementById('settings-mcp-status'),
   settingsAbout: document.getElementById('settings-about'),
+  settingsAutoUpdate: document.getElementById('settings-auto-update'),
   settingsUpdate: document.getElementById('settings-update'),
   settingsTheme: document.getElementById('settings-theme'),
   settingsThemeSystem: document.getElementById('settings-theme-system'),
@@ -498,9 +499,9 @@ async function start() {
       }
       ui.hideBoot();
       requestAnimationFrame(loop);
-      // The app checks once per launch; a failure stays quiet until the user
-      // asks in Vault settings, where an error is worth reporting.
-      if (state.live) checkForUpdates();
+      // The app checks once per launch unless opted out; a failure stays quiet
+      // until the user asks in Vault settings, where an error is worth reporting.
+      if (state.live && prefs.get('cortex.update.auto', true)) checkForUpdates();
       return;
     }
 
@@ -761,6 +762,17 @@ function wire() {
   els.settingsMcpTest.addEventListener('click', testMcp);
   els.settingsMcpConfig.addEventListener('click', copyMcpConfig);
   els.settingsUpdate.addEventListener('click', () => checkForUpdates({ manual: true }));
+  if (els.settingsAutoUpdate) {
+    els.settingsAutoUpdate.addEventListener('change', () => {
+      const enabled = Boolean(els.settingsAutoUpdate.checked);
+      prefs.set('cortex.update.auto', enabled);
+      ui.toast(
+        enabled
+          ? 'Automatic update checks enabled'
+          : 'Automatic update checks disabled (offline-friendly)',
+      );
+    });
+  }
   els.updateAction.addEventListener('click', installUpdate);
   els.updateClose.addEventListener('click', dismissUpdate);
   els.vaultButton.addEventListener('click', () => showLaunch());
@@ -1069,7 +1081,12 @@ function buildIncoming() {
 }
 
 function resolveTarget(target) {
-  const key = String(target || '').trim().replace(/\.md$/i, '').toLowerCase();
+  let key = String(target || '')
+    .trim()
+    .replace(/^\.\//, '')
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '');
+  key = key.split(/[#\^]/)[0].trim().replace(/\.md$/i, '').toLowerCase();
   if (!key) return null;
   return state.lookup.get(key) || state.lookup.get(key.split('/').pop()) || null;
 }
@@ -1983,12 +2000,17 @@ function renderAbout() {
   const about = state.about;
   const build = about.build && about.build !== 'dev' ? ` (${about.build})` : '';
   let line = `Cortex ${about.version}${build} · port ${about.port} · ${about.config || 'config folder unknown'}`;
+  if (about.offline) line += ' · offline mode';
   if (state.update) {
-    if (state.update.error) line += ' · update check unavailable';
+    if (state.update.disabled) line += ' · update checks disabled';
+    else if (state.update.error) line += ' · update check unavailable';
     else if (state.update.available) line += ` · ${state.update.latest} available`;
     else if (state.update.latest) line += ' · up to date';
   }
   els.settingsAbout.textContent = line;
+  if (els.settingsUpdate) {
+    els.settingsUpdate.disabled = Boolean(about.offline);
+  }
 }
 
 /* ---------- updates ---------- */
@@ -1998,11 +2020,17 @@ async function checkForUpdates({ manual = false } = {}) {
     if (manual) ui.toast('The static demo cannot check for updates');
     return;
   }
+  if (state.about?.offline) {
+    if (manual) ui.toast('Offline mode is enabled; update checks are disabled');
+    return;
+  }
   try {
     const info = await api.updateInfo();
     state.update = info;
     renderAbout();
-    if (info.available) {
+    if (info.disabled) {
+      if (manual) ui.toast(info.error || 'Offline mode is enabled; update checks are disabled');
+    } else if (info.available) {
       showUpdateBanner(info);
       if (manual) ui.toast(`Cortex ${info.latest} is available`);
     } else if (manual) {
@@ -2070,11 +2098,14 @@ function openSettings() {
       : 'Notes are written as plain Markdown in the folder, so Obsidian sees them immediately.';
   els.settingsRoads.checked = prefs.get('cortex.atlas.roads', true);
   els.settingsRoutes.checked = prefs.get('cortex.atlas.routes', true);
+  if (els.settingsAutoUpdate) {
+    els.settingsAutoUpdate.checked = prefs.get('cortex.update.auto', true);
+  }
   if (vault && state.live) {
     syncAgentHelp(vault);
     refreshMcpStatus();
     loadAbout();
-    checkForUpdates();
+    if (prefs.get('cortex.update.auto', true)) checkForUpdates();
     els.settingsReveal.disabled = Boolean(vault.missing);
   } else {
     els.settingsReveal.disabled = true;
@@ -3630,7 +3661,7 @@ function renderNotesStudioHeaderControls() {
 }
 
 function prepareStudioProseHtml(rawMarkdown, title) {
-  let markdown = String(rawMarkdown || '');
+  let markdown = String(rawMarkdown || '').replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)\r?\n?/, '');
   const heading = /^\s*#\s+(.+)\r?\n/.exec(markdown);
   if (heading && title && heading[1].trim().toLowerCase() === title.trim().toLowerCase()) {
     markdown = markdown.slice(heading[0].length);

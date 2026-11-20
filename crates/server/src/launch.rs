@@ -98,6 +98,12 @@ pub fn run_app() -> Result<()> {
         bind: "127.0.0.1".to_string(),
         port: 3000,
         port_fallback: true,
+        offline: std::env::var("CORTEX_OFFLINE").is_ok_and(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes"
+            )
+        }),
         stop_token: token.clone(),
     };
 

@@ -154,8 +154,8 @@ mean and lead to slower comprehension."
 4. Is there a superlative that cannot be documented?
 5. Does a section repeat a claim made higher up? Cut one.
 
-Cortex makes verifiable claims — 328 notes, 557 links, 5,523 notes, 24,151
-links, `~400 ms`, MIT, no network calls — so the copy should spend those instead
+Cortex makes verifiable claims — 332 notes, 557 links, ~5,600-note synthetic stress test,
+`~400 ms`, MIT, no telemetry, optional GitHub release-feed check (disable in Settings or with `--offline`) — so the copy should spend those instead
 of adjectives.
 
 ## What could not be verified

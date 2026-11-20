@@ -7,7 +7,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="dark" />
   <script src="./js/theme.js"></script>
-  <meta name="description" content="Cortex turns a folder of Markdown into a native note-taking studio and a 3D brain you can see, with a record of why you decided what you decided." />
+  <meta name="description" content="Cortex turns a folder of Markdown into a native note-taking studio and a 3D brain you can see, comparing your sources and keeping the reasoning behind every decision." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Cortex — Your notes, as a brain." />
+  <meta property="og:description" content="A local-first Markdown studio, deterministic 3D brain view, source-comparing decision trails, and agent-safe MCP server." />
+  <meta property="og:image" content="https://thijnperd.github.io/obsidian-cortex/social-preview.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Cortex — Your notes, as a brain." />
+  <meta name="twitter:description" content="A local-first Markdown studio, deterministic 3D brain view, source-comparing decision trails, and agent-safe MCP server." />
+  <meta name="twitter:image" content="https://thijnperd.github.io/obsidian-cortex/social-preview.jpg" />
   <title>Cortex — your notes, as a brain</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="icon" href="./favicon.ico" sizes="32x32" />
@@ -405,6 +413,11 @@
         <section class="settings-section">
           <h3>About</h3>
           <p class="field-help" id="settings-about">—</p>
+          <label class="check" for="settings-auto-update">
+            <input type="checkbox" id="settings-auto-update" checked aria-describedby="settings-update-help" />
+            Check for updates automatically on launch
+          </label>
+          <p class="field-help" id="settings-update-help">Reads GitHub's public release feed once per launch. Turn off for strictly offline sessions, or start with <code>--offline</code>.</p>
           <div class="settings-actions">
             <button class="btn" id="settings-update" type="button">Check for updates</button>
           </div>
@@ -439,7 +452,7 @@
       <div class="quick-note-grid">
         <div class="quick-note-field">
           <label class="field-label" for="quick-note-title">Title</label>
-          <input class="field-input" id="quick-note-title" type="text" placeholder="e.g. Session 14 — Siege of Kalaman" autocomplete="off" maxlength="120" required />
+          <input class="field-input" id="quick-note-title" type="text" placeholder="e.g. Architecture notes — Storage engine" autocomplete="off" maxlength="120" required />
         </div>
         <div class="quick-note-field">
           <label class="field-label" for="quick-note-folder">Folder</label>
@@ -516,7 +529,7 @@
       <header class="launch-brand">
         <img class="launch-logo" src="./logo.svg" width="40" height="40" alt="" />
         <span class="launch-wordmark">Cortex</span>
-        <span class="launch-tag">v2.2 · local-first</span>
+        <span class="launch-tag">v2.4.0 · local-first</span>
       </header>
       <h1 class="launch-title">Pick up where you left off.</h1>
       <p class="launch-sub">A native Markdown note studio and six visual views of the folder you already have. Nothing is copied, moved or synced.</p>

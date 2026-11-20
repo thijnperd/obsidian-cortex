@@ -68,6 +68,8 @@ pub struct Config {
     pub port: u16,
     /// Take the next free port when `port` is busy instead of failing.
     pub port_fallback: bool,
+    /// Disable outbound network calls such as release update checks.
+    pub offline: bool,
     /// Accepted by `POST /api/stop`, from loopback only.
     pub stop_token: String,
 }
@@ -947,6 +949,7 @@ struct AboutInfo {
     log: Option<String>,
     releases: &'static str,
     read_only: bool,
+    offline: bool,
 }
 
 async fn api_about(State(state): State<AppState>) -> Response {
@@ -959,6 +962,7 @@ async fn api_about(State(state): State<AppState>) -> Response {
         log: instance::log_path().map(|path| path.display().to_string()),
         releases: version::RELEASES_URL,
         read_only: state.config.read_only,
+        offline: state.config.offline,
     };
     json_response(
         StatusCode::OK,
@@ -967,6 +971,12 @@ async fn api_about(State(state): State<AppState>) -> Response {
 }
 
 async fn api_update(State(state): State<AppState>) -> Response {
+    if state.config.offline {
+        return json_response(
+            StatusCode::OK,
+            serde_json::to_string(&update::Check::disabled()).unwrap_or_default(),
+        );
+    }
     if let Some((checked, info)) = state.update.read().await.clone() {
         if checked.elapsed() < UPDATE_TTL {
             return json_response(
@@ -989,6 +999,16 @@ async fn api_update(State(state): State<AppState>) -> Response {
 async fn api_install_update(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Some(rejection) = begin_admin(&state, &headers).await {
         return rejection;
+    }
+    if state.config.offline {
+        return json_response(
+            StatusCode::BAD_REQUEST,
+            json!({
+                "error": "Offline mode is enabled; updates cannot be downloaded",
+                "code": "offline"
+            })
+            .to_string(),
+        );
     }
     let result = tokio::task::spawn_blocking(update::install).await;
     match result {
@@ -1540,10 +1560,25 @@ async fn api_synthesize(
             continue;
         }
         let note = &snapshot.vault.notes[index];
+        let links = note
+            .links
+            .iter()
+            .map(|link| {
+                snapshot
+                    .vault
+                    .resolve(&link.target)
+                    .map(|target| snapshot.vault.notes[target].title.clone())
+                    .unwrap_or_else(|| link.target.clone())
+            })
+            .collect();
         evidence.push(Evidence {
             title: note.title.clone(),
             folder: note.folder.clone(),
             excerpt: note.excerpt.clone(),
+            created: note.created.clone(),
+            tags: note.tags.clone(),
+            body: note.body.clone(),
+            links,
         });
     }
     if evidence.len() < 2 {

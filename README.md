@@ -16,11 +16,11 @@
 
 <p align="center">
   <a href="https://thijnperd.github.io/obsidian-cortex/"><strong>Visit the product page</strong></a> ·
-  <a href="https://thijnperd.github.io/obsidian-cortex/demo/?view=brain"><strong>Open the live demo</strong></a> — 328 notes, opens in the Brain, no install.
+  <a href="https://thijnperd.github.io/obsidian-cortex/demo/?view=brain"><strong>Open the live demo</strong></a> — 332 notes, opens in the Brain, no install.
 </p>
 
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases"><img alt="Version 2.3.1" src="https://img.shields.io/badge/version-2.3.1-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases"><img alt="Version 2.4.0" src="https://img.shields.io/badge/version-2.4.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
   <img alt="Licensed MIT" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-101216?style=flat-square&amp;labelColor=0a0b0d">
 </p>
@@ -40,13 +40,13 @@ browser and the binary stays self-contained.
 No account, no cloud, no database, no model required. Your files stay where they
 are; deleting the folder is the uninstall.
 
-**Most tools help you collect. Cortex helps you conclude.**
+**Most tools help you collect. Cortex compares your sources and keeps the reasoning.**
 
 ## Install
 
 | Platform | File |
 | --- | --- |
-| Windows x86-64 | `CortexSetup-2.3.1.exe`, or `cortex-windows-x86_64.zip` to run unpacked |
+| Windows x86-64 | `CortexSetup-2.4.0.exe`, or `cortex-windows-x86_64.zip` to run unpacked |
 | macOS (Apple silicon) | `Cortex.app` inside `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
@@ -63,8 +63,8 @@ checksum verification, is in [installing on Windows](docs/install-windows.md).
 ```bash
 cargo run -p cortex                                  # last vault, or the picker
 cargo run -p cortex -- seed-demo demo --size small   # 21 notes
-cargo run -p cortex -- seed-demo demo --size medium  # 328 notes
-cargo run -p cortex -- seed-demo demo --size large   # 5,523 notes
+cargo run -p cortex -- seed-demo demo --size medium  # 332 notes
+cargo run -p cortex -- seed-demo demo --size large   # ~5,600-note synthetic stress test
 cargo run -p cortex -- serve demo                    # open that folder directly
 ```
 
@@ -95,8 +95,8 @@ still there, unwrapped.
 
 ## Six views
 
-The same vault at 328 notes and 557 links. Every screenshot in this README is a
-seeded vault rendered by the app.
+The same vault across six lenses. Every screenshot in this README is rendered
+by the app from a seeded vault.
 
 | | |
 | --- | --- |
@@ -111,15 +111,17 @@ Above 1,200 notes the graph switches to a folder-level overview: notes keep thei
 positions, folders get the labels, only the strongest 5,000 links draw, and dense
 folders become stipple on the atlas. Hover or select a note for its own label.
 
-### The same views on 5,523 notes
+### Synthetic scale stress test (~5,600 notes)
 
-![Brain view of the giant vault: topic folders on the cortex](docs/screenshots/giant/02-brain.jpg)
+![Brain view of the giant demo vault: topic folders on the cortex](docs/screenshots/giant/02-brain.jpg)
 
-The giant demo vault has 5,523 notes, 24,151 links and 41 folders, with no
-unresolved links. A three-year daily journal becomes a ring around the vault
+The `--size large` vault is a **synthetic generator stress test** (not a real
+user vault): 41 varied-size topic folders, a three-year daily journal, and 24
+generated decision briefs. It exists to benchmark rendering and indexing at
+~5,600 notes, where a three-year daily journal becomes a ring around the vault
 instead of a blob that swallows it.
 
-![Atlas view of the giant vault: 41 folders as countries](docs/screenshots/giant/04-atlas.jpg)
+![Atlas view of the giant demo vault: 41 folders as countries](docs/screenshots/giant/04-atlas.jpg)
 
 The atlas sizes each country by its note count and turns a 1,095-note journal
 into stipple rather than a wall of markers. Rivers, roads, contours and forests
@@ -158,110 +160,35 @@ note it replaces.
 
 Select two or more notes, then choose **Research brief** or **Refine idea** in
 the Collected tray. Cortex writes `Synthesis/<question>.md`: ordinary Markdown
-with frontmatter, an evidence list of `[[wikilinks]]` with title, folder and
-excerpt, and the sections to fill in.
+with frontmatter, deterministic cross-source analysis, and an evidence list of
+`[[wikilinks]]`.
 
-The brief is a scaffold, not generated prose. There is no prompt, no model and no
-API key. Because every claim is a wikilink, each one is a click from its source,
-and the brief joins the Decisions board with those sources on its card.
+No LLM, prompt, or API key is involved. Instead of writing fake conclusions for
+you, Cortex compares the collected notes locally and extracts:
 
-`Refine idea` writes situation, assumptions (load-bearing vs cosmetic), two
-options with effort, risk and reversibility, a recommendation, and "what would
-change my mind". That artifact is the point: most note tools stop before a
-decision exists.
+- **Source comparison:** date span, shared tags, shared outgoing references,
+  direct links between selected notes, and unlinked overlaps that share a tag or
+  reference without linking yet.
+- **Line-cited claims (`L#`):** substantive prose lines pulled from each source
+  note with exact line references.
+- **Flagged tensions & open questions:** contrast/caveat lines (`however`,
+  `whereas`, `risk`, `trade-off`, `fails`) and open checkboxes/questions
+  extracted from the sources.
 
-## Navigating
+Because every claim and citation uses `[[wikilinks]]`, each brief joins the
+Decisions board with clickable sources while leaving the judgment to you (or an
+MCP-connected client).
 
-`Ctrl` on Windows and Linux, `⌘` on macOS. The app names the keys of the OS you
-are on rather than showing both.
+`Refine idea` seeds situation, load-bearing vs cosmetic assumptions, two options
+with effort, risk and reversibility, a recommendation section, and "what would
+change my mind".
 
-| Action | Key |
-| --- | --- |
-| Command palette &amp; note search | `Ctrl K` / `⌘K`, or `/` (`>` for commands only) |
-| Toggle sidebar | `[` |
-| Back / forward through opened notes | `Ctrl [` / `Ctrl ]` (`⌘[` / `⌘]`), or `‹` `›` |
-| Collect / uncollect a note | `Ctrl` / `⌘` / `Shift` + click, or `c` |
-| Local neighbourhood | `Local graph` in the note panel, or `l` |
-| Fly to a folder / back out | click its title, or `All folders` |
-| Views | `1` graph, `2` brain, `3` timeline, `4` atlas, `5` decisions, `6` bento |
-| Reset camera | `f` |
-| New note / edit | `n`, or `Edit` in the panel |
-| Today's note | `t`, or the sun button in the toolbar |
-| Jump to a decision trail | `y` while a brief or idea note is open |
-| Open another folder | `Ctrl O` / `⌘O` |
+## Agent-safe MCP
 
-Hidden folders dim instead of disappearing, so the context stays on screen.
-Clicking a `[[link]]`, a backlink or an unlinked mention opens that note in
-place, and the arrows walk back through the chain.
-
-## Notes studio
-
-The **Notes** tab is a three-pane workspace for writing: a folder explorer (or flat list) with a filter
-(All, Pinned, Recent or one folder; sort by recent, A-Z, links or length), the
-editor, and a connections pane with backlinks, unlinked mentions and related
-notes, each with a one-line snippet. **+ New** or 
- starts a note; quick capture
-files a title straight into the Inbox. Everything is still plain Markdown on disk.
-
-## Editing
-
-**Edit** opens the note as plain Markdown in a textarea. What you type is what
-gets saved, frontmatter and wikilinks included.
-
-| Action | Key |
-| --- | --- |
-| Save / cancel | `Ctrl S` or `Ctrl Enter` / `Esc` |
-| Bold, italic, inline code | `Ctrl B`, `Ctrl I`, `Ctrl E` |
-| Wikilink | select text, `Ctrl K` |
-| Strikethrough, highlight, code block | `Ctrl Shift X`, `Ctrl Shift H`, `Ctrl Shift K` |
-| Heading 1–3 | `Ctrl 1`, `Ctrl 2`, `Ctrl 3` |
-| Ordered / bullet / task list | `Ctrl Shift 7`, `Ctrl Shift 8`, `Ctrl Shift 9` |
-| Blockquote | `Ctrl Shift .` |
-| Indent / outdent | `Tab` / `Shift Tab` |
-| Toggle task checkbox | `Ctrl L`, or `Ctrl Enter` on a task line |
-| Duplicate line or selection | `Ctrl Shift D` |
-| Move line up / down | `Alt Up` / `Alt Down` |
-| Insert block | `/` at the start of a line: headings, tasks, tally boxes, callouts, table, math, code, quote, divider, today's date, wikilink |
-| Shortcut cheat sheet | `?` |
-
-`⌘` replaces `Ctrl` on macOS. Typing `[` inserts `[]` with the caret inside;
-parentheses, braces and quotes do the same. Typing a closing character in front
-of one steps over it instead of duplicating it.
-
-Today's note is a normal file at `Journal/YYYY-MM-DD.md`. Cortex opens an
-existing one rather than replacing it; a new one starts with Notes, Decisions
-and Tomorrow headings.
-
-## Vault settings
-
-The gear in the toolbar holds the per-vault choices: **Opens in** (which view
-this vault starts in), **Show in folder** (hands the path to Explorer, Finder or
-your file manager), **Map** (roads and trade routes on the atlas) and **Agent
-access** (the MCP permission described below).
-
-## Several folders at once
-
-Vaults are remembered in `vaults.json` under your platform config directory
-(`$XDG_CONFIG_HOME/cortex`, `~/Library/Application Support/cortex`,
-`%APPDATA%\cortex`), overridable with `CORTEX_CONFIG_DIR`. The sidebar switches
-between open vaults without restarting; search, briefs and the palette act on the
-vault you are looking at. Nothing is copied, moved or synced, and a folder that
-has been moved shows up struck through until you forget it.
-
-A change on disk appears in about 400 ms. Only the changed files are re-parsed,
-and notes that still exist keep their positions, so the graph does not rearrange
-itself while you work. If the change lands in the note you are editing, Cortex
-warns instead of replacing your draft.
-
-## Optional: connect an AI client
-
-**Skip this for everything above.** Cortex has no built-in model and needs no AI
-client to search, collect, write briefs, refine ideas, use Decisions or edit
-notes.
-
-If you already use an AI client, Cortex ships a Model Context Protocol server so
-that client can read the vault, create notes and rewrite sections through the
-same guards the app enforces.
+Cortex has no built-in model and works completely standalone without an AI
+client. When you *do* want Claude Desktop, Cursor, or Zed to read and edit
+notes, Cortex ships a Model Context Protocol server over stdio with guardrails
+built around real vaults:
 
 ```bash
 cortex mcp ~/Notes                          # stdio MCP server bound to one vault
@@ -303,6 +230,89 @@ a connected client stops on its next call. The instructions an agent receives ar
 in [docs/agent-guide.md](docs/agent-guide.md), the reasoning in
 [ADR 0003](docs/adr/0003-agent-access.md).
 
+## Navigating
+
+`Ctrl` on Windows and Linux, `⌘` on macOS. The app names the keys of the OS you
+are on rather than showing both.
+
+| Action | Key |
+| --- | --- |
+| Command palette &amp; note search | `Ctrl K` / `⌘K`, or `/` (`>` for commands only) |
+| Toggle sidebar | `[` |
+| Back / forward through opened notes | `Ctrl [` / `Ctrl ]` (`⌘[` / `⌘]`), or `‹` `›` |
+| Collect / uncollect a note | `Ctrl` / `⌘` / `Shift` + click, or `c` |
+| Local neighbourhood | `Local graph` in the note panel, or `l` |
+| Fly to a folder / back out | click its title, or `All folders` |
+| Views | `1` graph, `2` brain, `3` timeline, `4` atlas, `5` decisions, `6` bento |
+| Reset camera | `f` |
+| New note / edit | `n`, or `Edit` in the panel |
+| Today's note | `t`, or the sun button in the toolbar |
+| Jump to a decision trail | `y` while a brief or idea note is open |
+| Open another folder | `Ctrl O` / `⌘O` |
+
+Hidden folders dim instead of disappearing, so the context stays on screen.
+Clicking a `[[link]]`, a backlink or an unlinked mention opens that note in
+place, and the arrows walk back through the chain.
+
+## Notes studio
+
+The **Notes** tab is a three-pane workspace for writing: a folder explorer (or
+flat list) with a filter (All, Pinned, Recent or one folder; sort by recent, A-Z,
+links or length), the editor, and a connections pane with backlinks, unlinked
+mentions and related notes, each with a one-line snippet. **+ New** or `n`
+starts a note; quick capture files a title straight into the Inbox. Everything
+is still plain Markdown on disk.
+
+## Editing
+
+**Edit** opens the note as plain Markdown in a textarea. What you type is what
+gets saved, frontmatter and wikilinks included.
+
+| Action | Key |
+| --- | --- |
+| Save / cancel | `Ctrl S` or `Ctrl Enter` / `Esc` |
+| Bold, italic, inline code | `Ctrl B`, `Ctrl I`, `Ctrl E` |
+| Wikilink | select text, `Ctrl K` |
+| Strikethrough, highlight, code block | `Ctrl Shift X`, `Ctrl Shift H`, `Ctrl Shift K` |
+| Heading 1–3 | `Ctrl 1`, `Ctrl 2`, `Ctrl 3` |
+| Ordered / bullet / task list | `Ctrl Shift 7`, `Ctrl Shift 8`, `Ctrl Shift 9` |
+| Blockquote | `Ctrl Shift .` |
+| Indent / outdent | `Tab` / `Shift Tab` |
+| Toggle task checkbox | `Ctrl L`, or `Ctrl Enter` on a task line |
+| Duplicate line or selection | `Ctrl Shift D` |
+| Move line up / down | `Alt Up` / `Alt Down` |
+| Insert block | `/` at the start of a line: headings, tasks, tally boxes, callouts, table, math, code, quote, divider, today's date, wikilink |
+| Shortcut cheat sheet | `?` |
+
+`⌘` replaces `Ctrl` on macOS. Typing `[` inserts `[]` with the caret inside;
+parentheses, braces and quotes do the same. Typing a closing character in front
+of one steps over it instead of duplicating it.
+
+Today's note is a normal file at `Journal/YYYY-MM-DD.md`. Cortex opens an
+existing one rather than replacing it; a new one starts with Notes, Decisions
+and Tomorrow headings.
+
+## Vault settings
+
+The gear in the toolbar holds the per-vault choices: **Opens in** (which view
+this vault starts in), **Show in folder** (hands the path to Explorer, Finder or
+your file manager), **Map** (roads and trade routes on the atlas) and **Agent
+access** (the MCP permission described above).
+
+## Several folders at once
+
+Vaults are remembered in `vaults.json` under your platform config directory
+(`$XDG_CONFIG_HOME/cortex`, `~/Library/Application Support/cortex`,
+`%APPDATA%\cortex`), overridable with `CORTEX_CONFIG_DIR`. The sidebar switches
+between open vaults without restarting; search, briefs and the palette act on the
+vault you are looking at. Nothing is copied, moved or synced, and a folder that
+has been moved shows up struck through until you forget it.
+
+A change on disk appears in about 400 ms. Only the changed files are re-parsed,
+and notes that still exist keep their positions, so the graph does not rearrange
+itself while you work. If the change lands in the note you are editing, Cortex
+warns instead of replacing your draft.
+
 ## Run it on your own vault
 
 ```bash
@@ -314,6 +324,7 @@ cortex serve ~/Notes --title "My vault"
 | `--open` | open the UI in your browser once the server is up |
 | `--app` | `serve` only: open a chromeless browser window instead of a tab |
 | `--read-only` | serve without write endpoints |
+| `--offline` | disable all outbound network requests (including the update check) |
 | `--bind 0.0.0.0` | expose on the LAN (loopback is the default) |
 | `--allow-any-origin` | relax the same-origin check (LAN preview) |
 | `--allow-framing` | allow embedding in an iframe |
@@ -329,11 +340,14 @@ That is why the default is loopback-only.
 
 ### Updates and process lifetime
 
-Cortex checks its release feed once at startup and from **Check for updates** in
-About. The Windows path downloads the installer, verifies it against that
-release's `SHA256SUMS.txt`, runs it and reopens Cortex; it never installs a build
-whose checksum does not match. macOS and Linux open the release page, because
-replacing a running Unix binary safely needs its own mechanism.
+Cortex checks its public GitHub release feed once at startup and from **Check
+for updates** in About. Uncheck **Check for updates automatically on launch** in
+Vault settings → About to opt out, or start with `--offline` (or
+`CORTEX_OFFLINE=1`) to block all outbound requests. The Windows path downloads the
+installer, verifies it against that release's `SHA256SUMS.txt`, runs it and
+reopens Cortex; it never installs a build whose checksum does not match. macOS
+and Linux open the release page, because replacing a running Unix binary safely
+needs its own mechanism.
 
 One process owns the server, the window and (on Windows and macOS) the tray. It
 starts in the background, so the terminal comes back and closing it changes
@@ -359,16 +373,18 @@ trade is left to a later release ([ADR 0009](docs/adr/0009-native-window.md)).
 ## Develop
 
 ```bash
-cargo test -p cortex-core
+cargo test --workspace --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all --check
-node --check web/js/*.js
+cargo fmt --all -- --check
+node tools/check-repo.mjs
+node --test tests/web.test.mjs
 ```
 
 `crates/core` is pure logic: parse, index, layout, search, synthesis.
 `crates/server` is axum plus the embedded `web/` UI, hand-written WebGL2 with no
-build step. CI runs the checks on Linux, macOS and Windows and publishes the
-static export to the [live demo](https://thijnperd.github.io/obsidian-cortex/).
+build step. CI runs the Rust checks, JS unit tests, and a Playwright headless
+smoke test on Linux and publishes the static export to the
+[live demo](https://thijnperd.github.io/obsidian-cortex/).
 
 ## When something is wrong
 
@@ -385,7 +401,7 @@ opens it, and it rotates once at 1 MiB. If `cortex` says nothing at all, run
 ## License
 
 MIT. See [LICENSE](LICENSE); security reports follow [SECURITY.md](SECURITY.md),
-and the 2.3.1 notes are in [docs/releases/v2.3.1.md](docs/releases/v2.3.1.md).
+and the 2.4.0 notes are in [docs/releases/v2.4.0.md](docs/releases/v2.4.0.md).
 The in-app icons are [Tabler Icons](https://tabler.io/icons), MIT licensed, with
 the notice in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

@@ -62,6 +62,9 @@ enum Command {
         /// Open a chromeless app window (Chrome, Edge or Brave) instead of a tab.
         #[arg(long)]
         app: bool,
+        /// Disable all outbound network requests (including the startup update check).
+        #[arg(long)]
+        offline: bool,
     },
     /// The instance: server, window and tray in one process.
     #[command(hide = true)]
@@ -140,6 +143,7 @@ fn main() -> Result<()> {
             allow_framing,
             open,
             app,
+            offline,
         }) => {
             let roots = match vault {
                 Some(path) => {
@@ -160,6 +164,7 @@ fn main() -> Result<()> {
                 bind,
                 port: port.unwrap_or(3000),
                 port_fallback: port.is_none(),
+                offline: offline || offline_env(),
                 stop_token: instance::token(),
             };
             let runtime = tokio::runtime::Runtime::new()?;
@@ -191,6 +196,15 @@ fn main() -> Result<()> {
         }
         Some(Command::McpConfig { vault, write }) => mcp_setup::print_and_write(vault, write),
     }
+}
+
+fn offline_env() -> bool {
+    std::env::var("CORTEX_OFFLINE").is_ok_and(|value| {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes"
+        )
+    })
 }
 
 /// Rust ignores `SIGPIPE`, so `cortex doctor | head` would panic on the closed

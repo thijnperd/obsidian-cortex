@@ -27,12 +27,41 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Test
+      - name: Test (Rust)
         run: cargo test --workspace --all-targets --locked
+      - name: Repo hygiene & module check
+        run: node tools/check-repo.mjs
+      - name: Test (Web JS)
+        run: node --test tests/web.test.mjs
+
+  smoke:
+    name: web smoke (playwright)
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build cortex
+        run: cargo build --release -p cortex --locked
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save --prefix /tmp/pw playwright
+          /tmp/pw/node_modules/.bin/playwright install chromium --with-deps
+      - name: Run headless smoke test
+        env:
+          NODE_PATH: /tmp/pw/node_modules
+        run: node tests/smoke.mjs --bin target/release/cortex
 
   # Linux and Windows only. macOS runners are the scarce resource on this
   # account, and `release.yml` already builds and tests macOS on every push to
@@ -67,7 +96,7 @@ jobs:
 
   pages:
     name: demo → github pages
-    needs: check
+    needs: [check, smoke]
     # Pages builds from Actions, so every push to main refreshes the live demo.
     if: >-
       github.ref == 'refs/heads/main'
@@ -91,6 +120,7 @@ jobs:
           mkdir -p dist/screenshots
           cp -r site/. dist/
           cp web/favicon.ico web/favicon.svg web/logo.svg web/apple-touch-icon.png dist/
+          cp assets/social-preview.jpg dist/social-preview.jpg
           cp docs/screenshots/medium/*.jpg dist/screenshots/
           cp docs/screenshots/v1-decision-trail.jpg dist/screenshots/decision-trail.jpg
           cargo run --release -p cortex --locked -- export demo --out dist/demo --title "Cortex Demo"

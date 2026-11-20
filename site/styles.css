@@ -352,6 +352,7 @@ code {
 
 /* ---------- sections ---------- */
 .section { padding: 80px 0; }
+.section-divided { border-bottom: 1px solid var(--line); }
 .section-alt {
   background: var(--surface);
   border-top: 1px solid var(--line);

@@ -11,3 +11,12 @@ static.log
 # generated video toolchain and scratch frames
 marketing/tiktok/bin/
 marketing/tiktok/_*.png
+
+# Refuse committed vault archives and personal editor state
+*.zip
+*.7z
+*.rar
+*.tar.gz
+*.tgz
+.obsidian/
+workspace.json

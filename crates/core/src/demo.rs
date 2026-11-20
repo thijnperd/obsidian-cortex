@@ -1009,40 +1009,10 @@ fn seed_medium(root: &Path) -> std::io::Result<usize> {
         write_seed(root, seed, created, &mut written)?;
     }
 
-    // Two structure notes, so the decisions view has something to show on a
-    // first run. They go through the same builder the app uses, so the demo
-    // cannot drift from the frontmatter Cortex actually writes.
-    let briefs: [(Template, &str, &[&str]); 2] = [
-        (
-            Template::Research,
-            "How does attention shape deep work?",
-            &[
-                "Deep Work",
-                "Attention Economy",
-                "Interruption Debt",
-                "Cognitive Load",
-            ],
-        ),
-        (
-            Template::Idea,
-            "Should search come before the graph?",
-            &["Second Brain", "Zettelkasten", "The Atlas"],
-        ),
-    ];
-    for (template, question, titles) in briefs {
-        let evidence = titles
-            .iter()
-            .map(|title| Evidence {
-                title: (*title).to_string(),
-                folder: "Ideas".to_string(),
-                excerpt: String::new(),
-            })
-            .collect::<Vec<_>>();
-        let body = synthesis::build(template, question, &evidence);
-        let id = format!("Synthesis/{}", store::slugify(question));
-        store::write_note(root, &id, &body).map_err(|err| Error::other(err.to_string()))?;
-        written += 1;
-    }
+    // Worked decision trails in `Synthesis/` so the Decisions board and trail
+    // reader show real reasoning across statuses, confidence, due reviews, and
+    // supersession rather than empty template stubs.
+    write_medium_decisions(root, today, &mut written)?;
 
     let mut day = start;
     let mut entry = 0usize;
@@ -1092,6 +1062,257 @@ fn with_demo_trail(
     markdown.replacen(&anchor, &format!("{anchor}{extra}"), 1)
 }
 
+fn seed_body(seed: &Seed) -> String {
+    let paragraphs = seed.points.join("\n\n");
+    format!("# {}\n\n{}\n\n{}", seed.title, seed.lede, paragraphs)
+}
+
+fn seed_evidence(seed: &Seed, created: i64) -> Evidence {
+    Evidence {
+        title: seed.title.to_string(),
+        folder: seed.folder.to_string(),
+        excerpt: seed.lede.to_string(),
+        created: dates::iso_date(created),
+        tags: seed.tags.iter().map(|tag| (*tag).to_string()).collect(),
+        body: seed_body(seed),
+        links: seed.links.iter().map(|link| (*link).to_string()).collect(),
+    }
+}
+
+struct DemoDecision<'a> {
+    title: &'a str,
+    kind: &'a str,
+    status: &'a str,
+    created_offset: i64,
+    confidence: &'a str,
+    review_offset: i64,
+    supersedes: Option<&'a str>,
+    body: &'a str,
+}
+
+fn write_medium_decisions(root: &Path, today: i64, written: &mut usize) -> std::io::Result<()> {
+    let entries = [
+        DemoDecision {
+            title: "How does attention shape deep work?",
+            kind: "research",
+            status: "open",
+            created_offset: -18,
+            confidence: "0.78",
+            review_offset: 21,
+            supersedes: None,
+            body: "## Question\n\n\
+How does protecting attention change the ceiling on complex creative work?\n\n\
+## Source comparison\n\n\
+- **Shared tags:** #attention (3), #focus (2), #systems (2)\n\
+- **Direct links:** [[Deep Work]] → [[Attention Economy]], [[Attention Economy]] → [[Interruption Debt]], [[Interruption Debt]] → [[The Cost of Context Switching]]\n\n\
+## What the sources say\n\n\
+- [[Deep Work]] (L3): Depth is a trained capacity with a warm-up tax, not a fixed trait.\n\
+- [[Interruption Debt]] (L3): One ping costs the reload of the whole mental model, not just the reply.\n\
+- [[Cognitive Load]] (L3): Externalising state frees working memory for actual judgment.\n\
+- [[Attention Residue]] (L3): Unfinished tasks continue taxing the next block after switching.\n\n\
+## Tensions\n\n\
+- [[Deep Work]] focuses on individual blocking habits, whereas [[Attention Economy]] and [[Constraints]] treat distraction as a structural default problem.\n\n\
+## Synthesis\n\n\
+Uninterrupted two-hour blocks only compound when open loops are parked externally before starting; willpower without structural friction leaks on the first notification.\n\n\
+## Open questions\n\n\
+- [ ] Measure whether closing all messaging clients beats batching replies at noon.\n\n\
+## Evidence\n\n\
+- [[Deep Work]] — *Ideas* — Concentration on cognitively demanding tasks compounds through practice.\n\
+- [[Attention Economy]] — *Ideas* — Surfaces compete for the moment before intent forms.\n\
+- [[Interruption Debt]] — *Ideas* — Context reload taxes every switch.\n\
+- [[Cognitive Load]] — *Ideas* — Writing offloads working memory.\n\
+- [[Attention Residue]] — *Research* — Closing rituals stop prior tasks from bleeding forward.",
+        },
+        DemoDecision {
+            title: "Should search come before the graph?",
+            kind: "idea",
+            status: "refining",
+            created_offset: -35,
+            confidence: "0.62",
+            review_offset: -4,
+            supersedes: None,
+            body: "## Situation\n\n\
+- **Shared tags:** #knowledge (3), #visualization (2)\n\
+- [[Second Brain]] (L3): Retrieval and trust cost more than capture.\n\
+- [[Graph Views]] (L3): Global graphs look dramatic once, whereas search and local neighbourhoods answer daily questions.\n\n\
+## Assumptions\n\n\
+- [x] load-bearing: Keyboard search (`Ctrl K`) reaches any known note in under two seconds.\n\
+- [ ] load-bearing: Spatial memory only helps if folder regions remain deterministic across sessions.\n\
+- [ ] cosmetic: Keeping the full global graph as the default home canvas.\n\n\
+## Options\n\n\
+### A. Search-first palette + two-hop local graph\n\n\
+- Effort: low\n\
+- Risk: low\n\
+- Reversible: yes\n\n\
+### B. Open directly into the 3D cortical brain as orientation\n\n\
+- Effort: medium\n\
+- Risk: medium — can read as decoration if the path to reading and writing takes extra clicks\n\
+- Reversible: yes\n\n\
+## Recommendation\n\n\
+Keep Brain as the visual front door for spatial orientation, and bind `Ctrl K` everywhere so retrieval never waits on orbiting the canvas. Revisit after watching whether returning sessions open in Notes Studio or Brain.\n\n\
+## What would change my mind\n\n\
+- Returning users closing the canvas immediately to stay inside a flat file list.\n\n\
+## Evidence\n\n\
+- [[Second Brain]] — *Ideas* — A note you cannot retrieve is a note you did not write.\n\
+- [[Zettelkasten]] — *Ideas* — Neighbourhoods carry meaning individual cards lack.\n\
+- [[The Atlas]] — *Maps* — Hub notes anchor cross-folder trails.\n\
+- [[Graph Views]] — *Systems* — Graphs are reading aids for clusters and bridges.\n\
+- [[Spatial Memory]] — *Research* — Stable placement beats unsorted lists.",
+        },
+        DemoDecision {
+            title: "Keep positions deterministic across reloads",
+            kind: "idea",
+            status: "accepted",
+            created_offset: -28,
+            confidence: "0.91",
+            review_offset: 90,
+            supersedes: None,
+            body: "## Situation\n\n\
+- **Direct links:** [[Layout as Memory]] → [[Spatial Memory]], [[Spatial Memory]] → [[Graph Views]]\n\
+- [[Layout as Memory]] (L3): Force-directed jitter destroys spatial recall every time a single file is added.\n\
+- [[Spatial Memory]] (L3): People remember which corner holds Systems or Craft faster than exact file paths.\n\n\
+## Assumptions\n\n\
+- [x] load-bearing: Folder regions and node coordinates can be seeded deterministically from graph topology.\n\
+- [x] load-bearing: Incremental reloads preserve existing coordinates while inserting new notes cleanly.\n\n\
+## Options\n\n\
+### A. Non-deterministic force simulation on each load\n\n\
+- Effort: low\n\
+- Risk: high — turns the map into a screensaver\n\
+- Reversible: yes\n\n\
+### B. Deterministic topology-keyed coordinates\n\n\
+- Effort: medium\n\
+- Risk: low\n\
+- Reversible: yes\n\n\
+## Recommendation\n\n\
+Lock layout determinism as a hard invariant across Brain, Graph, and Atlas. Never seed layout or geometry from wall-clock time or `Math.random()`.\n\n\
+## What would change my mind\n\n\
+- Adding a new folder shifting unrelated regions significantly.\n\n\
+## Evidence\n\n\
+- [[Layout as Memory]] — *Systems* — Stable places are easier to remember than lists.\n\
+- [[Spatial Memory]] — *Research* — Spatial arrangement compresses recall.\n\
+- [[Graph Views]] — *Systems* — Clusters only teach when they stay put.\n\
+- [[Constraints]] — *Research* — Choosing one invariant removes entire classes of bugs.",
+        },
+        DemoDecision {
+            title: "Store decision trails in plain frontmatter",
+            kind: "idea",
+            status: "accepted",
+            created_offset: -14,
+            confidence: "0.86",
+            review_offset: 45,
+            supersedes: Some("Track decisions in a separate database"),
+            body: "## Situation\n\n\
+- **Shared tags:** #software (4)\n\
+- [[Plain Text]] (L3): Proprietary sidecar databases rot the moment a user opens their vault in another editor.\n\
+- [[The Smallest Viable Schema]] (L3): Five optional YAML keys (`type`, `status`, `confidence`, `review_on`, `supersedes`) are enough to power the board.\n\n\
+## Assumptions\n\n\
+- [x] load-bearing: Obsidian, Git, and MCP agents all read and edit standard YAML frontmatter safely.\n\
+- [ ] cosmetic: Custom status names beyond `open` and `refining` stay valid columns automatically.\n\n\
+## Options\n\n\
+### A. Frontmatter YAML on ordinary Markdown notes\n\n\
+- Effort: low\n\
+- Risk: low\n\
+- Reversible: yes\n\n\
+### B. Local SQLite decision ledger (superseded)\n\n\
+- Effort: high\n\
+- Risk: high — splits truth between files and hidden state\n\
+- Reversible: hard\n\n\
+## Recommendation\n\n\
+Store every decision field in YAML frontmatter inside `Synthesis/` and treat the Decisions board as a read-only projection of those files.\n\n\
+## What would change my mind\n\n\
+- Real user vaults needing multi-vault cross-links that Markdown frontmatter cannot represent cleanly.\n\n\
+## Evidence\n\n\
+- [[Plain Text]] — *Systems* — Plain text never needs a migration.\n\
+- [[Local First]] — *Systems* — Files outlive every viewer.\n\
+- [[The Smallest Viable Schema]] — *Systems* — Frontmatter should hold only what you query.\n\
+- [[Portability]] — *Systems* — Tools earn trust by making exit free.\n\
+- [[Filesystem as API]] — *Systems* — Every editor already speaks files.",
+        },
+        DemoDecision {
+            title: "When does spaced review beat re-reading?",
+            kind: "research",
+            status: "open",
+            created_offset: -9,
+            confidence: "0.74",
+            review_offset: 14,
+            supersedes: None,
+            body: "## Question\n\n\
+When is revisiting an old decision or note on a schedule worth more than capturing new material?\n\n\
+## Source comparison\n\n\
+- **Shared tags:** #learning (3), #memory (2)\n\
+- **Direct links:** [[Spaced Repetition]] → [[Working Memory]], [[Testing Effect]] → [[Spaced Repetition]]\n\n\
+## What the sources say\n\n\
+- [[Testing Effect]] (L3): Retrieval builds durable recall even when the first attempt feels effortful.\n\
+- [[Memory Consolidation]] (L3): Re-encountering an idea in a fresh context updates its links instead of merely refreshing text.\n\
+- [[Spaced Repetition]] (L3): Scheduling reviews on `review_on` dates applies spacing to decisions, not just flashcards.\n\n\
+## Tensions\n\n\
+- [[Deliberate Practice]] warns against comfortable repetition, whereas naive review queues risk turning notes into chore checklists.\n\n\
+## Synthesis\n\n\
+Review dates earn their keep on uncertain or time-sensitive decisions (`confidence < 0.8`) rather than evergreen reference notes; overdue reviews flag themselves on the Decisions board.\n\n\
+## Open questions\n\n\
+- [ ] What default `review_on` cadence prevents stale assumptions without creating alert fatigue?\n\n\
+## Evidence\n\n\
+- [[Spaced Repetition]] — *Research* — Recall near forgetting builds durable access.\n\
+- [[Testing Effect]] — *Research* — Retrieval causes learning.\n\
+- [[Memory Consolidation]] — *Research* — Replayed ideas pick up new context.\n\
+- [[Working Memory]] — *Research* — External schedules free mental queues.\n\
+- [[Deliberate Practice]] — *Research* — Feedback separates practice from habit.",
+        },
+        DemoDecision {
+            title: "Track decisions in a separate database",
+            kind: "idea",
+            status: "superseded",
+            created_offset: -60,
+            confidence: "0.35",
+            review_offset: 120,
+            supersedes: None,
+            body: "## Situation\n\n\
+- Early prototype considered storing decision statuses, confidence scores, and review schedules in a hidden `.cortex/decisions.sqlite` index.\n\n\
+## Assumptions\n\n\
+- [ ] load-bearing: Users would not mind decision metadata living outside their Markdown folder. (Disproved by [[Local First]] and [[Portability]].)\n\n\
+## Options\n\n\
+### A. Hidden SQLite index\n\n\
+- Effort: medium\n\
+- Risk: high — invisible to Obsidian, Git diffs, and plain-text backups\n\
+- Reversible: hard\n\n\
+### B. Plain Markdown frontmatter\n\n\
+- Effort: low\n\
+- Risk: low\n\
+- Reversible: trivial\n\n\
+## Recommendation\n\n\
+Superseded by [[Store decision trails in plain frontmatter]]: keep the index strictly derived from files on disk so deleting Cortex leaves nothing stranded.\n\n\
+## What would change my mind\n\n\
+- Already superseded.\n\n\
+## Evidence\n\n\
+- [[Local First]] — *Systems* — Failure modes matter more than convenience.\n\
+- [[Portability]] — *Systems* — Leaving should cost zero export steps.\n\
+- [[Data Gravity]] — *Systems* — Formats that stay plain win over time.\n\
+- [[Graceful Degradation]] — *Systems* — Notes stay legible even without the app.",
+        },
+    ];
+
+    for item in entries {
+        let created = dates::iso_date(today + item.created_offset);
+        let review_on = dates::iso_date(today + item.review_offset);
+        let mut frontmatter = format!(
+            "---\ntype: {}\nstatus: {}\ncreated: {created}\ntitle: \"{}\"\nconfidence: {}\nreview_on: {review_on}\n",
+            item.kind, item.status, item.title, item.confidence
+        );
+        if let Some(target) = item.supersedes {
+            frontmatter.push_str(&format!("supersedes: \"[[{target}]]\"\n"));
+        }
+        frontmatter.push_str(&format!("tags:\n  - {}\n---\n\n", item.kind));
+        let full = format!(
+            "{frontmatter}# {}\n\n{}\n\n<!-- cortex:{} -->\n",
+            item.title, item.body, item.kind
+        );
+        let id = format!("Synthesis/{}", store::slugify(item.title));
+        store::write_note(root, &id, &full).map_err(|err| Error::other(err.to_string()))?;
+        *written += 1;
+    }
+    Ok(())
+}
+
 /// A small first-run vault: twelve concept notes, two maps, a short journal and
 /// one of each decision card. Every link is filtered to a title that exists.
 fn seed_small(root: &Path) -> std::io::Result<usize> {
@@ -1130,11 +1351,8 @@ fn seed_small(root: &Path) -> std::io::Result<usize> {
     let evidence: Vec<Evidence> = chosen
         .iter()
         .take(3)
-        .map(|seed| Evidence {
-            title: seed.title.to_string(),
-            folder: seed.folder.to_string(),
-            excerpt: seed.lede.to_string(),
-        })
+        .enumerate()
+        .map(|(index, seed)| seed_evidence(seed, start + index as i64 * 11))
         .collect();
     let research_question = "What makes a small vault useful?";
     let idea_question = "Should a first vault start with three folders or ten?";
@@ -1157,19 +1375,46 @@ fn seed_small(root: &Path) -> std::io::Result<usize> {
         ),
     ];
     for (template, question, confidence, review_on, supersedes) in briefs {
-        let body = with_demo_trail(
+        let mut body = with_demo_trail(
             synthesis::build(template, question, &evidence),
             template.status(),
             confidence,
             review_on,
             supersedes,
         );
+        body = populate_small_brief(template, body);
         let id = format!("Synthesis/{}", store::slugify(question));
         store::write_note(root, &id, &body).map_err(|err| Error::other(err.to_string()))?;
         written += 1;
     }
 
     Ok(written)
+}
+
+fn populate_small_brief(template: Template, markdown: String) -> String {
+    match template {
+        Template::Research => markdown.replacen(
+            "Your conclusion in your own words, grounded in the lines above.\n\n- ",
+            "A small vault becomes useful once every note answers a concrete question and links back to the concepts it depends on.",
+            1,
+        ),
+        Template::Idea => markdown
+            .replacen(
+                "### A. \n\n- Effort: \n- Risk: \n- Reversible: ",
+                "### A. Three top-level folders (Ideas, Research, Journal)\n\n- Effort: low\n- Risk: low\n- Reversible: yes",
+                1,
+            )
+            .replacen(
+                "### B. \n\n- Effort: \n- Risk: \n- Reversible: ",
+                "### B. Ten topic folders upfront\n\n- Effort: high — taxonomy breaks as projects evolve\n- Risk: medium\n- Reversible: medium",
+                1,
+            )
+            .replacen(
+                "Pick one, in two sentences. Name the runner-up and when to switch.\n\n- ",
+                "Start with three folders so capture stays frictionless, and split a topic out only after a cluster crosses ~15 linked notes.",
+                1,
+            ),
+    }
 }
 
 struct Theme {
@@ -1384,9 +1629,18 @@ struct GenNote {
     points: String,
 }
 
-/// A large library: the medium vault, then a themed library, a three-year daily
-/// journal and two dozen decision cards. Titles are unique, links are built
-/// after every title exists, and the result is the same on every run.
+fn folder_note_count(folder_index: usize, per_folder: usize) -> usize {
+    if per_folder < 8 {
+        return per_folder.max(2);
+    }
+    const FACTORS: &[usize] = &[145, 65, 112, 82, 162, 46, 124, 92, 68, 134];
+    let factor = FACTORS[folder_index % FACTORS.len()];
+    ((per_folder * factor) / 100).max(4)
+}
+
+/// A large library: the medium vault, then a varied themed library, a three-year
+/// daily journal and two dozen decision cards. Titles are unique, links are
+/// built after every title exists, and the result is the same on every run.
 fn seed_large(
     root: &Path,
     folder_count: usize,
@@ -1399,9 +1653,13 @@ fn seed_large(
     let themes = &THEMES[..folder_count.min(THEMES.len())];
     let mut notes: Vec<GenNote> = Vec::new();
     let mut used: HashSet<String> = HashSet::new();
+    let mut spans: Vec<(usize, usize)> = Vec::with_capacity(themes.len());
 
     for (folder_index, theme) in themes.iter().enumerate() {
-        for index in 0..per_folder {
+        let folder_start = notes.len();
+        let count = folder_note_count(folder_index, per_folder);
+        spans.push((folder_start, count));
+        for index in 0..count {
             let adjective = ADJECTIVES[(index + folder_index * 5) % ADJECTIVES.len()];
             let noun = NOUNS[(index / ADJECTIVES.len() + index * 3 + folder_index) % NOUNS.len()];
             let kind = KINDS[(index + folder_index) % KINDS.len()];
@@ -1455,13 +1713,12 @@ fn seed_large(
         }
     }
 
-    for (folder_index, _) in themes.iter().enumerate() {
-        let folder_start = folder_index * per_folder;
-        for local in 0..per_folder {
+    for &(folder_start, count) in &spans {
+        for local in 0..count {
             let index = folder_start + local;
             let mut links: Vec<String> = Vec::new();
             for slot in 0..3 {
-                let target = folder_start + (local * 17 + slot * 23 + 5) % per_folder;
+                let target = folder_start + (local * 17 + slot * 23 + 5) % count;
                 if target != index {
                     links.push(notes[target].title.clone());
                 }
@@ -1514,7 +1771,9 @@ fn seed_large(
 
     // Decision cards: enough to make the columns scroll, all with real sources.
     for index in 0..24usize {
-        let theme = &themes[index % themes.len()];
+        let theme_idx = index % spans.len();
+        let theme = &themes[theme_idx];
+        let (folder_start, count) = spans[theme_idx];
         let template = if index % 2 == 0 {
             Template::Research
         } else {
@@ -1528,12 +1787,16 @@ fn seed_large(
         );
         let evidence: Vec<Evidence> = (0..3)
             .map(|slot| {
-                let local = (index * 3 + slot * 5 + 1) % per_folder;
-                let note = &notes[(index % themes.len()) * per_folder + local];
+                let local = (index * 3 + slot * 5 + 1) % count;
+                let note = &notes[folder_start + local];
                 Evidence {
                     title: note.title.clone(),
                     folder: note.folder.clone(),
                     excerpt: note.lede.clone(),
+                    created: dates::iso_date(note.created),
+                    tags: vec![note.tag.to_string(), note.kind.to_string()],
+                    body: format!("{}\n\n{}", note.lede, note.points),
+                    links: Vec::new(),
                 }
             })
             .collect();
@@ -1639,9 +1902,19 @@ mod tests {
         assert!(vault.notes.iter().all(|n| !n.title.is_empty()));
         assert!(vault.notes.iter().any(|n| n.folder == "Maps"));
         let board = crate::structures::board(&vault);
-        assert_eq!(board.total, 2, "the demo ships a brief and an idea");
-        assert_eq!(board.open, 2);
+        assert!(
+            board.total >= 6,
+            "the medium demo ships a populated decisions board, got {}",
+            board.total
+        );
+        assert!(board.open >= 3);
         assert!(board.cards.iter().all(|card| !card.evidence.is_empty()));
+        let has_trail = board
+            .cards
+            .iter()
+            .any(|card| card.confidence.is_some() && card.review_on.is_some());
+        assert!(has_trail);
+        assert!(board.cards.iter().any(|card| card.supersedes.is_some()));
     }
 
     #[test]

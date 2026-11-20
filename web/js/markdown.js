@@ -668,7 +668,7 @@ function inline(value, exists, ctx = { pipIndex: 0, taskIndex: 0 }) {
 
   // 5. Wikilinks [[target|alias]]
   text = text.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, target, alias) => {
-    const cleanTarget = target.trim();
+    const cleanTarget = target.replace(/\\+$/, '').trim();
     const name = (alias || cleanTarget).trim();
     if (isAttachmentTarget(cleanTarget)) {
       return stash(

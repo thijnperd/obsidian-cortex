@@ -36,6 +36,7 @@ pub struct Check {
     pub available: bool,
     pub url: Option<String>,
     pub can_install: bool,
+    pub disabled: bool,
     pub error: Option<String>,
 }
 
@@ -47,7 +48,20 @@ impl Check {
             available: false,
             url: None,
             can_install: false,
+            disabled: false,
             error: Some(message.into()),
+        }
+    }
+
+    pub fn disabled() -> Check {
+        Check {
+            current: version::VERSION.to_string(),
+            latest: None,
+            available: false,
+            url: None,
+            can_install: false,
+            disabled: true,
+            error: Some("Offline mode is enabled; update checks are disabled".to_string()),
         }
     }
 }
@@ -129,6 +143,7 @@ pub fn check() -> Check {
         available,
         url: Some(url),
         can_install: available && cfg!(windows),
+        disabled: false,
         error: None,
     }
 }
@@ -405,5 +420,14 @@ mod tests {
             lookup_sum(long, "CortexSetup-0.8.0.exe").as_deref(),
             Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
         );
+    }
+
+    #[test]
+    fn disabled_reports_offline_without_available_update() {
+        let check = Check::disabled();
+        assert!(check.disabled);
+        assert!(!check.available);
+        assert!(!check.can_install);
+        assert!(check.error.is_some());
     }
 }

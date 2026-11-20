@@ -59,3 +59,5 @@ SmartScreen instructions. Signing remains its own decision.
   before exit is deliberate: it lets the "Installing…" response reach the page.
 - If `curl` is missing, the check reports that plainly instead of failing open.
   No update is ever installed on a failed check.
+- Users can opt out of automatic launch checks via the checkbox in Vault settings
+  → About, or disable all outbound requests with `--offline` / `CORTEX_OFFLINE=1`.

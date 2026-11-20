@@ -1,12 +1,42 @@
 # Changelog
 
-## 2.2.0 - Notes studio
+## 2.4.0 — Source comparison, offline mode & CI smoke gate
+
+- **Deterministic source comparison in Research Brief:** extracts shared tags/references, direct cross-links, unlinked phrase overlaps, line-cited key claims (`(L#)`), contrast/caveat tensions, and open questions across selected sources.
+- **Populated Decisions view:** added a live decision status summary strip (`#open`, `#refining`, `#accepted`, `#superseded`, overdue review alerts) and seeded six worked decisions across all four columns in the default demo vault.
+- **Strict offline mode:** added `--offline` / `CORTEX_OFFLINE` and a Settings toggle (`Check GitHub releases on launch`) to disable the startup update probe.
+- **Headless UI smoke gate & repo checks:** added `tools/check-repo.mjs` (archive/leak check, version parity, OG metadata check, static ES export verification), `tests/web.test.mjs`, and `tests/smoke.mjs` (Playwright boot, all views, edit/save persistence), wired into CI and releases.
+- **Landing site & repo hygiene:** added Open Graph / Twitter metadata cards, documented Agent-safe MCP as a dedicated feature section, removed committed vault archive `Dragonlance.zip`, and fixed escaped-pipe wikilinks (`\|`).
+
+## 2.3.1 — Universe layout
+
+- **Folder galaxies spread over a sphere at every vault size:** vaults with 12 folders or fewer now use the same spherical universe layout as larger vaults instead of two offset crowns; the journal folder keeps its tilted orbit.
+
+## 2.3.0 — Folder explorer
+
+- **Notes tab folder explorer:** collapsible tree of the real vault hierarchy with note counts, single-line note rows, and a Folders/List toggle. Filtering opens matching folders and the open note's folders expand automatically.
+- **Calmer Notes layout:** copy link, reveal, locate in graph and zen mode grouped into one `…` menu; flat list hides excerpts until hover; active tab scrolls into view.
+- Version 2.3.0 across the binary, installer, README, and landing site.
+
+## 2.2.1 — Boot fix
+
+- **Fixed boot overlay never hiding:** restored UI helper exports (`toast`, `setBootStatus`, `hideBoot`, `setCrumbs`, `setModeButtons`, `showTooltip`, `hideTooltip`, `renderPaletteHits`) that were dropped in 2.2.0.
+- Restored post-boot in-app update check and banner.
+
+## 2.2.0 — Notes studio
 
 - **Notes studio tab:** filterable, sortable, pinnable note list; editor; connections pane with snippets for backlinks, mentions and related notes.
 - **Slash menu and editor shortcuts:** `/` inserts headings, tasks, tally boxes, callouts, tables, math, code, quotes, dividers, today's date and wikilinks; `Ctrl L` toggles tasks, `Ctrl Shift D` duplicates a line, `Alt Up/Down` moves it; `?` opens a shortcut cheat sheet.
 - **Quick capture** into the Inbox and a **Create note** option for unresolved links.
 - Server: note connections now carry a `snippet` field.
 - Version 2.2.0 across the binary, installer, README, landing site.
+
+## 2.1.0 — Tallies, Medieval roads, Atlas biomes & 3D styles
+
+- **Tally board:** inline `☐`/`☑` ballot trackers and custom sidebar counters synced directly back to Markdown notes.
+- **Atlas biomes & medieval roads:** woodland, highlands, wastes, wetlands, tundra, and steppe layers plus bridges, mountain tunnels, and trade routes, with cached atlas layer rendering.
+- **Star styles & Brain modes:** switch between Glow, Anime impact, and Dots star rendering and Cortical shell vs Notes-form-brain views.
+- **Full-span graph edges & Markdown upgrades:** fixed `appear=1.0` dot culling, added full-span graph edges, and added Markdown tables, LaTeX math, callouts, and an updated emblem icon.
 
 ## 2.0.0 — Precision Editorial Studio
 

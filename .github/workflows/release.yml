@@ -153,11 +153,37 @@ jobs:
             exit 1
           }
 
+  # Gate every release on JS checks and a headless boot + 7-view + save smoke test.
+  smoke:
+    name: web smoke (playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Repo hygiene & module check
+        run: node tools/check-repo.mjs
+      - name: Test (Web JS)
+        run: node --test tests/web.test.mjs
+      - name: Build cortex
+        run: cargo build --release -p cortex --locked
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save --prefix /tmp/pw playwright
+          /tmp/pw/node_modules/.bin/playwright install chromium --with-deps
+      - name: Run headless smoke test
+        env:
+          NODE_PATH: /tmp/pw/node_modules
+        run: node tests/smoke.mjs --bin target/release/cortex
+
   publish:
     name: attach binaries to the version release
     if: startsWith(github.ref, 'refs/tags/v')
     # Not build-macos: a queued macOS runner must never hold back a release.
-    needs: [verify-version, build]
+    needs: [verify-version, build, smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -178,7 +204,7 @@ jobs:
   publish-latest:
     name: refresh the rolling latest download
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
+    needs: [build, smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

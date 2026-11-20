@@ -5,7 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="dark" />
   <script src="./theme.js"></script>
-  <meta name="description" content="Cortex turns a folder of Markdown into a brain you can see — and keeps the reasoning trail behind every decision. Local-first desktop app in Rust + WebGL." />
+  <meta name="description" content="Cortex turns a folder of Markdown into a deterministic 3D brain you can see, compares your sources into decision trails, and exposes an agent-safe MCP server." />
+  <link rel="canonical" href="https://thijnperd.github.io/obsidian-cortex/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://thijnperd.github.io/obsidian-cortex/" />
+  <meta property="og:title" content="Cortex — Your notes, as a brain." />
+  <meta property="og:description" content="Local-first Markdown studio in Rust + WebGL: deterministic brain and atlas maps, source-comparing decision trails, and deny-by-default MCP access." />
+  <meta property="og:image" content="https://thijnperd.github.io/obsidian-cortex/social-preview.jpg" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="640" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Cortex — Your notes, as a brain." />
+  <meta name="twitter:description" content="Local-first Markdown studio in Rust + WebGL: deterministic brain and atlas maps, source-comparing decision trails, and deny-by-default MCP access." />
+  <meta name="twitter:image" content="https://thijnperd.github.io/obsidian-cortex/social-preview.jpg" />
   <title>Cortex — Your notes, as a brain.</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="icon" href="./favicon.ico" sizes="32x32" />
@@ -29,12 +41,13 @@
       <a class="brand" href="./">
         <img src="./logo.svg" width="30" height="30" alt="" />
         <span class="brand-name">Cortex</span>
-        <span class="brand-version">v2.0</span>
+        <span class="brand-version">v2.4.0</span>
       </a>
 
       <nav class="site-nav" aria-label="Primary">
         <a href="#views">Six views</a>
         <a href="#decisions">Decisions</a>
+        <a href="#mcp">Agent-safe MCP</a>
         <a href="#local-first">Local-first</a>
         <a href="#download">Download</a>
       </nav>
@@ -55,7 +68,7 @@
   <main>
     <section class="hero">
       <div class="container hero-inner">
-        <p class="hero-kicker">Cortex 2.0 · Precision Editorial Studio · MIT Open Source</p>
+        <p class="hero-kicker">Cortex 2.4.0 · Local-First Knowledge Studio · MIT Open Source</p>
         <h1 class="hero-title">Your notes, as a brain.</h1>
         <p class="hero-sub">
           Cortex reads a folder of Markdown and draws it as a cortical surface — folders as regions, notes as stars, wikilinks as fibre tracts — and keeps the reasoning trail behind every decision.
@@ -68,12 +81,12 @@
           </a>
           <a class="btn btn-lg" id="hero-download" href="#download">
             <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
-            <span id="hero-download-label">Download v2.3.1</span>
+            <span id="hero-download-label">Download v2.4.0</span>
           </a>
         </div>
 
         <p class="hero-meta">
-          <span>328-note live demo, no install</span>
+          <span>332-note live demo, no install</span>
           <span>Windows · macOS · Linux</span>
           <span>No account, no cloud, no database</span>
         </p>
@@ -199,20 +212,20 @@
         <div class="split-grid">
           <div class="split-copy">
             <p class="section-kicker">The “why” layer</p>
-            <h2 class="section-title" id="decisions-heading">Most tools help you collect. Cortex helps you conclude.</h2>
+            <h2 class="section-title" id="decisions-heading">Most tools help you collect. Cortex compares your sources and keeps the reasoning.</h2>
             <p class="section-sub">
-              Select two or more notes to scaffold a <strong>Research brief</strong> or <strong>Refine idea</strong> note in plain Markdown. Cortex tracks confidence, review dates, and superseded choices directly from your frontmatter — no proprietary database, no AI required.
+              Select two or more notes to build a <strong>Research brief</strong> or <strong>Refine idea</strong> note in plain Markdown. Cortex extracts line-cited claims, shared tags and references, unlinked overlaps, flagged caveats, and open questions — then tracks confidence, review dates, and superseded choices directly from your frontmatter.
             </p>
 
             <div class="code-card">
               <div class="code-card-head">
-                <span>Synthesis/ship-the-why-layer.md</span>
+                <span id="frontmatter-caption">Synthesis/ship-the-why-layer.md</span>
                 <button class="copy-btn" type="button" data-copy-target="frontmatter-code" aria-label="Copy frontmatter example">
                   <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
                   <span>Copy</span>
                 </button>
               </div>
-              <pre><code id="frontmatter-code">---
+              <pre role="region" aria-labelledby="frontmatter-caption" tabindex="0"><code id="frontmatter-code">---
 type: idea
 status: accepted
 confidence: 0.8
@@ -222,16 +235,48 @@ supersedes: "[[Earlier decision]]"
             </div>
 
             <ul class="feature-list">
-              <li><strong>Visual confidence meters</strong> on every decision card and trail header.</li>
-              <li><strong>Review due alerts</strong> automatically surface past review dates so choices never go stale.</li>
+              <li><strong>Source comparison &amp; citations</strong> pull line-numbered claims (<code>L#</code>), shared links, and unlinked overlaps into one brief.</li>
+              <li><strong>Visual confidence meters &amp; review alerts</strong> surface stale assumptions when <code>review_on</code> passes.</li>
               <li><strong>Focus reader &amp; tabbed connections</strong> let you read long briefs without losing the vault behind them.</li>
             </ul>
           </div>
 
           <figure class="split-media">
-            <img src="./screenshots/decision-trail.jpg" width="1440" height="900" loading="lazy" alt="Cortex v2 Decisions view with open Studio Reader panel showing a Decision trail card, confidence bar, and tabbed connections" />
+            <img src="./screenshots/decision-trail.jpg" width="1440" height="900" loading="lazy" alt="Cortex Decisions view with open Studio Reader panel showing a Decision trail card, confidence bar, and tabbed connections" />
             <figcaption>Press <code>y</code> inside any brief or idea note to jump straight to its reasoning trail.</figcaption>
           </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-divided" id="mcp" aria-labelledby="mcp-heading">
+      <div class="container">
+        <div class="split-grid">
+          <div class="split-copy">
+            <p class="section-kicker">Agent-safe MCP</p>
+            <h2 class="section-title" id="mcp-heading">Let AI clients work in your vault without trusting them blindly.</h2>
+            <p class="section-sub">
+              No built-in LLM or API key is required. When you want Claude Desktop, Cursor, or Zed to read or update notes, <code>cortex mcp</code> enforces strict guardrails over stdio:
+            </p>
+            <ul class="feature-list">
+              <li><strong>Deny-by-default access</strong> via a per-vault switch (<code>cortex agents ~/Notes --off</code> stops connected clients on the next call).</li>
+              <li><strong>Read-hash preconditions</strong> require an exact <code>expect</code> hash from <code>cortex_read_note</code> so edits never clobber concurrent changes.</li>
+              <li><strong>Zero delete tool &amp; strict path checks</strong> refuse traversal, symlinks, and <code>.obsidian/</code> writes; every mutation appends to <code>agent-writes.jsonl</code>.</li>
+            </ul>
+          </div>
+
+          <div class="code-card">
+            <div class="code-card-head">
+              <span id="mcp-code-caption">Configure Claude Desktop &amp; Cursor in one command</span>
+              <button class="copy-btn" type="button" data-copy-target="mcp-code" aria-label="Copy MCP setup command">
+                <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
+                <span>Copy</span>
+              </button>
+            </div>
+            <pre role="region" aria-labelledby="mcp-code-caption" tabindex="0"><code id="mcp-code">cortex mcp-config --vault ~/Notes --write
+cortex mcp ~/Notes
+cortex agents ~/Notes --off</code></pre>
+          </div>
         </div>
       </div>
     </section>
@@ -260,8 +305,8 @@ supersedes: "[[Earlier decision]]"
             <p>Open your existing vault in place. Wikilinks, aliases, anchors, tags, and YAML frontmatter work untouched — deleting the app leaves your notes spotless.</p>
           </article>
           <article class="pillar">
-            <h3>Optional MCP server</h3>
-            <p>No built-in model or API key. When you want Claude Desktop or Cursor to assist, <code>cortex mcp</code> enforces deny-by-default access, hash preconditions, and zero delete tools.</p>
+            <h3>Offline-ready &amp; transparent</h3>
+            <p>Zero telemetry and no built-in model. The optional GitHub release check can be toggled off in Vault settings → About or disabled globally with <code>--offline</code>.</p>
           </article>
         </div>
       </div>
@@ -270,10 +315,10 @@ supersedes: "[[Earlier decision]]"
     <section class="section section-alt" id="download" aria-labelledby="download-heading">
       <div class="container">
         <header class="section-head">
-          <p class="section-kicker">Install Cortex 2.3.1</p>
+          <p class="section-kicker">Install Cortex 2.4.0</p>
           <h2 class="section-title" id="download-heading">Open your vault in thirty seconds.</h2>
           <p class="section-sub">
-            Signed checksums (<code>SHA256SUMS.txt</code>) ship with every GitHub Release. Prefer to test first? Launch the 328-note live demo in your browser.
+            Published SHA-256 checksums (<code>SHA256SUMS.txt</code>) ship with every GitHub Release. Prefer to test first? Launch the 332-note live demo in your browser.
           </p>
         </header>
 
@@ -285,7 +330,7 @@ supersedes: "[[Earlier decision]]"
             </div>
             <p>Per-user installer (no admin rights) or portable unpacked archive. Native WebView2 window + system tray.</p>
             <div class="download-links">
-              <a class="btn btn-primary" href="https://github.com/thijnperd/obsidian-cortex/releases/latest" target="_blank" rel="noopener">CortexSetup-2.3.1.exe</a>
+              <a class="btn btn-primary" href="https://github.com/thijnperd/obsidian-cortex/releases/latest" target="_blank" rel="noopener">CortexSetup-2.4.0.exe</a>
               <a class="btn" href="https://github.com/thijnperd/obsidian-cortex/releases/latest" target="_blank" rel="noopener">Portable .zip</a>
             </div>
           </article>
@@ -315,13 +360,13 @@ supersedes: "[[Earlier decision]]"
 
         <div class="code-card source-card">
           <div class="code-card-head">
-            <span>Or build &amp; run from source (Rust 1.85+)</span>
+            <span id="source-code-caption">Or build &amp; run from source (Rust 1.85+)</span>
             <button class="copy-btn" type="button" data-copy-target="source-code" aria-label="Copy source build commands">
               <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
               <span>Copy</span>
             </button>
           </div>
-          <pre><code id="source-code">git clone https://github.com/thijnperd/obsidian-cortex.git
+          <pre role="region" aria-labelledby="source-code-caption" tabindex="0"><code id="source-code">git clone https://github.com/thijnperd/obsidian-cortex.git
 cd obsidian-cortex
 cargo run -p cortex -- seed-demo demo
 cargo run -p cortex -- serve demo --open</code></pre>

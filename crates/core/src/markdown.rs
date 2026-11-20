@@ -372,14 +372,17 @@ fn parse_link(inner: &str, embed: bool) -> Option<Link> {
         return None;
     }
     let (target_with_anchor, alias) = match inner.split_once('|') {
-        Some((target, alias)) => (target, Some(truncate_chars(alias.trim(), 200))),
+        Some((target, alias)) => (
+            target.trim_end_matches(|c: char| c == '\\' || c.is_whitespace()),
+            Some(truncate_chars(alias.trim(), 200)),
+        ),
         None => (inner, None),
     };
     let (path, anchor) = match target_with_anchor.split_once('#') {
         Some((path, anchor)) => (path, Some(anchor.trim().to_string())),
         None => (target_with_anchor, None),
     };
-    let target = path.trim();
+    let target = path.trim().trim_end_matches('\\').trim();
     // `[[#heading]]` points inside the same note; nothing to add to the graph.
     if target.is_empty() {
         return None;
@@ -622,5 +625,18 @@ mod tests {
         let parsed = parse("\u{feff}---\r\ntitle: Win\r\n---\r\n[[a]]\r\n");
         assert_eq!(parsed.frontmatter.title.as_deref(), Some("Win"));
         assert_eq!(parsed.links[0].target, "a");
+    }
+
+    #[test]
+    fn strips_escaped_pipe_backslash_in_wikilinks() {
+        let parsed = parse("| [[Note\\|Alias]] | [[Note \\| Spaced]] | [[Note#Sec\\|Anchor]] |");
+        assert_eq!(parsed.links.len(), 3);
+        assert_eq!(parsed.links[0].target, "Note");
+        assert_eq!(parsed.links[0].alias.as_deref(), Some("Alias"));
+        assert_eq!(parsed.links[1].target, "Note");
+        assert_eq!(parsed.links[1].alias.as_deref(), Some("Spaced"));
+        assert_eq!(parsed.links[2].target, "Note");
+        assert_eq!(parsed.links[2].anchor.as_deref(), Some("Sec"));
+        assert_eq!(parsed.links[2].alias.as_deref(), Some("Anchor"));
     }
 }

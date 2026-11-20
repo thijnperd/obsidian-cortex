@@ -1412,6 +1412,43 @@ export function renderDecisions(container, structures, onOpen) {
     return;
   }
 
+  const total = Number(structures?.total) || cards.length;
+  const openCount = Number.isFinite(Number(structures?.open))
+    ? Number(structures.open)
+    : cards.filter((card) => card.status === 'open' || card.status === 'refining').length;
+  const settledCount = Math.max(0, total - openCount);
+  const dueCount = cards.filter((card) => isReviewDue(card.review_on)).length;
+  const confidences = cards
+    .filter((card) => card.confidence !== null && card.confidence !== undefined)
+    .map((card) => clampPct(card.confidence));
+
+  const summary = document.createElement('div');
+  summary.className = 'decisions-summary';
+  summary.setAttribute('aria-label', 'Decision trail summary');
+  const stats = [
+    { label: total === 1 ? 'decision' : 'decisions', value: String(total) },
+    { label: 'in flight', value: String(openCount) },
+    { label: 'settled', value: String(settledCount) },
+    { label: 'review due', value: String(dueCount), due: dueCount > 0 },
+  ];
+  if (confidences.length) {
+    const avg = Math.round(confidences.reduce((sum, pct) => sum + pct, 0) / confidences.length);
+    stats.push({ label: 'avg confidence', value: `${avg}%` });
+  }
+  for (const item of stats) {
+    const cell = document.createElement('div');
+    cell.className = `decisions-stat${item.due ? ' is-due' : ''}`;
+    const value = document.createElement('span');
+    value.className = 'decisions-stat-value';
+    value.textContent = item.value;
+    const label = document.createElement('span');
+    label.className = 'decisions-stat-label';
+    label.textContent = item.label;
+    cell.append(value, label);
+    summary.appendChild(cell);
+  }
+  container.appendChild(summary);
+
   const columns = new Map();
   for (const card of cards) {
     const key = card.status || 'open';
@@ -1436,7 +1473,7 @@ export function renderDecisions(container, structures, onOpen) {
     container.appendChild(column);
   }
 
-  const total = Number(structures.total) || cards.length;
+  // total already computed above for the summary strip
   if (total > cards.length) {
     const more = document.createElement('p');
     more.className = 'decisions-more';

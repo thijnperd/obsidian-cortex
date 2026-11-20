@@ -10,7 +10,7 @@ it belonged on the desktop.
 1. "The app should be able to open file explorer." The vault is a real folder the
    user thinks about in Explorer terms, but the only way to reach it was to copy
    the path out of the toolbar.
-2. "Cortex and graph and timeline aren't working with the Dragonlance vault."
+2. "Cortex and graph and timeline aren't working with an undated Obsidian vault."
    Not a rendering fault in the usual sense: the vault has no frontmatter dates,
    so every note carried the same date, `buildAppearValues` filled every birth
    time with `1`, and `smoothstep(1, 1.05, reveal)` is `0` for every reveal a
