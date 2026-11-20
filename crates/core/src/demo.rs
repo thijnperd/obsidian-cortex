@@ -1352,7 +1352,13 @@ fn seed_small(root: &Path) -> std::io::Result<usize> {
         .iter()
         .take(3)
         .enumerate()
-        .map(|(index, seed)| seed_evidence(seed, start + index as i64 * 11))
+        .map(|(index, seed)| {
+            let mut item = seed_evidence(seed, start + index as i64 * 11);
+            // The brief is generated from these, so its comparison bullets and
+            // evidence list must only link notes this small vault actually has.
+            item.links.retain(|link| titles.contains(link.as_str()));
+            item
+        })
         .collect();
     let research_question = "What makes a small vault useful?";
     let idea_question = "Should a first vault start with three folders or ten?";

@@ -367,6 +367,15 @@ fn scan_inline(line: &str, links: &mut Vec<Link>, tags: &mut Vec<String>) {
 }
 
 fn parse_link(inner: &str, embed: bool) -> Option<Link> {
+    // Obsidian escapes the alias pipe as `\|` inside a table cell. The escape is
+    // table syntax, not part of the target, anchor or alias.
+    let unescaped;
+    let inner = if inner.contains("\\|") {
+        unescaped = inner.replace("\\|", "|");
+        unescaped.as_str()
+    } else {
+        inner
+    };
     let inner = inner.trim();
     if inner.is_empty() || inner.len() > 400 || inner.contains('\n') {
         return None;
@@ -629,13 +638,16 @@ mod tests {
 
     #[test]
     fn strips_escaped_pipe_backslash_in_wikilinks() {
-        let parsed = parse("| [[Note\\|Alias]] | [[Note \\| Spaced]] | [[Note#Sec\\|Anchor]] |");
+        // Distinct targets on purpose: two aliases of one target dedupe into a
+        // single link (see `duplicate_links_collapse`), which is not what this
+        // test is about.
+        let parsed = parse("| [[Note\\|Alias]] | [[Other \\| Spaced]] | [[Third#Sec\\|Anchor]] |");
         assert_eq!(parsed.links.len(), 3);
         assert_eq!(parsed.links[0].target, "Note");
         assert_eq!(parsed.links[0].alias.as_deref(), Some("Alias"));
-        assert_eq!(parsed.links[1].target, "Note");
+        assert_eq!(parsed.links[1].target, "Other");
         assert_eq!(parsed.links[1].alias.as_deref(), Some("Spaced"));
-        assert_eq!(parsed.links[2].target, "Note");
+        assert_eq!(parsed.links[2].target, "Third");
         assert_eq!(parsed.links[2].anchor.as_deref(), Some("Sec"));
         assert_eq!(parsed.links[2].alias.as_deref(), Some("Anchor"));
     }
