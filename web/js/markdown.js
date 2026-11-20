@@ -387,7 +387,7 @@ function calloutKind(rawType) {
   return 'note';
 }
 
-export function renderMarkdown(markdown, exists = () => true) {
+export function renderMarkdown(markdown, exists = () => true, ctx = { pipIndex: 0, taskIndex: 0 }) {
   const text = String(markdown || '').replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)\r?\n?/, '');
   const lines = text.split(/\r?\n/);
   const output = [];
@@ -400,7 +400,7 @@ export function renderMarkdown(markdown, exists = () => true) {
 
   const flushParagraph = () => {
     if (paragraph.length) {
-      output.push(`<p>${inline(paragraph.join(' '), exists)}</p>`);
+      output.push(`<p>${inline(paragraph.join(' '), exists, ctx)}</p>`);
       paragraph = [];
     }
   };
@@ -480,7 +480,7 @@ export function renderMarkdown(markdown, exists = () => true) {
       flushParagraph();
       closeAllLists();
       const level = heading[1].length;
-      output.push(`<h${level}>${inline(heading[2], exists)}</h${level}>`);
+      output.push(`<h${level}>${inline(heading[2], exists, ctx)}</h${level}>`);
       continue;
     }
 
@@ -509,7 +509,7 @@ export function renderMarkdown(markdown, exists = () => true) {
 
       const ths = [];
       for (let c = 0; c < colCount; c += 1) {
-        ths.push(`<th${alignClass(c)}>${inline(headers[c] || '', exists)}</th>`);
+        ths.push(`<th${alignClass(c)}>${inline(headers[c] || '', exists, ctx)}</th>`);
       }
 
       idx += 2;
@@ -523,7 +523,7 @@ export function renderMarkdown(markdown, exists = () => true) {
         const cells = splitTableCells(rowLine);
         const tds = [];
         for (let c = 0; c < colCount; c += 1) {
-          tds.push(`<td${alignClass(c)}>${inline(cells[c] || '', exists)}</td>`);
+          tds.push(`<td${alignClass(c)}>${inline(cells[c] || '', exists, ctx)}</td>`);
         }
         bodyRows.push(`<tr>${tds.join('')}</tr>`);
         idx += 1;
@@ -560,17 +560,17 @@ export function renderMarkdown(markdown, exists = () => true) {
         const defaultTitle = CALLOUT_LABELS[rawType]
           || (rawType.charAt(0).toUpperCase() + rawType.slice(1));
         const titleHtml = calloutMatch[3]
-          ? inline(calloutMatch[3].trim(), exists)
+          ? inline(calloutMatch[3].trim(), exists, ctx)
           : escapeHtml(defaultTitle);
         const innerMd = blockLines.slice(1).join('\n').trim();
-        const bodyHtml = innerMd ? `<div class="callout-body">${renderMarkdown(innerMd, exists)}</div>` : '';
+        const bodyHtml = innerMd ? `<div class="callout-body">${renderMarkdown(innerMd, exists, ctx)}</div>` : '';
         output.push(
           `<aside class="callout callout-${kind}" data-callout="${escapeHtml(rawType)}">` +
           `<div class="callout-title"><span class="callout-badge">${escapeHtml(CALLOUT_LABELS[rawType] || rawType)}</span>` +
           `<span class="callout-heading">${titleHtml}</span></div>${bodyHtml}</aside>`,
         );
       } else {
-        const innerHtml = renderMarkdown(blockLines.join('\n'), exists);
+        const innerHtml = renderMarkdown(blockLines.join('\n'), exists, ctx);
         output.push(`<blockquote>${innerHtml}</blockquote>`);
       }
       continue;
@@ -602,14 +602,15 @@ export function renderMarkdown(markdown, exists = () => true) {
       const task = /^\[([ xX])\]\s+(.*)$/.exec(itemText);
       if (task) {
         const checked = task[1].toLowerCase() === 'x';
+        const tIdx = ctx.taskIndex++;
         itemText = task[2];
         output.push(
           `<li class="task-item${checked ? ' is-done' : ''}">` +
-          `<span class="task-box" aria-hidden="true">${checked ? '✓' : ''}</span>` +
-          `<span>${inline(itemText, exists)}</span></li>`,
+          `<button type="button" class="task-box" data-task-index="${tIdx}" aria-pressed="${checked}" title="Toggle task">${checked ? '✓' : ''}</button>` +
+          `<span>${inline(itemText, exists, ctx)}</span></li>`,
         );
       } else {
-        output.push(`<li>${inline(itemText, exists)}</li>`);
+        output.push(`<li>${inline(itemText, exists, ctx)}</li>`);
       }
       continue;
     }
@@ -629,7 +630,7 @@ function isAttachmentTarget(target) {
   return /\.(pdf|png|jpe?g|webp|gif|svg|mp3|mp4|wav|csv|zip)$/.test(base);
 }
 
-function inline(value, exists) {
+function inline(value, exists, ctx = { pipIndex: 0, taskIndex: 0 }) {
   let text = escapeHtml(value);
   const tokens = [];
   const stash = (html) => {
@@ -637,10 +638,19 @@ function inline(value, exists) {
     return `\u0000${tokens.length - 1}\u0000`;
   };
 
-  // 1. Inline code (`...`) first so math/wikilinks inside backticks stay literal
+  // 1. Inline code (`...`) first so math/wikilinks/pips inside backticks stay literal
   text = text.replace(/`([^`]+)`/g, (match, inner) => stash(`<code>${inner}</code>`));
 
-  // 2. Display math inline $$...$$ or \[...\]
+  // 2. Interactive ballot boxes ☐ (\u2610), ☑ (\u2611), ☒ (\u2612)
+  text = text.replace(/[\u2610\u2611\u2612]/g, (box) => {
+    const idx = ctx.pipIndex++;
+    const checked = box !== '\u2610';
+    return stash(
+      `<button type="button" class="tally-pip${checked ? ' is-checked' : ''}" data-pip-index="${idx}" aria-pressed="${checked}" title="Click to toggle tally point">${checked ? '✓' : ''}</button>`,
+    );
+  });
+
+  // 3. Display math inline $$...$$ or \[...\]
   text = text.replace(/\$\$([^$]+)\$\$/g, (match, expr) =>
     stash(`<span class="math-inline is-display" role="math">${renderLatex(expr, true)}</span>`),
   );
@@ -648,7 +658,7 @@ function inline(value, exists) {
     stash(`<span class="math-inline is-display" role="math">${renderLatex(expr, true)}</span>`),
   );
 
-  // 3. Inline math $...$ (must not start/end with space, and closing $ not followed by digit) or \(...\)
+  // 4. Inline math $...$ (must not start/end with space, and closing $ not followed by digit) or \(...\)
   text = text.replace(/\\\((.+?)\\\)/g, (match, expr) =>
     stash(`<span class="math-inline" role="math">${renderLatex(expr, false)}</span>`),
   );
@@ -656,7 +666,7 @@ function inline(value, exists) {
     `${prefix}${stash(`<span class="math-inline" role="math">${renderLatex(expr, false)}</span>`)}`,
   );
 
-  // 4. Wikilinks [[target|alias]]
+  // 5. Wikilinks [[target|alias]]
   text = text.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, target, alias) => {
     const cleanTarget = target.trim();
     const name = (alias || cleanTarget).trim();
@@ -672,20 +682,230 @@ function inline(value, exists) {
     );
   });
 
-  // 5. External links [label](https://...)
+  // 6. External links [label](https://...)
   text = text.replace(
     /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
     (match, label, url) => stash(`<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`),
   );
 
-  // 6. Highlights ==text==, Strikethrough ~~text~~, Bold **text**, Italic *text* / _text_
+  // 7. Highlights ==text==, Strikethrough ~~text~~, Bold **text**, Italic *text* / _text_
   text = text.replace(/==([^=]+)==/g, '<mark>$1</mark>');
   text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
   text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   text = text.replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>');
   text = text.replace(/(^|[\s(])_([^_\n]+)_/g, '$1<em>$2</em>');
 
-  // Restore stashed tokens (may be nested one level if callout title had wikilinks)
+  // Restore stashed tokens
   text = text.replace(/\u0000(\d+)\u0000/g, (match, index) => tokens[Number(index)]);
   return text;
+}
+
+/**
+ * Toggles the Nth Unicode ballot box (☐ / ☑ / ☒) outside frontmatter and code spans.
+ */
+export function toggleNthBallotBox(rawSource, targetIndex, forceState = null) {
+  const source = String(rawSource || '');
+  const fmMatch = /^\uFEFF?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)\r?\n?/.exec(source);
+  const prefix = fmMatch ? fmMatch[0] : '';
+  const body = source.slice(prefix.length);
+
+  let current = 0;
+  let inFence = false;
+  const lines = body.split(/(\r?\n)/);
+  for (let i = 0; i < lines.length; i += 2) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    let inInlineCode = false;
+    let out = '';
+    for (let c = 0; c < line.length; c += 1) {
+      const ch = line[c];
+      if (ch === '`') {
+        inInlineCode = !inInlineCode;
+        out += ch;
+        continue;
+      }
+      if (!inInlineCode && (ch === '\u2610' || ch === '\u2611' || ch === '\u2612')) {
+        if (current === targetIndex) {
+          const nextChecked = forceState !== null ? Boolean(forceState) : ch === '\u2610';
+          out += nextChecked ? '\u2611' : '\u2610';
+        } else {
+          out += ch;
+        }
+        current += 1;
+      } else {
+        out += ch;
+      }
+    }
+    lines[i] = out;
+  }
+  return prefix + lines.join('');
+}
+
+/**
+ * Toggles the Nth Markdown task checkbox (- [ ] / - [x]) outside frontmatter and code fences.
+ */
+export function toggleNthTaskBox(rawSource, targetIndex) {
+  const source = String(rawSource || '');
+  const fmMatch = /^\uFEFF?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)\r?\n?/.exec(source);
+  const prefix = fmMatch ? fmMatch[0] : '';
+  const body = source.slice(prefix.length);
+
+  let current = 0;
+  let inFence = false;
+  const lines = body.split(/(\r?\n)/);
+  for (let i = 0; i < lines.length; i += 2) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const m = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\]\s+.*)$/.exec(line);
+    if (m) {
+      if (current === targetIndex) {
+        const checked = m[2].toLowerCase() === 'x';
+        lines[i] = `${m[1]}${checked ? ' ' : 'x'}${m[3]}`;
+      }
+      current += 1;
+    }
+  }
+  return prefix + lines.join('');
+}
+
+/**
+ * Scans a Markdown document for tally tables (tables containing ☐ / ☑ / ☒).
+ * Returns an array of tally sections with exact pip indices into `rawSource`.
+ */
+export function extractNoteTallies(rawSource, noteId = '', noteTitle = '') {
+  const source = String(rawSource || '');
+  const fmMatch = /^\uFEFF?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)\r?\n?/.exec(source);
+  const body = fmMatch ? source.slice(fmMatch[0].length) : source;
+  const lines = body.split(/\r?\n/);
+
+  let pipCursor = 0;
+  let inFence = false;
+  let lastHeading = noteTitle || 'Tally';
+  const sections = [];
+
+  const countPipsInLine = (line) => {
+    let inCode = false;
+    const indices = [];
+    for (let c = 0; c < line.length; c += 1) {
+      const ch = line[c];
+      if (ch === '`') inCode = !inCode;
+      else if (!inCode && (ch === '\u2610' || ch === '\u2611' || ch === '\u2612')) {
+        indices.push({ pipIndex: pipCursor++, checked: ch !== '\u2610' });
+      }
+    }
+    return indices;
+  };
+
+  for (let idx = 0; idx < lines.length; idx += 1) {
+    const line = lines[idx];
+    const trimmed = line.trim();
+    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
+    const h = /^(#{1,6})\s+(.*)$/.exec(trimmed);
+    if (h) {
+      lastHeading = h[2].replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, t, a) => a || t).trim();
+      countPipsInLine(line);
+      continue;
+    }
+
+    if (trimmed.includes('|') && idx + 1 < lines.length && isTableDelimiter(lines[idx + 1])) {
+      const headers = splitTableCells(trimmed);
+      countPipsInLine(line);
+      countPipsInLine(lines[idx + 1]);
+      idx += 2;
+      const rows = [];
+      while (idx < lines.length) {
+        const rowLine = lines[idx].trim();
+        if (!rowLine || !rowLine.includes('|') || /^(#{1,6})\s+/.test(rowLine) || rowLine.startsWith('>')) {
+          idx -= 1;
+          break;
+        }
+        const cells = splitTableCells(rowLine);
+        const rowPips = [];
+        let firstCellText = cells[0] || '';
+        let targetNote = null;
+        const wl = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/.exec(firstCellText);
+        if (wl) {
+          targetNote = wl[1].trim();
+          firstCellText = (wl[2] || wl[1]).trim();
+        } else {
+          firstCellText = firstCellText.replace(/\*\*|__/g, '').trim();
+        }
+
+        for (let c = 0; c < cells.length; c += 1) {
+          const cellPips = countPipsInLine(cells[c]);
+          const colHeader = (headers[c] || '').trim();
+          const isBonus = /inspir|forfeit|paid|bonus|done|total/i.test(colHeader);
+          for (const p of cellPips) {
+            rowPips.push({
+              pipIndex: p.pipIndex,
+              checked: p.checked,
+              colHeader,
+              isBonus,
+            });
+          }
+        }
+        if (rowPips.length > 0 && firstCellText) {
+          rows.push({
+            label: firstCellText,
+            targetNote,
+            pips: rowPips,
+          });
+        }
+        idx += 1;
+      }
+      if (rows.length > 0) {
+        sections.push({
+          id: `${noteId}::${lastHeading}`,
+          noteId,
+          noteTitle,
+          title: lastHeading,
+          headers,
+          rows,
+        });
+      }
+      continue;
+    }
+
+    countPipsInLine(line);
+  }
+
+  return sections;
+}
+
+/**
+ * Syncs a player note's inline tally line (e.g. `Current tally: **cool ☐ ☐ ☐ · crybaby ☐ ☐ ☐**`)
+ * with the given coolCount (0..3) and crybabyCount (0..3).
+ */
+export function syncInlinePlayerTally(playerSource, coolCount = null, crybabyCount = null) {
+  let out = String(playerSource || '');
+  if (coolCount !== null) {
+    out = out.replace(
+      /(cool\s+)([\u2610\u2611\u2612])(\s*)([\u2610\u2611\u2612])(\s*)([\u2610\u2611\u2612])/i,
+      (_, p1, _b1, s1, _b2, s2) =>
+        `${p1}${coolCount >= 1 ? '\u2611' : '\u2610'}${s1}${coolCount >= 2 ? '\u2611' : '\u2610'}${s2}${coolCount >= 3 ? '\u2611' : '\u2610'}`,
+    );
+  }
+  if (crybabyCount !== null) {
+    out = out.replace(
+      /(crybaby\s+)([\u2610\u2611\u2612])(\s*)([\u2610\u2611\u2612])(\s*)([\u2610\u2611\u2612])/i,
+      (_, p1, _b1, s1, _b2, s2) =>
+        `${p1}${crybabyCount >= 1 ? '\u2611' : '\u2610'}${s1}${crybabyCount >= 2 ? '\u2611' : '\u2610'}${s2}${crybabyCount >= 3 ? '\u2611' : '\u2610'}`,
+    );
+  }
+  return out;
 }

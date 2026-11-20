@@ -742,6 +742,226 @@ body.is-resizing .resize-handle:active::after {
   white-space: nowrap;
 }
 
+/* ---------- sidebar tallies & point trackers ---------- */
+.block-tallies {
+  flex: 0 0 auto;
+  max-height: 248px;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+.tallies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 var(--s1) var(--s1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+.tally-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg);
+}
+.tally-tab {
+  appearance: none;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-3);
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 120ms var(--ease), background 120ms var(--ease);
+}
+.tally-tab:hover { color: var(--ink); }
+.tally-tab.is-active {
+  background: var(--surface-2);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.tally-source-btn {
+  appearance: none;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 11px;
+  cursor: pointer;
+}
+.tally-source-btn:hover {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+.tally-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tally-list-custom {
+  padding-top: var(--s1);
+  border-top: 1px solid var(--line-subtle);
+}
+.tally-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 4px;
+  border-radius: var(--r-sm);
+}
+.tally-row:hover {
+  background: var(--surface-2);
+}
+.tally-label {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--sans);
+  font-size: 12px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+button.tally-label:hover {
+  color: var(--accent);
+}
+.tally-pips {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tally-pip {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: border-color 120ms var(--ease), background 120ms var(--ease), transform 80ms var(--ease);
+}
+.tally-pip:hover {
+  border-color: var(--accent);
+  transform: scale(1.06);
+}
+.tally-pip.is-checked {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tally-row.is-crybaby .tally-pip.is-checked {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.tally-pip.is-bonus {
+  margin-left: 3px;
+  border-radius: 50%;
+}
+.tally-step,
+.tally-del {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink-3);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tally-step:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.tally-del:hover {
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+.tally-add-form {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-2);
+}
+.tally-add-input {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+.tally-add-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+.tally-add-btn {
+  padding: 3px 9px;
+  font-size: 11.5px;
+}
+.tally-empty {
+  margin: 0;
+  padding: 2px var(--s1);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+.biome-choices {
+  margin-top: var(--s2);
+}
+.biome-choices.is-disabled {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
 .block-selection {
   gap: var(--s2);
   padding: var(--s3) var(--s2) 0;
@@ -982,17 +1202,20 @@ body.panel-expanded .panel-scroll {
   margin-left: -18px;
 }
 .prose .task-box {
+  appearance: none;
   flex: none;
   display: inline-grid;
   place-items: center;
   width: 15px;
   height: 15px;
+  padding: 0;
   border: 1px solid var(--line-strong);
   border-radius: 3px;
   background: var(--surface-2);
   color: var(--accent);
   font-size: 11px;
   line-height: 1;
+  cursor: pointer;
   transform: translateY(1px);
 }
 .prose li.task-item.is-done {

@@ -94,6 +94,8 @@ export class Renderer {
     this.appear = null;
     this.morph = -1;
     this.reveal = 1;
+    this.starMode = 'glow';
+    this.brainMode = 'shell';
     this.hiddenFolders = new Set();
     this.selection = new Set();
     this.focusIndex = null;
@@ -150,6 +152,7 @@ export class Renderer {
     }
 
     this.shellCount = indices.length;
+    this.shellPositionsArray = positions;
     this.shellPositions = this.createBuffer(positions);
     this.shellNormals = this.createBuffer(normals);
     this.shellIndices = gl.createBuffer();
@@ -245,6 +248,10 @@ export class Renderer {
       this.nodes,
       graph.meta.folders.map((folder) => folder.name),
       this.diaries,
+      {
+        surfaceOnly: this.brainMode === 'notes',
+        meshPositions: this.shellPositionsArray,
+      },
     );
     this.brain = brain.positions;
     this.brainAnchors = brain.anchors;
@@ -482,10 +489,10 @@ export class Renderer {
     gl.bindVertexArray(null);
   }
 
-  setMorph(value) {
+  setMorph(value, force = false) {
     if (!this.count) return;
     const target = clamp(value, 0, 1);
-    if (Math.abs(target - this.morph) < 0.0004) return;
+    if (!force && Math.abs(target - this.morph) < 0.0004) return;
     this.morph = target;
     const data = this.posData;
     const universe = this.universe;
@@ -499,6 +506,30 @@ export class Renderer {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.positionsTexture);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.texWidth, this.texHeight, gl.RGBA, gl.FLOAT, data);
+  }
+
+  setStarMode(mode) {
+    this.starMode = mode === 'anime' || mode === 'dots' ? mode : 'glow';
+  }
+
+  setBrainMode(mode) {
+    const next = mode === 'notes' ? 'notes' : 'shell';
+    if (this.brainMode === next) return;
+    this.brainMode = next;
+    if (this.graph && this.nodes.length) {
+      const brain = buildBrainPositions(
+        this.nodes,
+        this.graph.meta.folders.map((folder) => folder.name),
+        this.diaries,
+        {
+          surfaceOnly: this.brainMode === 'notes',
+          meshPositions: this.shellPositionsArray,
+        },
+      );
+      this.brain = brain.positions;
+      this.brainAnchors = brain.anchors;
+      this.setMorph(Math.max(0, this.morph), true);
+    }
   }
 
   setReveal(value) {
@@ -655,7 +686,7 @@ export class Renderer {
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.hazeCount);
     }
 
-    if (this.morph > 0.01 && this.shellVao) {
+    if (this.morph > 0.01 && this.shellVao && this.brainMode !== 'notes') {
       const program = this.programs.shell;
       gl.useProgram(program);
       gl.uniformMatrix4fv(loc(gl, program, 'uViewProj'), false, camera.viewProjection);
@@ -681,17 +712,21 @@ export class Renderer {
       gl.uniform2f(loc(gl, program, 'uViewport'), this.cssWidth, this.cssHeight);
       gl.uniform1f(loc(gl, program, 'uTime'), time);
       gl.uniform1f(loc(gl, program, 'uReveal'), this.reveal);
-      gl.uniform1f(loc(gl, program, 'uThickness'), 1.0);
+      gl.uniform1f(loc(gl, program, 'uThickness'), this.brainMode === 'notes' && this.morph > 0.5 ? 1.18 : 1.0);
       gl.uniform1f(loc(gl, program, 'uMorph'), this.morph);
       gl.uniform1f(loc(gl, program, 'uDensity'), this.density);
       gl.uniform1f(loc(gl, program, 'uCrowd'), this.crowd);
-      gl.uniform1f(loc(gl, program, 'uCrowdEdge'), this.crowdEdge);
+      gl.uniform1f(
+        loc(gl, program, 'uCrowdEdge'),
+        this.brainMode === 'notes' ? this.crowdEdge * 0.55 : this.crowdEdge,
+      );
       gl.bindVertexArray(this.edgeVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.edgeInstances);
     }
 
     if (this.count > 0) {
       const program = this.programs.stars;
+      const starModeInt = this.starMode === 'anime' ? 1 : this.starMode === 'dots' ? 2 : 0;
       gl.useProgram(program);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.positionsTexture);
@@ -702,12 +737,16 @@ export class Renderer {
       gl.uniform1f(loc(gl, program, 'uTime'), time);
       gl.uniform1f(loc(gl, program, 'uReveal'), this.reveal);
       gl.uniform1f(loc(gl, program, 'uSizeScale'),
-        22.0 * (1 - 0.22 * Math.max(0, this.morph))
+        22.0 * (1 - (this.brainMode === 'notes' ? 0.08 : 0.22) * Math.max(0, this.morph))
           * (this.overview ? 0.45 : Math.max(0.55, this.density)));
       gl.uniform1f(loc(gl, program, 'uDensity'), this.density);
       gl.uniform1f(loc(gl, program, 'uCrowd'), this.crowd);
-      gl.uniform1f(loc(gl, program, 'uBrainCrowd'), this.brainCrowd);
+      gl.uniform1f(
+        loc(gl, program, 'uBrainCrowd'),
+        this.brainMode === 'notes' ? Math.min(1, this.brainCrowd * 1.25) : this.brainCrowd,
+      );
       gl.uniform1f(loc(gl, program, 'uMorph'), this.morph);
+      gl.uniform1i(loc(gl, program, 'uStarMode'), starModeInt);
       gl.bindVertexArray(this.nodeVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.count);
     }

@@ -3,7 +3,13 @@
 import { Camera } from './camera.js';
 import { Renderer, PALETTE } from './renderer.js';
 import { clamp, easeInOut, project } from './math.js';
-import { renderMarkdown } from './markdown.js';
+import {
+  renderMarkdown,
+  toggleNthBallotBox,
+  toggleNthTaskBox,
+  extractNoteTallies,
+  syncInlinePlayerTally,
+} from './markdown.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
 import { Atlas } from './atlas.js';
@@ -52,6 +58,10 @@ const state = {
   update: null,
   launching: false,
   theme: 'dark',
+  starMode: 'glow',
+  brainMode: 'shell',
+  activeTallySection: null,
+  addingCustomTally: false,
   sidebarCollapsed: false,
   panelExpanded: false,
   time: 0,
@@ -87,8 +97,12 @@ const els = {
   settingsObsidian: document.getElementById('settings-obsidian'),
   settingsViews: document.getElementById('settings-views'),
   settingsWrites: document.getElementById('settings-writes'),
+  settingsStars: document.getElementById('settings-stars'),
+  settingsBrainMode: document.getElementById('settings-brain-mode'),
   settingsRoads: document.getElementById('settings-roads'),
   settingsRoutes: document.getElementById('settings-routes'),
+  settingsBiomes: document.getElementById('settings-biomes'),
+  settingsBiomeList: document.getElementById('settings-biome-list'),
   settingsAgents: document.getElementById('settings-agents'),
   settingsAgentsHelp: document.getElementById('settings-agents-help'),
   settingsReveal: document.getElementById('settings-reveal'),
@@ -110,6 +124,8 @@ const els = {
   stats: document.getElementById('stats'),
   folders: document.getElementById('folders'),
   foldersReset: document.getElementById('folders-reset'),
+  tallies: document.getElementById('tallies'),
+  tallyAdd: document.getElementById('tally-add'),
   vaultList: document.getElementById('vault-list'),
   addVault: document.getElementById('add-vault'),
   searchButton: document.getElementById('search-button'),
@@ -438,10 +454,72 @@ async function start() {
   }
 }
 
+function applyStarMode(mode, { persist = true } = {}) {
+  const valid = mode === 'anime' || mode === 'dots' ? mode : 'glow';
+  state.starMode = valid;
+  if (persist) prefs.set('cortex.graph.starMode', valid);
+  if (state.renderer) state.renderer.setStarMode(valid);
+  syncVisualSettingsUI();
+}
+
+function applyBrainMode(mode, { persist = true } = {}) {
+  const valid = mode === 'notes' ? 'notes' : 'shell';
+  state.brainMode = valid;
+  if (persist) prefs.set('cortex.graph.brainMode', valid);
+  if (state.renderer) {
+    state.renderer.setBrainMode(valid);
+    if (state.graph) buildLabels();
+  }
+  syncVisualSettingsUI();
+}
+
+function toggleBiomeChoice(biomeId) {
+  const list = new Set(prefs.get('cortex.atlas.disabledBiomes', []));
+  if (list.has(biomeId)) list.delete(biomeId);
+  else list.add(biomeId);
+  const arr = [...list];
+  prefs.set('cortex.atlas.disabledBiomes', arr);
+  if (state.atlas) state.atlas.setDisabledBiomes(list);
+  syncVisualSettingsUI();
+}
+
+function syncVisualSettingsUI() {
+  if (els.settingsStars) {
+    els.settingsStars.querySelectorAll('[data-star-mode]').forEach((btn) => {
+      const active = btn.dataset.starMode === state.starMode;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+  }
+  if (els.settingsBrainMode) {
+    els.settingsBrainMode.querySelectorAll('[data-brain-mode]').forEach((btn) => {
+      const active = btn.dataset.brainMode === state.brainMode;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+  }
+  if (els.settingsBiomes) {
+    els.settingsBiomes.checked = prefs.get('cortex.atlas.biomes', true);
+  }
+  if (els.settingsBiomeList) {
+    const biomesOn = prefs.get('cortex.atlas.biomes', true);
+    const disabled = new Set(prefs.get('cortex.atlas.disabledBiomes', []));
+    els.settingsBiomeList.classList.toggle('is-disabled', !biomesOn);
+    els.settingsBiomeList.querySelectorAll('[data-biome]').forEach((btn) => {
+      const active = biomesOn && !disabled.has(btn.dataset.biome);
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', String(active));
+      btn.disabled = !biomesOn;
+    });
+  }
+}
+
 function wire() {
   applyPlatformHints();
   syncTourButton();
   applyTheme(prefs.get(THEME_KEY, 'dark'), { persist: false });
+  state.starMode = prefs.get('cortex.graph.starMode', 'glow');
+  state.brainMode = prefs.get('cortex.graph.brainMode', 'shell');
   state.sidebarCollapsed = Boolean(prefs.get(SIDEBAR_COLLAPSED_KEY, false));
   const savedSidebarW = Number(prefs.get(SIDEBAR_WIDTH_KEY, DEFAULT_SIDEBAR_W));
   if (Number.isFinite(savedSidebarW)) setSidebarWidth(savedSidebarW);
@@ -528,6 +606,16 @@ function wire() {
   els.settingsViews.querySelectorAll('[data-mode]').forEach((button) => {
     button.addEventListener('click', () => setMode(button.dataset.mode));
   });
+  if (els.settingsStars) {
+    els.settingsStars.querySelectorAll('[data-star-mode]').forEach((button) => {
+      button.addEventListener('click', () => applyStarMode(button.dataset.starMode));
+    });
+  }
+  if (els.settingsBrainMode) {
+    els.settingsBrainMode.querySelectorAll('[data-brain-mode]').forEach((button) => {
+      button.addEventListener('click', () => applyBrainMode(button.dataset.brainMode));
+    });
+  }
   els.settingsRoads.addEventListener('change', () => {
     prefs.set('cortex.atlas.roads', els.settingsRoads.checked);
     if (state.atlas) state.atlas.setRoads(els.settingsRoads.checked);
@@ -536,6 +624,24 @@ function wire() {
     prefs.set('cortex.atlas.routes', els.settingsRoutes.checked);
     if (state.atlas) state.atlas.setRoutes(els.settingsRoutes.checked);
   });
+  if (els.settingsBiomes) {
+    els.settingsBiomes.addEventListener('change', () => {
+      prefs.set('cortex.atlas.biomes', els.settingsBiomes.checked);
+      if (state.atlas) state.atlas.setBiomes(els.settingsBiomes.checked);
+      syncVisualSettingsUI();
+    });
+  }
+  if (els.settingsBiomeList) {
+    els.settingsBiomeList.querySelectorAll('[data-biome]').forEach((button) => {
+      button.addEventListener('click', () => toggleBiomeChoice(button.dataset.biome));
+    });
+  }
+  if (els.tallyAdd) {
+    els.tallyAdd.addEventListener('click', () => {
+      state.addingCustomTally = !state.addingCustomTally;
+      renderSidebarTallies();
+    });
+  }
   els.settingsAgents.addEventListener('change', () => {
     setAgentAccess(els.settingsAgents.checked);
   });
@@ -775,6 +881,12 @@ async function refreshGraph() {
 function applyGraph(graph) {
   state.graph = graph;
   state.meta = graph.meta;
+  if (!state.live) {
+    const overrides = prefs.get(staticNoteOverridesKey(), {});
+    for (const node of graph.nodes) {
+      if (overrides[node.id]) node.body = overrides[node.id];
+    }
+  }
   document.title = `${graph.meta.title} — Cortex`;
   els.vaultTitle.textContent = graph.meta.title;
   els.vaultSub.textContent = state.live
@@ -790,11 +902,15 @@ function applyGraph(graph) {
   renderSidebarFolders();
   buildLookup();
   buildIncoming();
+  renderSidebarTallies();
+  if (state.live) preloadTallyNotes();
 
   if (!state.renderer) {
     state.renderer = new Renderer(els.canvas);
     state.renderer.onContextLost = () => ui.toast('Graphics context lost — reload to restore');
   }
+  state.renderer.setStarMode(state.starMode);
+  state.renderer.brainMode = state.brainMode;
   state.renderer.setGraph(graph);
   state.renderer.setFolderFilter(state.hidden);
   if (state.folderFocus && !graph.meta.folders.some((folder) => folder.name === state.folderFocus)) {
@@ -1240,6 +1356,8 @@ function setMode(mode, { persist = true, animate = true } = {}) {
     syncAtlas();
     atlas.setRoads(prefs.get('cortex.atlas.roads', true));
     atlas.setRoutes(prefs.get('cortex.atlas.routes', true));
+    atlas.setBiomes(prefs.get('cortex.atlas.biomes', true));
+    atlas.setDisabledBiomes(new Set(prefs.get('cortex.atlas.disabledBiomes', [])));
     atlas.resize();
     atlas.dirty = true;
     els.atlas.focus({ preventScroll: true });
@@ -1330,6 +1448,269 @@ function resetFolders() {
   syncBento();
 }
 
+/* ---------- tallies & point trackers ---------- */
+
+function vaultStorageKey() {
+  return state.vaultId || state.meta?.title || 'default';
+}
+
+function staticNoteOverridesKey() {
+  return `cortex.noteOverrides.${vaultStorageKey()}`;
+}
+
+function customTalliesKey() {
+  return `cortex.tallies.custom.${vaultStorageKey()}`;
+}
+
+async function preloadTallyNotes() {
+  if (!state.live || !state.graph) return;
+  const candidates = state.graph.nodes.filter(
+    (node) =>
+      /point|tally|tracker|score|cool|crybaby/i.test(node.title)
+      || /[\u2610\u2611\u2612]/.test(node.excerpt || ''),
+  );
+  let loadedAny = false;
+  for (const node of candidates.slice(0, 6)) {
+    if (state.cache.has(node.id)) continue;
+    try {
+      const detail = await api.fetchNote(node.id, state.vaultId);
+      if (detail) {
+        state.cache.set(node.id, detail);
+        loadedAny = true;
+      }
+    } catch {
+      /* ignore transient fetch failure */
+    }
+  }
+  if (loadedAny) renderSidebarTallies();
+}
+
+function getNoteSourceForTally(node) {
+  if (!node) return '';
+  if (state.detail && state.detail.id === node.id) {
+    return state.detail.raw || state.detail.markdown || node.body || '';
+  }
+  if (state.cache.has(node.id)) {
+    const cached = state.cache.get(node.id);
+    return cached.raw || cached.markdown || node.body || '';
+  }
+  return node.body || '';
+}
+
+function collectVaultTallySections() {
+  if (!state.graph) return [];
+  const primary = [];
+  const fallback = [];
+  for (const node of state.graph.nodes) {
+    const src = getNoteSourceForTally(node);
+    if (!src || !/[\u2610\u2611\u2612]/.test(src)) continue;
+    let body = src;
+    const heading = /^\s*#\s+(.+)\r?\n/.exec(body);
+    if (heading && heading[1].trim().toLowerCase() === node.title.trim().toLowerCase()) {
+      body = body.slice(heading[0].length);
+    }
+    const extracted = extractNoteTallies(body, node.id, node.title);
+    const isDedicated = /point|tally|tracker|cool|crybaby|score/i.test(node.title);
+    for (const sec of extracted) {
+      if (isDedicated || /point|tally|tracker|cool|crybaby|score/i.test(sec.title)) {
+        primary.push(sec);
+      } else {
+        fallback.push(sec);
+      }
+    }
+  }
+  return primary.length ? primary : fallback;
+}
+
+function renderSidebarTallies() {
+  if (!els.tallies || !state.graph) return;
+  const sections = collectVaultTallySections();
+  if (sections.length && !sections.some((s) => s.id === state.activeTallySection)) {
+    state.activeTallySection = sections[0].id;
+  }
+  const customCounters = prefs.get(customTalliesKey(), []);
+  ui.renderTallies(els.tallies, {
+    sections,
+    activeSectionId: state.activeTallySection,
+    customCounters,
+    addingCustom: state.addingCustomTally,
+    onSelectSection: (secId) => {
+      state.activeTallySection = secId;
+      renderSidebarTallies();
+    },
+    onToggleNotePip: (noteId, pipIndex, row) => {
+      toggleNoteBallotPip(noteId, pipIndex, row?.targetNote || null);
+    },
+    onOpenNoteByTarget: (target) => {
+      const id = resolveTarget(target);
+      if (!id) {
+        ui.toast(`No note called “${target}” yet`);
+        return;
+      }
+      const idx = nodeIndex(id);
+      if (idx >= 0) openNote(idx);
+    },
+    onOpenSourceNote: (noteId) => {
+      const idx = nodeIndex(noteId);
+      if (idx >= 0) openNote(idx);
+    },
+    onAdjustCustom: (id, delta) => adjustCustomTally(id, delta),
+    onToggleCustomPip: (id, pipSlot) => toggleCustomTallyPip(id, pipSlot),
+    onAddCustom: (label) => addCustomTally(label),
+    onDeleteCustom: (id) => deleteCustomTally(id),
+    onCancelAdd: () => {
+      state.addingCustomTally = false;
+      renderSidebarTallies();
+    },
+  });
+}
+
+async function persistModifiedNoteSource(noteId, updatedSource) {
+  const idx = nodeIndex(noteId);
+  const node = idx >= 0 ? state.graph.nodes[idx] : null;
+  if (node) node.body = updatedSource;
+
+  if (state.cache.has(noteId)) {
+    const cached = state.cache.get(noteId);
+    cached.markdown = updatedSource;
+    if (cached.raw != null) cached.raw = updatedSource;
+  }
+  if (state.detail && state.detail.id === noteId) {
+    state.detail.markdown = updatedSource;
+    if (state.detail.raw != null) state.detail.raw = updatedSource;
+  }
+
+  if (state.live && !state.readOnly) {
+    try {
+      const res = await api.saveNote({ id: noteId, content: updatedSource }, state.vaultId);
+      state.version = res.version;
+    } catch (error) {
+      ui.toast(error.message || 'Could not save tally change');
+    }
+  } else {
+    const overrides = prefs.get(staticNoteOverridesKey(), {});
+    overrides[noteId] = updatedSource;
+    prefs.set(staticNoteOverridesKey(), overrides);
+  }
+}
+
+async function toggleNoteBallotPip(noteId, pipIndex, linkedPlayerTarget = null) {
+  const idx = nodeIndex(noteId);
+  if (idx < 0) return;
+  const node = state.graph.nodes[idx];
+  let source = getNoteSourceForTally(node);
+  if (!source && state.live) {
+    const detail = await getDetail(node);
+    source = detail?.raw || detail?.markdown || '';
+  }
+  if (!source) return;
+
+  const updated = toggleNthBallotBox(source, pipIndex);
+  await persistModifiedNoteSource(noteId, updated);
+
+  // If this note is a Points table and row points to a player note, sync the player's inline tally!
+  const updatedSections = extractNoteTallies(updated, noteId, node.title);
+  if (updatedSections.length > 0) {
+    const targetsToSync = new Set();
+    if (linkedPlayerTarget) targetsToSync.add(linkedPlayerTarget);
+    else {
+      for (const sec of updatedSections) {
+        for (const r of sec.rows) {
+          if (r.targetNote) targetsToSync.add(r.targetNote);
+        }
+      }
+    }
+    for (const target of targetsToSync) {
+      const playerId = resolveTarget(target);
+      if (!playerId || playerId === noteId) continue;
+      let coolCount = null;
+      let crybabyCount = null;
+      for (const sec of updatedSections) {
+        const row = sec.rows.find(
+          (r) => r.targetNote && resolveTarget(r.targetNote) === playerId,
+        );
+        if (!row) continue;
+        const mainPips = row.pips.filter((p) => !p.isBonus).slice(0, 3);
+        const count = mainPips.filter((p) => p.checked).length;
+        if (/cool/i.test(sec.title)) coolCount = count;
+        else if (/crybaby/i.test(sec.title)) crybabyCount = count;
+      }
+      if (coolCount !== null || crybabyCount !== null) {
+        const pIdx = nodeIndex(playerId);
+        const pNode = pIdx >= 0 ? state.graph.nodes[pIdx] : null;
+        if (pNode) {
+          const pSource = getNoteSourceForTally(pNode);
+          if (pSource && /cool\s+[\u2610\u2611\u2612]/i.test(pSource)) {
+            const syncedPlayer = syncInlinePlayerTally(pSource, coolCount, crybabyCount);
+            if (syncedPlayer !== pSource) {
+              await persistModifiedNoteSource(playerId, syncedPlayer);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (state.detail && !state.editing) {
+    const scroll = els.panelBody.scrollTop;
+    renderPanel(state.detail, { preserveScroll: scroll });
+  }
+  renderSidebarTallies();
+}
+
+async function toggleNoteTaskPip(noteId, taskIndex) {
+  const idx = nodeIndex(noteId);
+  if (idx < 0) return;
+  const node = state.graph.nodes[idx];
+  const source = getNoteSourceForTally(node);
+  if (!source) return;
+  const updated = toggleNthTaskBox(source, taskIndex);
+  await persistModifiedNoteSource(noteId, updated);
+  if (state.detail && state.detail.id === noteId && !state.editing) {
+    const scroll = els.panelBody.scrollTop;
+    renderPanel(state.detail, { preserveScroll: scroll });
+  }
+}
+
+function addCustomTally(label) {
+  const list = prefs.get(customTalliesKey(), []);
+  list.push({
+    id: `c_${Date.now()}_${list.length}`,
+    label,
+    count: 0,
+    max: 3,
+  });
+  prefs.set(customTalliesKey(), list);
+  state.addingCustomTally = false;
+  renderSidebarTallies();
+}
+
+function adjustCustomTally(id, delta) {
+  const list = prefs.get(customTalliesKey(), []);
+  const item = list.find((c) => c.id === id);
+  if (!item) return;
+  const max = item.max || 3;
+  item.count = clamp((item.count || 0) + delta, 0, max);
+  prefs.set(customTalliesKey(), list);
+  renderSidebarTallies();
+}
+
+function toggleCustomTallyPip(id, pipSlot) {
+  const list = prefs.get(customTalliesKey(), []);
+  const item = list.find((c) => c.id === id);
+  if (!item) return;
+  const current = item.count || 0;
+  item.count = current === pipSlot + 1 ? pipSlot : pipSlot + 1;
+  prefs.set(customTalliesKey(), list);
+  renderSidebarTallies();
+}
+
+function deleteCustomTally(id) {
+  const list = prefs.get(customTalliesKey(), []).filter((c) => c.id !== id);
+  prefs.set(customTalliesKey(), list);
+  renderSidebarTallies();
+}
+
 /** The bento board is DOM, so a folder toggle is a cheap re-render. */
 function syncBento() {
   if (!state.graph) return;
@@ -1359,6 +1740,8 @@ function ensureAtlas() {
   });
   state.atlas.setRoads(prefs.get('cortex.atlas.roads', true));
   state.atlas.setRoutes(prefs.get('cortex.atlas.routes', true));
+  state.atlas.setBiomes(prefs.get('cortex.atlas.biomes', true));
+  state.atlas.setDisabledBiomes(new Set(prefs.get('cortex.atlas.disabledBiomes', [])));
   return state.atlas;
 }
 
@@ -1529,25 +1912,32 @@ async function installUpdate() {
 
 function openSettings() {
   const vault = currentVault();
-  if (!vault) {
+  if (!vault && !state.graph) {
     ui.toast('Open a folder first');
     return;
   }
-  els.settingsName.textContent = vault.name;
-  els.settingsPath.textContent = vault.path;
-  els.settingsObsidian.hidden = !vault.obsidian;
-  els.settingsWrites.textContent = state.readOnly
-    ? 'This folder is open read-only. Cortex can read it, but will not write to it.'
-    : 'Notes are written as plain Markdown in the folder, so Obsidian sees them immediately.';
+  els.settingsName.textContent = vault?.name || state.meta?.title || 'Vault';
+  els.settingsPath.textContent = vault?.path || (state.live ? '' : 'Static demo');
+  els.settingsObsidian.hidden = !vault?.obsidian;
+  els.settingsWrites.textContent = !state.live
+    ? 'Static export mode: visual settings and tallies are saved locally in your browser.'
+    : state.readOnly
+      ? 'This folder is open read-only. Cortex can read it, but will not write to it.'
+      : 'Notes are written as plain Markdown in the folder, so Obsidian sees them immediately.';
   els.settingsRoads.checked = prefs.get('cortex.atlas.roads', true);
   els.settingsRoutes.checked = prefs.get('cortex.atlas.routes', true);
-  syncAgentHelp(vault);
-  refreshMcpStatus();
-  loadAbout();
-  checkForUpdates();
-  els.settingsReveal.disabled = Boolean(vault.missing);
+  if (vault && state.live) {
+    syncAgentHelp(vault);
+    refreshMcpStatus();
+    loadAbout();
+    checkForUpdates();
+    els.settingsReveal.disabled = Boolean(vault.missing);
+  } else {
+    els.settingsReveal.disabled = true;
+  }
   syncSettingsViews();
   syncThemeUI();
+  syncVisualSettingsUI();
   els.settings.hidden = false;
   els.settingsClose.focus();
 }
@@ -2326,7 +2716,7 @@ function relatedFromGraph(id) {
     });
 }
 
-function renderPanel(detail) {
+function renderPanel(detail, { preserveScroll = null } = {}) {
   // The body usually repeats its title as an H1; the panel already shows it.
   let markdown = detail.markdown || '';
   const heading = /^\s*#\s+(.+)\r?\n/.exec(markdown);
@@ -2335,7 +2725,7 @@ function renderPanel(detail) {
   }
   const html = renderMarkdown(markdown, (target) => Boolean(resolveTarget(target)));
   els.panelBody.innerHTML = ui.panelHtml(detail, html);
-  els.panelBody.scrollTop = 0;
+  els.panelBody.scrollTop = preserveScroll !== null ? preserveScroll : 0;
   els.panel.hidden = false;
   ui.setCrumbs(`${state.meta.title} / ${detail.folder}`);
   syncHistory();
@@ -2424,11 +2814,28 @@ function renderPanel(detail) {
     });
   });
 
+  els.panelBody.querySelectorAll('.tally-pip[data-pip-index]').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleNoteBallotPip(detail.id, Number(btn.dataset.pipIndex));
+    });
+  });
+
+  els.panelBody.querySelectorAll('.task-box[data-task-index]').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleNoteTaskPip(detail.id, Number(btn.dataset.taskIndex));
+    });
+  });
+
   els.panelBody.querySelectorAll('.confidence-fill[data-confidence]').forEach((bar) => {
     bar.style.setProperty('--confidence', `${bar.dataset.confidence}%`);
   });
 
   wireConnectionTabs(els.panelBody.querySelector('#note-connections'));
+  renderSidebarTallies();
 }
 
 function wireConnectionTabs(root) {
@@ -2812,6 +3219,71 @@ function buildPaletteCommands() {
         if (state.atlas && state.mode === 'atlas') state.atlas.fit();
       },
     },
+    {
+      kind: 'command',
+      id: 'cmd:stars:glow',
+      title: 'Star style: Glow',
+      subtitle: 'Soft glowing stars with halo and cross flare',
+      keywords: 'stars glow style graph look',
+      run: () => applyStarMode('glow'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:stars:anime',
+      title: 'Star style: Anime impact',
+      subtitle: 'High-contrast impact frame star bursts',
+      keywords: 'stars anime impact sakuga frame style graph look',
+      run: () => applyStarMode('anime'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:stars:dots',
+      title: 'Star style: Dots',
+      subtitle: 'Crisp flat geometric dots without flare',
+      keywords: 'stars dots minimal flat style graph look',
+      run: () => applyStarMode('dots'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:brain:mode',
+      title: state.brainMode === 'shell' ? 'Brain mode: Notes form brain (hide shell)' : 'Brain mode: Show cortical shell',
+      subtitle: 'Toggle whether the 3D brain mesh is drawn or notes sculpt the brain directly',
+      keywords: 'brain mode shell hidden notes sculpt cortex',
+      run: () => applyBrainMode(state.brainMode === 'shell' ? 'notes' : 'shell'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:atlas:biomes',
+      title: prefs.get('cortex.atlas.biomes', true) ? 'Hide Atlas biomes' : 'Show Atlas biomes',
+      subtitle: 'Toggle regional biomes (woodland, wastes, wetlands, tundra, highlands, steppe)',
+      keywords: 'atlas map biomes terrain toggle',
+      run: () => {
+        const next = !prefs.get('cortex.atlas.biomes', true);
+        prefs.set('cortex.atlas.biomes', next);
+        if (state.atlas) state.atlas.setBiomes(next);
+        syncVisualSettingsUI();
+      },
+    },
+    {
+      kind: 'command',
+      id: 'cmd:tally:add',
+      title: 'Add tally / point counter',
+      subtitle: 'Track cool points, crybaby points, or custom tallies in the sidebar',
+      keywords: 'tally counter points cool crybaby tracker score',
+      run: () => {
+        if (state.sidebarCollapsed) toggleSidebar(false);
+        state.addingCustomTally = true;
+        renderSidebarTallies();
+      },
+    },
+    {
+      kind: 'command',
+      id: 'cmd:settings',
+      title: 'Open vault settings',
+      subtitle: 'Appearance, star look, brain mode, map roads & biomes',
+      keywords: 'settings preferences stars brain biomes roads mcp',
+      run: () => openSettings(),
+    },
   ];
 
   if (state.selected != null) {
@@ -2849,14 +3321,6 @@ function buildPaletteCommands() {
         keywords: 'new create note markdown',
         shortcut: 'n',
         run: () => createNote(),
-      },
-      {
-        kind: 'command',
-        id: 'cmd:settings',
-        title: 'Open vault settings',
-        subtitle: 'Appearance, map roads, MCP and updates',
-        keywords: 'settings preferences mcp config',
-        run: () => openSettings(),
       },
       {
         kind: 'command',

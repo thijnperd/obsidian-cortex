@@ -14,11 +14,30 @@ const CORE_TILT = 0.12;
 
 /// Returns `{ positions, anchors }`; anchors are per-folder surface points so
 /// the UI can label each region of the brain.
-export function buildBrainPositions(nodes, folderNames, diaries = new Set()) {
+/// When `options.surfaceOnly` is true ("notes make up the brain" mode), notes
+/// are sculpted onto the outer cortical gyri and anatomical mesh envelope so
+/// the stars and fibre tracts themselves form the 3D brain without the shell.
+export function buildBrainPositions(nodes, folderNames, diaries = new Set(), options = {}) {
+  const surfaceOnly = Boolean(options.surfaceOnly);
+  const meshPositions = options.meshPositions || null;
   const anchors = new Map();
   const folderIndex = new Map(folderNames.map((name, index) => [name, index]));
   const sums = new Map();
   const counts = new Map();
+
+  // Pre-partition the real 3D cortical mesh vertices by hemisphere (left / right)
+  // so `surfaceOnly` mode can snap notes directly onto the anatomical brain surface.
+  const leftVerts = [];
+  const rightVerts = [];
+  if (surfaceOnly && meshPositions && meshPositions.length >= 9) {
+    for (let i = 0; i < meshPositions.length; i += 3) {
+      const vx = meshPositions[i];
+      const vy = meshPositions[i + 1];
+      const vz = meshPositions[i + 2];
+      if (vx < -0.015) leftVerts.push(vx, vy, vz);
+      else if (vx > 0.015) rightVerts.push(vx, vy, vz);
+    }
+  }
 
   for (const node of nodes) {
     const entry = sums.get(node.folder) || [0, 0, 0];
@@ -43,9 +62,8 @@ export function buildBrainPositions(nodes, folderNames, diaries = new Set()) {
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index];
     const folder = folderIndex.get(node.folder) ?? 0;
-    const count = counts.get(node.folder) || 0;
 
-    if (diaries.has(node.folder)) {
+    if (diaries.has(node.folder) && !surfaceOnly) {
       // Diffuse core: a seeded spiral through the middle of both hemispheres.
       // It is inside the shell, so the chapter links cross the lobes instead of
       // drawing a ring around them.
@@ -88,11 +106,11 @@ export function buildBrainPositions(nodes, folderNames, diaries = new Set()) {
     ry /= length;
     rz /= length;
 
-    // A folder used to become one narrow ray from the lobe centre to the
-    // surface, which left most of the brain empty between folders. Spread its
-    // notes through a cone around that ray so the lobe has tissue in depth.
+    // Spread notes through a cone around the folder ray so the lobe has tissue.
+    const spreadScale = surfaceOnly ? 1.22 : 1.0;
     const lateral = (0.26 + 0.34 * pseudoRandom(index + 37))
-      * Math.sqrt(pseudoRandom(index + 101));
+      * Math.sqrt(pseudoRandom(index + 101))
+      * spreadScale;
     const around = pseudoRandom(index + 203) * Math.PI * 2;
     const up = Math.abs(direction[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
     let sideA = [
@@ -124,39 +142,65 @@ export function buildBrainPositions(nodes, folderNames, diaries = new Set()) {
     dy /= units;
     dz /= units;
 
-    // Gyri: small folds so the outer notes are not a perfect ellipsoid.
-    const fold = 1 + 0.05 * Math.sin(dx * 11 + dz * 7) + 0.03 * Math.sin(dy * 13 + dx * 4);
-    // Fill the lobe, not just its rind. A cube root gives a uniform volume
-    // distribution; the old 0.62–1.0 band left the middle of the brain empty.
-    const seeded = 0.16 + 0.82 * Math.cbrt(pseudoRandom(index));
+    // Gyri: small folds so the outer notes trace cortical ridges.
+    const foldAmp = surfaceOnly ? 1.55 : 1.0;
+    const fold = 1
+      + 0.05 * foldAmp * Math.sin(dx * 11 + dz * 7)
+      + 0.03 * foldAmp * Math.sin(dy * 13 + dx * 4);
+    const seeded = surfaceOnly
+      ? (0.80 + 0.20 * Math.pow(pseudoRandom(index), 0.42))
+      : (0.16 + 0.82 * Math.cbrt(pseudoRandom(index)));
 
-    brain[index * 3] = center[0] + dx * RADII[0] * fold * seeded;
-    brain[index * 3 + 1] = clamp(center[1] + dy * RADII[1] * fold * seeded, -0.44, 0.54);
-    brain[index * 3 + 2] = center[2] + dz * RADII[2] * fold * seeded;
+    let px = center[0] + dx * RADII[0] * fold * seeded;
+    let py = clamp(center[1] + dy * RADII[1] * fold * seeded, -0.44, 0.54);
+    let pz = center[2] + dz * RADII[2] * fold * seeded;
+
+    const hemiVerts = side < 0 ? leftVerts : rightVerts;
+    if (surfaceOnly && hemiVerts.length >= 3) {
+      let bestX = px;
+      let bestY = py;
+      let bestZ = pz;
+      let bestD2 = Infinity;
+      for (let v = 0; v < hemiVerts.length; v += 3) {
+        const vx = hemiVerts[v];
+        const vy = hemiVerts[v + 1];
+        const vz = hemiVerts[v + 2];
+        const d2 = (vx - px) ** 2 + (vy - py) ** 2 + (vz - pz) ** 2;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          bestX = vx;
+          bestY = vy;
+          bestZ = vz;
+        }
+      }
+      const depth = 0.94 + 0.08 * pseudoRandom(index + 509);
+      const jx = (pseudoRandom(index + 613) - 0.5) * 0.032;
+      const jy = (pseudoRandom(index + 719) - 0.5) * 0.032;
+      const jz = (pseudoRandom(index + 827) - 0.5) * 0.032;
+      px = bestX * depth + jx;
+      py = bestY * depth + jy;
+      pz = bestZ * depth + jz;
+    }
+
+    brain[index * 3] = px;
+    brain[index * 3 + 1] = py;
+    brain[index * 3 + 2] = pz;
   }
 
-  // White matter: a folder of its own never got a core point, so give it an
-  // anchor the labels can follow instead of silently dropping it.
   for (const name of folderNames) {
     if (!anchors.has(name)) anchors.set(name, [0, 0.56, 0]);
   }
 
-  // The cortical mesh is narrower than a smooth ellipsoid (temporal lobes,
-  // frontal pole), so a few surface notes would float just outside it. Pull
-  // the whole cloud in slightly: fibres stay visibly inside the shell.
+  const pullIn = surfaceOnly ? 0.96 : 0.86;
   for (let index = 0; index < brain.length; index += 1) {
-    brain[index] *= 0.86;
-    // The mesh has no tissue under the temporal lobes: keep nodes above the
-    // brainstem so nothing floats in the black below the brain.
-    if (index % 3 === 1) brain[index] = clamp(brain[index], -0.32, 0.42);
+    brain[index] *= pullIn;
+    if (index % 3 === 1) brain[index] = clamp(brain[index], surfaceOnly ? -0.36 : -0.32, surfaceOnly ? 0.46 : 0.42);
   }
 
-  // Region labels follow the same pull-in as the notes, or a label can sit in
-  // the black outside the cortex and look like it belongs to another view.
   for (const anchor of anchors.values()) {
-    anchor[0] *= 0.86;
-    anchor[1] = clamp(anchor[1] * 0.86, -0.32, 0.42);
-    anchor[2] *= 0.86;
+    anchor[0] *= pullIn;
+    anchor[1] = clamp(anchor[1] * pullIn, -0.34, 0.44);
+    anchor[2] *= pullIn;
   }
 
   return { positions: brain, anchors };

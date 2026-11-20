@@ -142,6 +142,197 @@ export function syncFolders(hidden) {
   if (reset) reset.hidden = hidden.size === 0;
 }
 
+function shortTallyTabName(title) {
+  const lower = String(title || '').toLowerCase();
+  if (lower.includes('cool')) return 'Cool';
+  if (lower.includes('crybaby')) return 'Crybaby';
+  return String(title || 'Tally').slice(0, 14);
+}
+
+export function renderTallies(
+  container,
+  {
+    sections = [],
+    activeSectionId = null,
+    customCounters = [],
+    addingCustom = false,
+    onSelectSection,
+    onToggleNotePip,
+    onOpenNoteByTarget,
+    onOpenSourceNote,
+    onAdjustCustom,
+    onToggleCustomPip,
+    onAddCustom,
+    onDeleteCustom,
+    onCancelAdd,
+  } = {},
+) {
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (addingCustom) {
+    const form = document.createElement('form');
+    form.className = 'tally-add-form';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tally-add-input';
+    input.placeholder = 'Counter name (e.g. Cool points)…';
+    input.maxLength = 40;
+    input.required = true;
+    const actions = document.createElement('div');
+    actions.className = 'tally-add-actions';
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.className = 'btn btn-primary tally-add-btn';
+    save.textContent = 'Add';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'text-button';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', () => onCancelAdd?.());
+    actions.append(save, cancel);
+    form.append(input, actions);
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const val = input.value.trim();
+      if (val) onAddCustom?.(val);
+    });
+    container.appendChild(form);
+    setTimeout(() => input.focus(), 0);
+  }
+
+  if (sections.length > 0) {
+    const active = sections.find((s) => s.id === activeSectionId) || sections[0];
+    if (sections.length > 1) {
+      const tabBar = document.createElement('div');
+      tabBar.className = 'tally-tabs';
+      for (const sec of sections) {
+        const isCurrent = sec.id === active.id;
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = `tally-tab${isCurrent ? ' is-active' : ''}`;
+        tab.setAttribute('aria-pressed', String(isCurrent));
+        tab.textContent = shortTallyTabName(sec.title);
+        tab.title = `${sec.title} (${sec.noteTitle})`;
+        tab.addEventListener('click', () => onSelectSection?.(sec.id));
+        tabBar.appendChild(tab);
+      }
+      if (onOpenSourceNote && active.noteId) {
+        const srcBtn = document.createElement('button');
+        srcBtn.type = 'button';
+        srcBtn.className = 'tally-source-btn';
+        srcBtn.textContent = '↗';
+        srcBtn.title = `Open ${active.noteTitle}`;
+        srcBtn.setAttribute('aria-label', `Open ${active.noteTitle}`);
+        srcBtn.addEventListener('click', () => onOpenSourceNote(active.noteId));
+        tabBar.appendChild(srcBtn);
+      }
+      container.appendChild(tabBar);
+    }
+
+    const list = document.createElement('div');
+    list.className = 'tally-list';
+    const isCrybaby = /crybaby/i.test(active.title);
+
+    for (const row of active.rows) {
+      const item = document.createElement('div');
+      item.className = `tally-row${isCrybaby ? ' is-crybaby' : ' is-cool'}`;
+
+      const labelBtn = document.createElement('button');
+      labelBtn.type = 'button';
+      labelBtn.className = 'tally-label';
+      labelBtn.textContent = row.label;
+      labelBtn.title = row.targetNote ? `Open ${row.label}` : row.label;
+      if (row.targetNote && onOpenNoteByTarget) {
+        labelBtn.addEventListener('click', () => onOpenNoteByTarget(row.targetNote));
+      } else if (active.noteId && onOpenSourceNote) {
+        labelBtn.addEventListener('click', () => onOpenSourceNote(active.noteId));
+      }
+
+      const pipsWrap = document.createElement('div');
+      pipsWrap.className = 'tally-pips';
+      for (const pip of row.pips) {
+        const pipBtn = document.createElement('button');
+        pipBtn.type = 'button';
+        pipBtn.className = `tally-pip${pip.checked ? ' is-checked' : ''}${pip.isBonus ? ' is-bonus' : ''}`;
+        pipBtn.setAttribute('aria-pressed', String(pip.checked));
+        pipBtn.title = `${row.label} · ${active.title} (${pip.colHeader || 'point'})`;
+        pipBtn.textContent = pip.checked ? (pip.isBonus ? '★' : '✓') : '';
+        pipBtn.addEventListener('click', () => {
+          onToggleNotePip?.(active.noteId, pip.pipIndex, row, active);
+        });
+        pipsWrap.appendChild(pipBtn);
+      }
+
+      item.append(labelBtn, pipsWrap);
+      list.appendChild(item);
+    }
+    container.appendChild(list);
+  }
+
+  if (customCounters.length > 0) {
+    const customList = document.createElement('div');
+    customList.className = 'tally-list tally-list-custom';
+    for (const counter of customCounters) {
+      const row = document.createElement('div');
+      row.className = 'tally-row is-custom';
+
+      const label = document.createElement('span');
+      label.className = 'tally-label';
+      label.textContent = counter.label;
+      label.title = counter.label;
+
+      const controls = document.createElement('div');
+      controls.className = 'tally-pips';
+      const maxPips = counter.max || 3;
+      for (let p = 0; p < maxPips; p += 1) {
+        const checked = p < (counter.count || 0);
+        const pipBtn = document.createElement('button');
+        pipBtn.type = 'button';
+        pipBtn.className = `tally-pip${checked ? ' is-checked' : ''}`;
+        pipBtn.setAttribute('aria-pressed', String(checked));
+        pipBtn.title = `${counter.label}: ${counter.count || 0}/${maxPips}`;
+        pipBtn.textContent = checked ? '✓' : '';
+        pipBtn.addEventListener('click', () => onToggleCustomPip?.(counter.id, p));
+        controls.appendChild(pipBtn);
+      }
+
+      const minus = document.createElement('button');
+      minus.type = 'button';
+      minus.className = 'tally-step';
+      minus.textContent = '−';
+      minus.title = 'Decrease';
+      minus.addEventListener('click', () => onAdjustCustom?.(counter.id, -1));
+
+      const plus = document.createElement('button');
+      plus.type = 'button';
+      plus.className = 'tally-step';
+      plus.textContent = '+';
+      plus.title = 'Increase';
+      plus.addEventListener('click', () => onAdjustCustom?.(counter.id, 1));
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'tally-del';
+      del.textContent = '×';
+      del.title = `Remove ${counter.label}`;
+      del.addEventListener('click', () => onDeleteCustom?.(counter.id));
+
+      controls.append(minus, plus, del);
+      row.append(label, controls);
+      customList.appendChild(row);
+    }
+    container.appendChild(customList);
+  }
+
+  if (!sections.length && !customCounters.length && !addingCustom) {
+    const empty = document.createElement('p');
+    empty.className = 'tally-empty';
+    empty.textContent = 'Track points, habits, or table scores. Click + Counter to add one.';
+    container.appendChild(empty);
+  }
+}
+
 export function renderVaultList(container, vaults, activeId, onOpen, onReveal) {
   container.innerHTML = '';
   for (const vault of vaults) {

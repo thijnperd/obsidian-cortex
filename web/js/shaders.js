@@ -102,6 +102,7 @@ uniform float uDensity;
 uniform float uCrowd;
 uniform float uBrainCrowd;
 uniform float uMorph;
+uniform highp int uStarMode;
 
 out vec2 vUv;
 out vec3 vColor;
@@ -121,17 +122,28 @@ void main() {
   float born = smoothstep(data.w, data.w + 0.05, uReveal);
   float distance = max(clip.w, 0.35);
   float size = max(aSize * 1.08, 0.72) * uSizeScale * (0.35 + 0.65 * born) / distance;
-  size *= 0.88 + 0.22 * aFocus;
+  if (uStarMode == 1) {
+    size *= 1.38 * (0.86 + 0.32 * aFocus);
+  } else if (uStarMode == 2) {
+    size *= 0.56 * (0.90 + 0.20 * aFocus);
+  } else {
+    size *= 0.88 + 0.22 * aFocus;
+  }
   vec2 offset = aCorner * size * 2.0 / uViewport;
   gl_Position = clip;
   gl_Position.xy += offset * clip.w;
-  float twinkle = 0.86 + 0.14 * sin(uTime * 1.6 + aSeed * 6.2831);
+  float twinkle = uStarMode == 2
+    ? 1.0
+    : (0.86 + 0.14 * sin(uTime * (uStarMode == 1 ? 3.2 : 1.6) + aSeed * 6.2831));
   float crowd = mix(uCrowd, uBrainCrowd, uMorph);
   vAlpha = born * aFocus * twinkle * mix(uDensity, crowd, uMorph);
 }`;
 
 export const STAR_FS = `#version 300 es
 precision highp float;
+precision highp int;
+
+uniform highp int uStarMode;
 
 in vec2 vUv;
 in vec3 vColor;
@@ -140,6 +152,35 @@ out vec4 fragColor;
 
 void main() {
   float r2 = dot(vUv, vUv);
+  if (uStarMode == 2) {
+    if (r2 > 1.0) discard;
+    float r = sqrt(r2);
+    float disc = 1.0 - smoothstep(0.64, 0.78, r);
+    if (disc <= 0.001) discard;
+    float rim = smoothstep(0.42, 0.70, r) * disc;
+    vec3 color = mix(vColor * 1.38, vec3(1.0), 0.24 * (1.0 - r) + 0.16 * rim);
+    fragColor = vec4(color * disc, vAlpha * disc);
+    return;
+  }
+  if (uStarMode == 1) {
+    float r = sqrt(r2);
+    float ax = abs(vUv.x);
+    float ay = abs(vUv.y);
+    float spikeH = exp(-ay * 28.0) * pow(max(0.0, 1.0 - ax), 1.15);
+    float spikeV = exp(-ax * 22.0) * pow(max(0.0, 1.0 - ay), 1.05);
+    vec2 dUv = vec2(vUv.x - vUv.y, vUv.x + vUv.y) * 0.70710678;
+    float diag = (exp(-abs(dUv.y) * 36.0) * pow(max(0.0, 1.0 - abs(dUv.x * 1.38)), 1.55)
+                + exp(-abs(dUv.x) * 36.0) * pow(max(0.0, 1.0 - abs(dUv.y * 1.38)), 1.55)) * 0.85;
+    float astroid = pow(ax, 0.55) + pow(ay, 0.55);
+    float core = smoothstep(0.54, 0.0, astroid);
+    float ring = smoothstep(0.032, 0.0, abs(r - 0.33)) * 0.52;
+    float burst = core * 2.1 + (spikeH + spikeV) * 1.85 + diag + ring;
+    if (burst <= 0.004) discard;
+    vec3 color = vColor * (burst * 1.5)
+      + vec3(1.0, 0.99, 0.96) * (pow(core, 1.45) * 2.35 + (spikeH + spikeV) * 1.15 + diag * 0.5);
+    fragColor = vec4(color, vAlpha * clamp(burst * 1.35, 0.0, 1.0));
+    return;
+  }
   if (r2 > 1.0) discard;
   float r = sqrt(r2);
   float core = pow(max(0.0, 1.0 - r), 4.6);
@@ -179,7 +220,7 @@ out vec3 vColor;
 out float vAlpha;
 out float vSeed;
 
-const float SEGMENTS = 10.0;
+const float SEGMENTS = 8.0;
 
 vec3 bezier(vec3 p0, vec3 p1, vec3 p2, float t) {
   float it = 1.0 - t;

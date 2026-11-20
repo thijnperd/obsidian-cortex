@@ -139,6 +139,14 @@
       <div class="folders" id="folders"></div>
     </section>
 
+    <section class="block block-tallies" id="tallies-block" aria-label="Tallies and point trackers">
+      <h2 class="block-title">
+        Tallies
+        <button class="text-button" id="tally-add" type="button" title="Add a custom counter or point tracker">+ Counter</button>
+      </h2>
+      <div class="tallies" id="tallies"></div>
+    </section>
+
     <section class="block block-selection" id="selection" hidden aria-label="Collected notes">
       <h2 class="block-title">Collected <span id="tray-count">0</span></h2>
       <div class="selection-actions">
@@ -235,9 +243,33 @@
         </section>
 
         <section class="settings-section">
+          <h3>Graph &amp; Brain</h3>
+          <p class="field-help">Star look in 3D Graph, Brain, and Timeline views:</p>
+          <div class="choice-row" id="settings-stars" role="group" aria-label="Star look">
+            <button class="choice" data-star-mode="glow" type="button" aria-pressed="true">Glow</button>
+            <button class="choice" data-star-mode="anime" type="button" aria-pressed="false">Anime impact</button>
+            <button class="choice" data-star-mode="dots" type="button" aria-pressed="false">Dots</button>
+          </div>
+          <p class="field-help">Brain representation:</p>
+          <div class="choice-row" id="settings-brain-mode" role="group" aria-label="Brain mode">
+            <button class="choice" data-brain-mode="shell" type="button" aria-pressed="true">Cortical shell</button>
+            <button class="choice" data-brain-mode="notes" type="button" aria-pressed="false">Notes form brain</button>
+          </div>
+        </section>
+
+        <section class="settings-section">
           <h3>Map</h3>
-          <label class="check"><input type="checkbox" id="settings-roads" checked /> Roads between linked places</label>
+          <label class="check"><input type="checkbox" id="settings-roads" checked /> Medieval roads, bridges &amp; mountain tunnels</label>
           <label class="check"><input type="checkbox" id="settings-routes" checked /> Trade routes between countries</label>
+          <label class="check"><input type="checkbox" id="settings-biomes" checked /> Regional biomes</label>
+          <div class="choice-row biome-choices" id="settings-biome-list" role="group" aria-label="Biome layers">
+            <button class="choice" data-biome="forest" type="button" aria-pressed="true">Woodland</button>
+            <button class="choice" data-biome="highlands" type="button" aria-pressed="true">Highlands</button>
+            <button class="choice" data-biome="wastes" type="button" aria-pressed="true">Wastes</button>
+            <button class="choice" data-biome="wetlands" type="button" aria-pressed="true">Wetlands</button>
+            <button class="choice" data-biome="tundra" type="button" aria-pressed="true">Tundra</button>
+            <button class="choice" data-biome="steppe" type="button" aria-pressed="true">Steppe</button>
+          </div>
         </section>
 
         <section class="settings-section">
@@ -285,7 +317,7 @@
       <header class="launch-brand">
         <img class="launch-logo" src="./logo.svg" width="40" height="40" alt="" />
         <span class="launch-wordmark">Cortex</span>
-        <span class="launch-tag">v2 · local-first</span>
+        <span class="launch-tag">v2.1 · local-first</span>
       </header>
       <h1 class="launch-title">Pick up where you left off.</h1>
       <p class="launch-sub">Six views of the folder you already have, and a record of why you decided what you decided. Nothing is copied, moved or synced.</p>

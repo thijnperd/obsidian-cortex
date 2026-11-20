@@ -38,6 +38,80 @@ const PIGMENTS = [
   [92, 96, 128],
 ];
 
+export const BIOMES = {
+  forest: {
+    id: 'forest',
+    label: 'Ancient Woodland',
+    ink: [82, 118, 66],
+    wash: [108, 144, 86],
+  },
+  highlands: {
+    id: 'highlands',
+    label: 'Craggy Highlands',
+    ink: [118, 92, 74],
+    wash: [138, 110, 90],
+  },
+  wastes: {
+    id: 'wastes',
+    label: 'Arid Wastes',
+    ink: [168, 106, 54],
+    wash: [196, 134, 76],
+  },
+  wetlands: {
+    id: 'wetlands',
+    label: 'Marsh & Fen',
+    ink: [68, 114, 104],
+    wash: [88, 134, 122],
+  },
+  tundra: {
+    id: 'tundra',
+    label: 'Frost Tundra',
+    ink: [114, 138, 156],
+    wash: [156, 178, 194],
+  },
+  steppe: {
+    id: 'steppe',
+    label: 'Golden Steppe',
+    ink: [152, 128, 64],
+    wash: [178, 152, 86],
+  },
+};
+
+function classifyCountryBiome(country, index, avgElev, wetness) {
+  const lower = String(country.name || '').toLowerCase();
+  if (/waste|desert|dune|arid|sand|barren|ash|cinder/.test(lower)) return 'wastes';
+  if (/vogler|marsh|swamp|fen|bog|river|coast|sea|tide|wet|bay/.test(lower)) return 'wetlands';
+  if (/lost name|ice|frost|snow|tundra|winter|glacier|north|cold/.test(lower)) return 'tundra';
+  if (/siege|enem|bbeg|mountain|peak|crag|highland|iron|mine|cave|war|fort/.test(lower)) return 'highlands';
+  if (/wood|forest|grove|tree|sylvan|npc|item/.test(lower)) return 'forest';
+  if (/kalaman|steppe|plain|meadow|savanna|field|prelude/.test(lower)) return 'steppe';
+
+  const { x, y } = country.capital;
+  if (avgElev > 0.38) return 'highlands';
+  if (y < WORLD * 0.31) return 'tundra';
+  if (y > WORLD * 0.66 && x > WORLD * 0.42) return 'wastes';
+  if (wetness > 0.16 || avgElev < 0.24 || x < WORLD * 0.28) return 'wetlands';
+  const order = ['forest', 'steppe', 'wetlands', 'highlands', 'wastes', 'tundra'];
+  return order[index % order.length];
+}
+
+function segmentIntersection(ax, ay, bx, by, cx, cy, dx, dy) {
+  const rX = bx - ax;
+  const rY = by - ay;
+  const sX = dx - cx;
+  const sY = dy - cy;
+  const denom = rX * sY - rY * sX;
+  if (Math.abs(denom) < 1e-6) return null;
+  const uX = cx - ax;
+  const uY = cy - ay;
+  const t = (uX * sY - uY * sX) / denom;
+  const u = (uX * rY - uY * rX) / denom;
+  if (t > 0.04 && t < 0.96 && u >= 0 && u <= 1) {
+    return { x: ax + t * rX, y: ay + t * rY, t };
+  }
+  return null;
+}
+
 const rgba = (rgb, alpha) => `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
 
 function clamp(value, min, max) {
@@ -468,7 +542,7 @@ function convexHull(points) {
  * villages instead of a single smeared capital.
  */
 function clusterRadius(count) {
-  return clamp(58 * Math.sqrt(32 / Math.max(8, count)), 16, 58);
+  return clamp(22 * Math.sqrt(14 / Math.max(6, count)), 11, 22);
 }
 
 /** Single-linkage grouping, so a clump of linked notes becomes one settlement. */
@@ -616,6 +690,9 @@ export class Atlas {
     this.countries = [];
     this.places = [];
     this.roadBands = [];
+    this.roadSegments = [];
+    this.bridges = [];
+    this.tunnels = [];
     this.routeBands = [];
     this.hidden = new Set();
     this.focus = null;
@@ -634,6 +711,7 @@ export class Atlas {
     this.fibres = null;
     this.fibresPattern = null;
     this.riverBands = [];
+    this.riverSegments = [];
     this.lakes = [];
     this.terrain = null;
     this.started = 0;
@@ -641,6 +719,8 @@ export class Atlas {
     this.pointer = { down: false, moved: false, x: 0, y: 0, startX: 0, startY: 0, startView: null };
     this.showRoads = true;
     this.showRoutes = true;
+    this.showBiomes = true;
+    this.disabledBiomes = new Set();
     this.loadPaper();
     this.bind();
   }
@@ -708,6 +788,8 @@ export class Atlas {
         count: folder.count,
         colour: folder.color ?? index,
         ink: PIGMENTS[(folder.color ?? index) % PIGMENTS.length],
+        biome: 'forest',
+        biomeDef: BIOMES.forest,
         capital,
         cell,
         polygon: field,
@@ -733,10 +815,6 @@ export class Atlas {
       country.wilderness = wildernessPath(country.polygon, country.places, 100 + index * 17);
     });
 
-    // Rivers depend on the finished countries (their coastlines and towns), so
-    // the water is computed once the land exists.
-    this.buildTerrain();
-
     const position = new Map();
     this.places = [];
     this.countries.forEach((country, countryIndex) => {
@@ -747,6 +825,10 @@ export class Atlas {
       }
     });
     this.position = position;
+
+    // Rivers and biome marks depend on finished countries and place positions.
+    this.buildTerrain();
+
     this.namedCountries = [...this.countries]
       .sort((a, b) => b.count - a.count)
       .slice(0, this.overview ? 26 : this.countries.length);
@@ -775,103 +857,590 @@ export class Atlas {
   }
 
   /**
-   * Roads are bucketed by width instead of stored per link: a note with many
-   * links draws the same road four times, and the wider line is the evidence.
+   * Medieval road network:
+   * - Settlements within each country connect via a local Gabriel + spanning road tree.
+   * - Neighbouring countries connect via overland King's Highways.
+   * - All note links route through this network so link traffic widens major roads
+   *   without filling the screen with an all-pairs starburst.
+   * - Crossing a river builds a stone bridge; crossing a mountain bores a tunnel.
    */
   layoutRoads() {
-    const roads = new Map();
-    const routes = new Map();
+    this.roadBands = [];
+    this.roadSegments = [];
+    this.bridges = [];
+    this.tunnels = [];
+    this.routeBands = [];
+
     const nodes = this.graph?.nodes || [];
-    const add = (bucket, width, path) => {
-      const key = Math.round(width * 4) / 4;
-      const existing = bucket.get(key);
-      if (existing) existing.addPath(path);
-      else bucket.set(key, path);
+    const edges = this.graph?.edges || [];
+    if (!nodes.length || !this.countries.length) {
+      this.worldDirty = true;
+      this.dirty = true;
+      return;
+    }
+
+    // 1. Group nearby places (within 15px) in each country into town waypoints
+    // so roads connect town-to-town rather than drawing micro-streets inside one village.
+    const waypoints = [];
+    const nodeToWaypoint = new Map();
+    const countryWaypoints = this.countries.map(() => []);
+
+    this.countries.forEach((country, cIdx) => {
+      if (this.hidden.has(country.name) || !country.places.length) return;
+      const sorted = [...country.places].sort(
+        (a, b) => (b.degree - a.degree) || (b.pagerank - a.pagerank) || (a.index - b.index),
+      );
+      const localWps = [];
+      for (const place of sorted) {
+        let found = null;
+        for (const wp of localWps) {
+          const dx = wp.x - place.x;
+          const dy = wp.y - place.y;
+          if (dx * dx + dy * dy < 225) {
+            found = wp;
+            break;
+          }
+        }
+        if (found) {
+          found.members.push(place.index);
+          found.degree += place.degree || 0;
+          nodeToWaypoint.set(place.index, found.id);
+        } else {
+          const wp = {
+            id: waypoints.length,
+            x: place.x,
+            y: place.y,
+            country: cIdx,
+            primaryIndex: place.index,
+            degree: place.degree || 0,
+            members: [place.index],
+          };
+          waypoints.push(wp);
+          localWps.push(wp);
+          nodeToWaypoint.set(place.index, wp.id);
+        }
+      }
+      countryWaypoints[cIdx] = localWps;
+    });
+
+    // Count direct links between waypoints and between countries.
+    const wpPairLinks = new Map();
+    const countryPairLinks = new Map();
+    const pairKey = (a, b) => (a < b ? `${a}:${b}` : `${b}:${a}`);
+
+    for (const edge of edges) {
+      const fNode = nodes[edge.source];
+      const tNode = nodes[edge.target];
+      if (!fNode || !tNode) continue;
+      if (this.hidden.has(fNode.folder) || this.hidden.has(tNode.folder)) continue;
+      const wA = nodeToWaypoint.get(edge.source);
+      const wB = nodeToWaypoint.get(edge.target);
+      if (wA === undefined || wB === undefined || wA === wB) continue;
+      const w = Math.max(1, edge.weight || 1);
+      const wk = pairKey(wA, wB);
+      wpPairLinks.set(wk, (wpPairLinks.get(wk) || 0) + w);
+
+      const cA = waypoints[wA].country;
+      const cB = waypoints[wB].country;
+      if (cA !== cB) {
+        const ck = pairKey(cA, cB);
+        countryPairLinks.set(ck, (countryPairLinks.get(ck) || 0) + w);
+      }
+    }
+
+    // Road graph adjacency: roadEdges Map("wA:wB" -> { u, v, links, isHighway })
+    const roadEdges = new Map();
+    const addRoadEdge = (u, v, initialLinks = 1, isHighway = false) => {
+      if (u === v) return null;
+      const key = pairKey(u, v);
+      let entry = roadEdges.get(key);
+      if (!entry) {
+        entry = {
+          u: Math.min(u, v),
+          v: Math.max(u, v),
+          links: initialLinks,
+          isHighway,
+        };
+        roadEdges.set(key, entry);
+      } else {
+        entry.links += initialLinks;
+        if (isHighway) entry.isHighway = true;
+      }
+      return entry;
     };
 
-    const candidates = [];
-    for (const edge of this.graph?.edges || []) {
-      const from = this.position?.get(edge.source);
-      const to = this.position?.get(edge.target);
-      if (!from || !to) continue;
-      if (this.hidden.has(nodes[edge.source]?.folder) || this.hidden.has(nodes[edge.target]?.folder)) {
-        continue;
+    // 2. Intra-country road networks (Gabriel graph + MST over each country's town waypoints).
+    this.countries.forEach((country, cIdx) => {
+      const wps = countryWaypoints[cIdx];
+      if (!wps || wps.length < 2) return;
+      const m = wps.length;
+      const adj = Array.from({ length: m }, () => []);
+
+      // Gabriel condition: connect i and j if no other waypoint k in the country
+      // sits deep inside the circle with diameter (i, j).
+      for (let i = 0; i < m; i += 1) {
+        for (let j = i + 1; j < m; j += 1) {
+          const a = wps[i];
+          const b = wps[j];
+          const mx = (a.x + b.x) * 0.5;
+          const my = (a.y + b.y) * 0.5;
+          const r2 = ((a.x - b.x) ** 2 + (a.y - b.y) ** 2) * 0.25;
+          const direct = wpPairLinks.get(pairKey(a.id, b.id)) || 0;
+          const shrink = direct > 0 ? 0.72 : 0.92;
+          let blocked = false;
+          for (let k = 0; k < m; k += 1) {
+            if (k === i || k === j) continue;
+            const c = wps[k];
+            const d2 = (c.x - mx) ** 2 + (c.y - my) ** 2;
+            if (d2 < r2 * shrink) {
+              blocked = true;
+              break;
+            }
+          }
+          if (!blocked) {
+            addRoadEdge(a.id, b.id, 1 + direct * 2, false);
+            adj[i].push(j);
+            adj[j].push(i);
+          }
+        }
       }
-      // Links inside one settlement are streets: at country scale they turn a
-      // tight clump of notes into a sunburst. The clump already reads as a town.
-      if (from.cluster && from.cluster === to.cluster) continue;
-      // In an overview, a single hub with a hundred links turns the roads into
-      // a white starburst. Its neighbours are already in the same stipple.
-      if (this.overview && ((from.degree || 0) > 8 || (to.degree || 0) > 8)) continue;
-      candidates.push({ edge, from, to, weight: Math.max(1, edge.weight || 1) });
-    }
-    // A 20,000-link vault would otherwise draw a hairball. Keep the strongest
-    // roads, deterministically, and let the graph view carry every link.
-    if (candidates.length > 12000) {
-      candidates.sort((a, b) =>
-        b.weight - a.weight
-        || a.edge.source - b.edge.source
-        || a.edge.target - b.edge.target);
-      candidates.length = 12000;
-    }
-    let routesDrawn = 0;
-    for (const { edge, from, to, weight } of candidates) {
-      const path = smoothOpen(meander(from, to, edge.source * 31 + edge.target * 7));
-      if (from.country !== to.country) {
-        if (routesDrawn >= (this.overview ? 400 : 2500)) continue;
-        routesDrawn += 1;
-        add(routes, 1 + Math.log2(1 + weight) * 0.35, path);
-      } else {
-        add(roads, 0.8 + Math.log2(1 + weight) * 0.55, path);
+
+      // Ensure single connected component via Prim's MST.
+      const inTree = new Uint8Array(m);
+      inTree[0] = 1;
+      for (let step = 1; step < m; step += 1) {
+        let bestI = -1;
+        let bestJ = -1;
+        let bestScore = Infinity;
+        for (let i = 0; i < m; i += 1) {
+          if (!inTree[i]) continue;
+          for (let j = 0; j < m; j += 1) {
+            if (inTree[j]) continue;
+            const a = wps[i];
+            const b = wps[j];
+            const direct = wpPairLinks.get(pairKey(a.id, b.id)) || 0;
+            const dist = Math.hypot(a.x - b.x, a.y - b.y) / (1 + direct * 0.45);
+            if (dist < bestScore) {
+              bestScore = dist;
+              bestI = i;
+              bestJ = j;
+            }
+          }
+        }
+        if (bestI >= 0 && bestJ >= 0) {
+          inTree[bestJ] = 1;
+          const a = wps[bestI];
+          const b = wps[bestJ];
+          const direct = wpPairLinks.get(pairKey(a.id, b.id)) || 0;
+          addRoadEdge(a.id, b.id, 1 + direct * 2, false);
+        }
+      }
+
+      // Route all intra-country note links through the local road network so trunk roads widen!
+      for (let i = 0; i < m; i += 1) {
+        for (let j = i + 1; j < m; j += 1) {
+          const direct = wpPairLinks.get(pairKey(wps[i].id, wps[j].id)) || 0;
+          if (!direct) continue;
+          const existing = roadEdges.get(pairKey(wps[i].id, wps[j].id));
+          if (existing) {
+            existing.links += direct;
+          } else {
+            // Route via capital (wps[0])
+            const e1 = roadEdges.get(pairKey(wps[i].id, wps[0].id));
+            const e2 = roadEdges.get(pairKey(wps[j].id, wps[0].id));
+            if (e1) e1.links += direct;
+            if (e2) e2.links += direct;
+          }
+        }
+      }
+    });
+
+    // 3. Inter-country King's Highways: connect geographically adjacent countries
+    // and route cross-country link traffic along the overland highway backbone.
+    const visibleCountryIds = [];
+    this.countries.forEach((country, idx) => {
+      if (!this.hidden.has(country.name) && countryWaypoints[idx]?.length) {
+        visibleCountryIds.push(idx);
+      }
+    });
+
+    const countryAdj = new Map();
+    for (const c of visibleCountryIds) countryAdj.set(c, new Map());
+
+    const areCellsAdjacent = (cellA, cellB) => {
+      for (const [ax, ay] of cellA) {
+        for (const [bx, by] of cellB) {
+          if ((ax - bx) ** 2 + (ay - by) ** 2 < 324) return true;
+        }
+      }
+      return false;
+    };
+
+    for (let i = 0; i < visibleCountryIds.length; i += 1) {
+      for (let j = i + 1; j < visibleCountryIds.length; j += 1) {
+        const cA = visibleCountryIds[i];
+        const cB = visibleCountryIds[j];
+        const capA = this.countries[cA].capital;
+        const capB = this.countries[cB].capital;
+        const mx = (capA.x + capB.x) * 0.5;
+        const my = (capA.y + capB.y) * 0.5;
+        const r2 = ((capA.x - capB.x) ** 2 + (capA.y - capB.y) ** 2) * 0.25;
+        let gabriel = true;
+        for (const cK of visibleCountryIds) {
+          if (cK === cA || cK === cB) continue;
+          const capK = this.countries[cK].capital;
+          if ((capK.x - mx) ** 2 + (capK.y - my) ** 2 < r2 * 0.88) {
+            gabriel = false;
+            break;
+          }
+        }
+        if (gabriel || areCellsAdjacent(this.countries[cA].cell, this.countries[cB].cell)) {
+          const dist = Math.hypot(capA.x - capB.x, capA.y - capB.y);
+          countryAdj.get(cA).set(cB, dist);
+          countryAdj.get(cB).set(cA, dist);
+        }
       }
     }
 
-    this.roadBands = [...roads].map(([width, path]) => ({ width, path }));
+    // Route every cross-country link total across the overland country graph (Dijkstra).
+    const borderTraffic = new Map();
+    for (const [ck, links] of countryPairLinks.entries()) {
+      const [sStr, tStr] = ck.split(':');
+      const startC = Number(sStr);
+      const endC = Number(tStr);
+      if (!countryAdj.has(startC) || !countryAdj.has(endC)) continue;
+
+      const dist = new Map();
+      const prev = new Map();
+      const unvisited = new Set(visibleCountryIds);
+      for (const c of visibleCountryIds) dist.set(c, Infinity);
+      dist.set(startC, 0);
+
+      while (unvisited.size) {
+        let u = null;
+        let best = Infinity;
+        for (const c of unvisited) {
+          const d = dist.get(c);
+          if (d < best) {
+            best = d;
+            u = c;
+          }
+        }
+        if (u === null || u === endC || best === Infinity) break;
+        unvisited.delete(u);
+        for (const [v, edgeDist] of countryAdj.get(u).entries()) {
+          if (!unvisited.has(v)) continue;
+          const direct = countryPairLinks.get(pairKey(u, v)) || 0;
+          const cost = edgeDist / (1 + Math.log2(1 + direct) * 0.25);
+          if (best + cost < dist.get(v)) {
+            dist.set(v, best + cost);
+            prev.set(v, u);
+          }
+        }
+      }
+
+      let curr = endC;
+      while (prev.has(curr)) {
+        const p = prev.get(curr);
+        const bk = pairKey(p, curr);
+        borderTraffic.set(bk, (borderTraffic.get(bk) || 0) + links);
+        curr = p;
+      }
+    }
+
+    // Turn active border crossings into King's Highways between the best border/capital hubs.
+    for (const [bk, traffic] of borderTraffic.entries()) {
+      const [aStr, bStr] = bk.split(':');
+      const cA = Number(aStr);
+      const cB = Number(bStr);
+      const wpsA = countryWaypoints[cA] || [];
+      const wpsB = countryWaypoints[cB] || [];
+      if (!wpsA.length || !wpsB.length) continue;
+
+      // Pick hubs in cA and cB that balance proximity to the border with hub prominence.
+      let bestA = wpsA[0];
+      let bestB = wpsB[0];
+      let bestScore = Infinity;
+      const candA = wpsA.slice(0, Math.min(4, wpsA.length));
+      const candB = wpsB.slice(0, Math.min(4, wpsB.length));
+      for (const wa of candA) {
+        for (const wb of candB) {
+          const d = Math.hypot(wa.x - wb.x, wa.y - wb.y);
+          const direct = wpPairLinks.get(pairKey(wa.id, wb.id)) || 0;
+          const score = d / (1 + direct * 0.15 + (wa === wpsA[0] ? 0.18 : 0) + (wb === wpsB[0] ? 0.18 : 0));
+          if (score < bestScore) {
+            bestScore = score;
+            bestA = wa;
+            bestB = wb;
+          }
+        }
+      }
+      addRoadEdge(bestA.id, bestB.id, traffic, true);
+      if (bestA.id !== wpsA[0].id) addRoadEdge(bestA.id, wpsA[0].id, Math.ceil(traffic * 0.5), true);
+      if (bestB.id !== wpsB[0].id) addRoadEdge(bestB.id, wpsB[0].id, Math.ceil(traffic * 0.5), true);
+    }
+
+    // 4. Build road polylines, detect Mountain Tunnels and River Bridges!
+    const mountains = this.terrain?.mountains || [];
+    const rivers = this.riverSegments || [];
+
+    const roadList = [...roadEdges.values()].sort((a, b) => a.links - b.links);
+    for (const road of roadList) {
+      const from = waypoints[road.u];
+      const to = waypoints[road.v];
+      if (!from || !to) continue;
+      const dist = Math.hypot(to.x - from.x, to.y - from.y);
+      if (dist < 10) continue;
+
+      const links = Math.max(1, road.links);
+      let tier = 1;
+      let width = 1.3;
+      if (links >= 12 || (road.isHighway && links >= 5)) {
+        tier = 3;
+        width = clamp(2.7 + Math.log2(1 + links) * 0.34, 2.7, 4.4);
+      } else if (links >= 3 || road.isHighway) {
+        tier = 2;
+        width = clamp(1.85 + Math.log2(1 + links) * 0.24, 1.85, 2.65);
+      } else {
+        tier = 1;
+        width = 1.3;
+      }
+
+      const rawPts = this.buildMedievalRoadPoints(from, to, road.u * 31 + road.v * 17, mountains);
+
+      // Check which interior points pass through a mountain peak -> carve a tunnel!
+      const inMountain = new Uint8Array(rawPts.length);
+      for (let i = 1; i < rawPts.length - 1; i += 1) {
+        const [px, py] = rawPts[i];
+        for (let m = 0; m < mountains.length; m += 1) {
+          const mt = mountains[m];
+          const r = mt.s * 0.68;
+          const dx = px - mt.x;
+          const dy = py - mt.y;
+          if (dx * dx + dy * dy < r * r) {
+            inMountain[i] = 1;
+            break;
+          }
+        }
+      }
+
+      // Split rawPts into surface segments and mountain tunnel segments.
+      let segStart = 0;
+      let currentTunnel = false;
+      const surfacePolys = [];
+      for (let i = 1; i < rawPts.length; i += 1) {
+        const nextTunnel = Boolean(inMountain[i]);
+        if (nextTunnel !== currentTunnel || i === rawPts.length - 1) {
+          const endIdx = i;
+          const slice = rawPts.slice(segStart, endIdx + 1);
+          if (currentTunnel && slice.length >= 2) {
+            const entry = slice[0];
+            const exit = slice[slice.length - 1];
+            const tLen = Math.hypot(exit[0] - entry[0], exit[1] - entry[1]);
+            if (tLen >= 7) {
+              const entryAngle = Math.atan2(slice[1][1] - entry[1], slice[1][0] - entry[0]);
+              const prevExit = slice[slice.length - 2];
+              const exitAngle = Math.atan2(prevExit[1] - exit[1], prevExit[0] - exit[0]);
+              this.tunnels.push({
+                path: smoothOpen(slice),
+                entry,
+                exit,
+                entryAngle,
+                exitAngle,
+                width,
+                tier,
+              });
+            } else {
+              surfacePolys.push(slice);
+            }
+          } else if (slice.length >= 2) {
+            surfacePolys.push(slice);
+          }
+          segStart = i;
+          currentTunnel = nextTunnel;
+        }
+      }
+
+      for (const poly of surfacePolys) {
+        this.roadSegments.push({
+          path: smoothOpen(poly),
+          points: poly,
+          width,
+          tier,
+          links,
+        });
+
+        // Detect river crossings along surface road segments -> build a bridge!
+        for (let i = 0; i < poly.length - 1; i += 1) {
+          const [ax, ay] = poly[i];
+          const [bx, by] = poly[i + 1];
+          const minX = Math.min(ax, bx) - 2;
+          const maxX = Math.max(ax, bx) + 2;
+          const minY = Math.min(ay, by) - 2;
+          const maxY = Math.max(ay, by) + 2;
+
+          for (let r = 0; r < rivers.length; r += 1) {
+            const rv = rivers[r];
+            if (rv.maxX < minX || rv.minX > maxX || rv.maxY < minY || rv.minY > maxY) continue;
+            const hit = segmentIntersection(ax, ay, bx, by, rv.ax, rv.ay, rv.bx, rv.by);
+            if (!hit) continue;
+            const duplicate = this.bridges.some(
+              (b) => (b.x - hit.x) ** 2 + (b.y - hit.y) ** 2 < 196,
+            );
+            if (!duplicate) {
+              this.bridges.push({
+                x: hit.x,
+                y: hit.y,
+                angle: Math.atan2(by - ay, bx - ax),
+                width: Math.max(1.9, width),
+                riverWidth: rv.width,
+                tier,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 5. Long-distance Trade Routes (clean, high-arching curves between major trading countries).
+    const routes = new Map();
+    const addRoute = (width, path) => {
+      const key = Math.round(width * 4) / 4;
+      const existing = routes.get(key);
+      if (existing) existing.addPath(path);
+      else routes.set(key, path);
+    };
+    const topTradePairs = [...countryPairLinks.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, this.overview ? 14 : 22);
+
+    for (const [ck, weight] of topTradePairs) {
+      const [aStr, bStr] = ck.split(':');
+      const cA = Number(aStr);
+      const cB = Number(bStr);
+      // Skip adjacent countries that already have a direct overland King's Highway
+      if (countryAdj.get(cA)?.has(cB)) continue;
+      const from = countryWaypoints[cA]?.[0];
+      const to = countryWaypoints[cB]?.[0];
+      if (!from || !to) continue;
+      const path = smoothOpen(meander(from, to, cA * 41 + cB * 13));
+      addRoute(1 + Math.log2(1 + weight) * 0.32, path);
+    }
+
     this.routeBands = [...routes].map(([width, path]) => ({ width, path }));
     this.worldDirty = true;
     this.dirty = true;
   }
 
+  /** Builds a 20-step meandering polyline for a medieval road. */
+  buildMedievalRoadPoints(from, to, seed, mountains) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const nx = -dy / length;
+    const ny = dx / length;
+    const sway = Math.min(20, length * 0.14);
+    const steps = Math.max(10, Math.min(26, Math.round(length / 7)));
+
+    // Check if there is a mountain peak near the straight line between `from` and `to`
+    // so the road cuts cleanly through the mountain pass (creating a clear tunnel!).
+    let targetMountain = null;
+    let targetT = 0.5;
+    for (let m = 0; m < mountains.length; m += 1) {
+      const mt = mountains[m];
+      const t = ((mt.x - from.x) * dx + (mt.y - from.y) * dy) / (length * length);
+      if (t < 0.22 || t > 0.78) continue;
+      const px = from.x + dx * t;
+      const py = from.y + dy * t;
+      const dist = Math.hypot(mt.x - px, mt.y - py);
+      if (dist < mt.s * 0.92) {
+        targetMountain = mt;
+        targetT = t;
+        break;
+      }
+    }
+
+    const pts = [];
+    for (let s = 0; s <= steps; s += 1) {
+      const t = s / steps;
+      if (s === 0) {
+        pts.push([from.x, from.y]);
+        continue;
+      }
+      if (s === steps) {
+        pts.push([to.x, to.y]);
+        continue;
+      }
+      const wave = (noise2(from.x + to.x, from.y + to.y, seed + Math.floor(t * 6) * 13) - 0.5)
+        * 2 * sway * Math.sin(Math.PI * t);
+      let x = from.x + dx * t + nx * wave;
+      let y = from.y + dy * t + ny * wave;
+      if (targetMountain) {
+        const bell = Math.exp(-(((t - targetT) / 0.18) ** 2));
+        x = x * (1 - bell * 0.75) + targetMountain.x * (bell * 0.75);
+        y = y * (1 - bell * 0.75) + targetMountain.y * (bell * 0.75);
+      }
+      pts.push([x, y]);
+    }
+    return pts;
+  }
+
   placeMembers(country, maxDegree) {
     const { polygon, capital } = country;
-    const members = country.members;
-    if (!polygon.length || !members.length) return [];
+    const rawMembers = country.members;
+    if (!polygon.length || !rawMembers.length) return [];
+    const members = [...rawMembers].sort(
+      (a, b) =>
+        (this.graph.nodes[b]?.degree || 0) - (this.graph.nodes[a]?.degree || 0)
+        || (this.graph.nodes[b]?.pagerank || 0) - (this.graph.nodes[a]?.pagerank || 0)
+        || a - b,
+    );
     const area = Math.abs(polygonArea(polygon));
     const radius = Math.sqrt(area / Math.PI) * 0.66;
     const count = members.length;
-    // A big folder becomes a country of towns, not one white disc. Town centres
-    // sit on a ring inside the border and each town gets its share of notes.
-    const towns = count > 48 ? Math.min(12, Math.ceil(count / 24)) : 1;
-    const perTown = Math.ceil(count / towns);
-    const townSpread = towns > 1 ? radius * 0.8 : 0;
+    // Spread notes into a Capital + 2..10 surrounding medieval towns/villages
+    // so roads visibly traverse the countryside between settlements.
+    const towns = count > 48
+      ? Math.min(12, Math.ceil(count / 20))
+      : count >= 4
+        ? Math.min(7, Math.max(2, Math.ceil(count / 4)))
+        : count;
+    const perTown = Math.ceil(count / Math.max(1, towns));
+    const townSpread = towns > 1 ? radius * 0.64 : 0;
     const townRadius = towns > 1
       ? Math.min(
-        radius * (this.overview ? 0.42 : 0.16),
-        Math.max(10, Math.sqrt(perTown) * (this.overview ? 5.5 : 4.5)),
+        radius * (this.overview ? 0.36 : 0.17),
+        Math.max(7, Math.sqrt(perTown) * (this.overview ? 4.8 : 3.8)),
       )
       : radius;
     const random = mulberry(country.name.length * 131 + count);
-    const townCentres = Array.from({ length: towns }, (_, town) => {
-      if (towns === 1) return [capital.x, capital.y];
+    const townCentres = Array.from({ length: Math.max(1, towns) }, (_, town) => {
+      if (town === 0 || towns === 1) return [capital.x, capital.y];
       const angle = town * 2.399963 + 0.35;
-      const reach = townSpread * (0.82 + random() * 0.18);
-      return [capital.x + Math.cos(angle) * reach, capital.y + Math.sin(angle) * reach];
+      const reach = townSpread * (0.58 + ((town % 3) * 0.14) + random() * 0.14);
+      const tx = capital.x + Math.cos(angle) * reach;
+      const ty = capital.y + Math.sin(angle) * reach;
+      if (!pointInPoly(tx, ty, polygon)) {
+        return this.nearestInside(tx, ty, polygon, capital);
+      }
+      return [tx, ty];
     });
     const points = members.map((nodeIndex, slot) => {
-      const town = Math.min(towns - 1, Math.floor(slot / perTown));
+      const town = Math.min(townCentres.length - 1, Math.floor(slot / perTown));
       const localSlot = slot - town * perTown;
       const centre = townCentres[town];
       const angle = localSlot * GOLDEN;
-      const ring = townRadius * Math.sqrt((localSlot + 0.7) / perTown);
+      const ring = localSlot === 0 ? 0 : townRadius * Math.sqrt((localSlot + 0.6) / perTown);
       return {
         index: nodeIndex,
+        town,
         x: centre[0] + Math.cos(angle) * ring * 0.82,
         y: centre[1] + Math.sin(angle) * ring * 0.82,
       };
     });
 
-    // Springs along real links, so a cluster of connected notes reads as a
-    // settlement cluster rather than an even sprinkle.
+    // Springs along real links within the same town, so each town stays a
+    // distinct village instead of collapsing all villages back into one ball.
     const local = new Map();
     members.forEach((nodeIndex, slot) => local.set(nodeIndex, slot));
     const springs = [];
@@ -879,7 +1448,7 @@ export class Atlas {
       const a = local.get(edge.source);
       const b = local.get(edge.target);
       if (a === undefined || b === undefined || a === b) continue;
-      springs.push([a, b]);
+      if (points[a].town === points[b].town) springs.push([a, b]);
     }
 
     const density = count > 800 ? 0.3 : count > 240 ? 0.42 : count > 120 ? 0.58 : 1;
@@ -900,10 +1469,6 @@ export class Atlas {
       };
     });
 
-    // A daily journal of 1,300 entries is 1.7 million pairwise checks *per
-    // pass*: the town spiral is already even, so skip the physics and let the
-    // stipple carry the density. In a large vault every 120-note folder would
-    // pay that cost too, so the overview skips it for all stippled folders.
     if (count > 800 || (this.overview && count > 64)) {
       for (const point of points) {
         if (!pointInPoly(point.x, point.y, polygon)) {
@@ -915,8 +1480,8 @@ export class Atlas {
       return finish();
     }
 
-    const spacing = clamp(21 - Math.log2(count + 2) * 2.2, 8, 18);
-    for (let step = 0; step < 90; step++) {
+    const spacing = clamp(18 - Math.log2(count + 2) * 1.8, 8, 16);
+    for (let step = 0; step < 65; step++) {
       for (let i = 0; i < count; i++) {
         for (let j = i + 1; j < count; j++) {
           const a = points[i];
@@ -929,8 +1494,9 @@ export class Atlas {
             dy = 0.01;
             distance = Math.hypot(dx, dy);
           }
-          if (distance < spacing) {
-            const push = ((spacing - distance) / distance) * 0.5;
+          const minSep = a.town === b.town ? spacing : spacing * 1.45;
+          if (distance < minSep) {
+            const push = ((minSep - distance) / distance) * 0.5;
             a.x -= dx * push;
             a.y -= dy * push;
             b.x += dx * push;
@@ -944,7 +1510,7 @@ export class Atlas {
         const dx = to.x - from.x;
         const dy = to.y - from.y;
         const distance = Math.hypot(dx, dy) || 1;
-        const target = spacing * 2.6;
+        const target = spacing * 1.6;
         const pull = ((distance - target) / distance) * 0.05;
         from.x += dx * pull;
         from.y += dy * pull;
@@ -952,8 +1518,9 @@ export class Atlas {
         to.y -= dy * pull;
       }
       for (const point of points) {
-        point.x += (capital.x - point.x) * 0.0025;
-        point.y += (capital.y - point.y) * 0.0025;
+        const anchor = townCentres[point.town] || [capital.x, capital.y];
+        point.x += (anchor[0] - point.x) * 0.035;
+        point.y += (anchor[1] - point.y) * 0.035;
         if (!pointInPoly(point.x, point.y, polygon)) {
           const inside = this.nearestInside(point.x, point.y, polygon, capital);
           point.x = inside[0];
@@ -1148,6 +1715,7 @@ export class Atlas {
 
     const threshold = 50;
     const bands = new Map();
+    const riverSegments = [];
     const lakes = [];
     const addSegment = (a, b, width) => {
       const key = Math.round(width * 4) / 4;
@@ -1158,6 +1726,17 @@ export class Atlas {
       }
       path.moveTo(a[0], a[1]);
       path.lineTo(b[0], b[1]);
+      riverSegments.push({
+        ax: a[0],
+        ay: a[1],
+        bx: b[0],
+        by: b[1],
+        minX: Math.min(a[0], b[0]),
+        maxX: Math.max(a[0], b[0]),
+        minY: Math.min(a[1], b[1]),
+        maxY: Math.max(a[1], b[1]),
+        width,
+      });
     };
     const hasUpstream = (id, gx, gy) => {
       for (const [dx, dy] of around) {
@@ -1210,7 +1789,28 @@ export class Atlas {
       }
     }
 
+    // Compute per-country average elevation and wetness to classify biomes.
+    const elevSums = new Float32Array(this.countries.length);
+    const wetCounts = new Uint32Array(this.countries.length);
+    const cellCounts = new Uint32Array(this.countries.length);
+    for (let id = 0; id < total; id += 1) {
+      const c = owner[id];
+      if (!land[id] || c < 0) continue;
+      elevSums[c] += filled[id];
+      if (rain[id] >= threshold * 0.65) wetCounts[c] += 1;
+      cellCounts[c] += 1;
+    }
+    this.countries.forEach((country, idx) => {
+      const cnt = Math.max(1, cellCounts[idx]);
+      const avgElev = elevSums[idx] / cnt;
+      const wetness = wetCounts[idx] / cnt;
+      const biomeId = classifyCountryBiome(country, idx, avgElev, wetness);
+      country.biome = biomeId;
+      country.biomeDef = BIOMES[biomeId] || BIOMES.forest;
+    });
+
     this.riverBands = [...bands].map(([width, path]) => ({ width, path }));
+    this.riverSegments = riverSegments;
     this.lakes = lakes;
     this.terrain = { land, owner, elev: filled, mountains: [], forests: [] };
     this.terrain.relief = this.buildRelief(filled, land);
@@ -1298,13 +1898,16 @@ export class Atlas {
     return path;
   }
 
-  /** Mountains and woods, sampled on a stride so the land never turns to noise. */
+  /** Mountains, forests, dunes, mesas, and marshes tailored to each country's biome. */
   buildTerrainMarks() {
     const n = GRID;
     const { elev, land, owner, mountains, forests } = this.terrain;
     for (const country of this.countries) {
       country.mountains = [];
       country.forests = [];
+      country.dunes = [];
+      country.mesas = [];
+      country.marshes = [];
     }
     const places = this.places;
     const placeCount = places.length;
@@ -1319,39 +1922,97 @@ export class Atlas {
     for (let gy = 2; gy < n - 2; gy += 2) {
       for (let gx = 2; gx < n - 2; gx += 2) {
         const id = gy * n + gx;
-        if (!land[id] || owner[id] < 0) continue;
+        const cIdx = owner[id];
+        if (!land[id] || cIdx < 0) continue;
+        const country = this.countries[cIdx];
+        if (!country) continue;
+        const biome = country.biome || 'forest';
         const x = (gx + 0.5) * CELL + (noise2(gx, gy, 17) - 0.5) * CELL * 1.6;
         const y = (gy + 0.5) * CELL + (noise2(gx, gy, 29) - 0.5) * CELL * 1.6;
+        if (nearPlace(x, y)) continue;
         const height = elev[id];
-        if (height > 0.46
+        const minMountainElev = biome === 'highlands' || biome === 'tundra' ? 0.39 : 0.46;
+
+        if (height > minMountainElev
           && height >= elev[id - 1] && height >= elev[id + 1]
           && height >= elev[id - n] && height >= elev[id + n]
-          && noise2(gx, gy, 41) > 0.12
-          && !nearPlace(x, y)
-          && mountains.length < (this.overview ? 150 : 280)) {
-          const mark = {
-            x,
-            y,
-            s: 10 + height * 14,
-            tilt: (noise2(gx, gy, 53) - 0.5) * 0.35,
-            country: owner[id],
-          };
-          mountains.push(mark);
-          this.countries[owner[id]]?.mountains.push(mark);
-        } else if (height > 0.12 && height < 0.46
-          && fbm(x * 0.02, y * 0.02, 211, 3) > 0.48
-          && noise2(gx, gy, 67) > 0.2
-          && !nearPlace(x, y)
-          && forests.length < (this.overview ? 0 : 340)) {
-          const tree = {
-            x,
-            y,
-            s: 4.6 + noise2(gx, gy, 71) * 3.6,
-            conifer: noise2(gx, gy, 83) > 0.45,
-            country: owner[id],
-          };
-          forests.push(tree);
-          this.countries[owner[id]]?.forests.push(tree);
+          && noise2(gx, gy, 41) > (biome === 'highlands' ? 0.05 : 0.12)
+          && mountains.length < (this.overview ? 160 : 300)) {
+          if (biome === 'wastes' && noise2(gx, gy, 59) > 0.38) {
+            country.mesas.push({
+              x,
+              y,
+              s: 11 + height * 12,
+              tilt: (noise2(gx, gy, 53) - 0.5) * 0.18,
+            });
+          } else {
+            const mark = {
+              x,
+              y,
+              s: 10 + height * 14,
+              tilt: (noise2(gx, gy, 53) - 0.5) * 0.35,
+              snow: biome === 'tundra' || height > 0.64,
+              craggy: biome === 'highlands',
+              country: cIdx,
+            };
+            mountains.push(mark);
+            country.mountains.push(mark);
+          }
+          continue;
+        }
+
+        if (this.overview) continue;
+
+        if (biome === 'wastes') {
+          if (height > 0.08 && height < 0.44 && noise2(gx, gy, 73) > 0.32 && country.dunes.length < 36) {
+            country.dunes.push({
+              x,
+              y,
+              s: 7.5 + noise2(gx, gy, 79) * 5.5,
+              tilt: (noise2(gx, gy, 89) - 0.5) * 0.45,
+            });
+          }
+        } else if (biome === 'wetlands') {
+          if (height > 0.06 && height < 0.38 && noise2(gx, gy, 77) > 0.28 && country.marshes.length < 38) {
+            country.marshes.push({
+              x,
+              y,
+              s: 5.5 + noise2(gx, gy, 81) * 3.8,
+            });
+          } else if (height >= 0.24 && height < 0.46 && noise2(gx, gy, 67) > 0.45 && country.forests.length < 22) {
+            const tree = { x, y, s: 4.8 + noise2(gx, gy, 71) * 3.2, conifer: false, country: cIdx };
+            forests.push(tree);
+            country.forests.push(tree);
+          }
+        } else if (biome === 'tundra') {
+          if (height > 0.12 && height < 0.46 && noise2(gx, gy, 67) > 0.34 && country.forests.length < 32) {
+            const tree = {
+              x,
+              y,
+              s: 4.8 + noise2(gx, gy, 71) * 3.4,
+              conifer: true,
+              frost: true,
+              country: cIdx,
+            };
+            forests.push(tree);
+            country.forests.push(tree);
+          }
+        } else {
+          const densityThresh = biome === 'forest' ? 0.34 : biome === 'steppe' ? 0.58 : 0.48;
+          if (height > 0.12 && height < 0.46
+            && fbm(x * 0.02, y * 0.02, 211, 3) > densityThresh
+            && noise2(gx, gy, 67) > (biome === 'forest' ? 0.12 : 0.26)
+            && forests.length < 380) {
+            const tree = {
+              x,
+              y,
+              s: 4.6 + noise2(gx, gy, 71) * 3.6,
+              conifer: biome === 'highlands' || noise2(gx, gy, 83) > 0.45,
+              country: cIdx,
+            };
+            forests.push(tree);
+            country.forests.push(tree);
+          }
         }
       }
     }
@@ -1376,24 +2037,38 @@ export class Atlas {
     ctx.restore();
   }
 
+  isBiomeActive(country) {
+    return this.showBiomes && !this.disabledBiomes.has(country.biome);
+  }
+
   drawTerrainMarks(country) {
-    if (!country.mountains && !country.forests) return;
+    const biomeActive = this.isBiomeActive(country);
     if (country.mountains) {
-      for (const mountain of country.mountains) this.drawMountain(mountain);
+      for (const mountain of country.mountains) this.drawMountain(mountain, biomeActive);
+    }
+    if (!biomeActive) return;
+    if (country.mesas) {
+      for (const mesa of country.mesas) this.drawMesa(mesa);
+    }
+    if (country.dunes) {
+      for (const dune of country.dunes) this.drawDune(dune);
+    }
+    if (country.marshes) {
+      for (const marsh of country.marshes) this.drawMarsh(marsh);
     }
     if (country.forests) {
       for (const forest of country.forests) this.drawTree(forest);
     }
   }
 
-  /** A peak with two smaller shoulders, so a ridge reads as a range. */
-  drawMountain({ x, y, s, tilt }) {
+  /** A peak with two smaller shoulders, plus optional snow caps or craggy ridgelines. */
+  drawMountain({ x, y, s, tilt, snow, craggy }, biomeActive = true) {
     const { ctx } = this;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(tilt);
-    ctx.strokeStyle = rgba(INK, 0.5);
-    ctx.lineWidth = 0.65;
+    ctx.strokeStyle = rgba(INK, craggy && biomeActive ? 0.62 : 0.5);
+    ctx.lineWidth = craggy && biomeActive ? 0.78 : 0.65;
     const shoulder = (cx, cy, size, flip) => {
       const w = size * 0.56;
       ctx.beginPath();
@@ -1401,7 +2076,9 @@ export class Atlas {
       ctx.lineTo(cx, cy - size * 0.55);
       ctx.lineTo(cx + w * flip, cy + size * 0.42);
       ctx.closePath();
-      ctx.fillStyle = 'rgba(247, 238, 216, 0.5)';
+      ctx.fillStyle = snow && biomeActive
+        ? 'rgba(246, 250, 254, 0.76)'
+        : 'rgba(247, 238, 216, 0.5)';
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
@@ -1409,7 +2086,7 @@ export class Atlas {
       ctx.lineTo(cx + w * flip, cy + size * 0.42);
       ctx.lineTo(cx + w * 0.08, cy + size * 0.42);
       ctx.closePath();
-      ctx.fillStyle = rgba(INK, 0.22);
+      ctx.fillStyle = rgba(INK, snow && biomeActive ? 0.28 : 0.22);
       ctx.fill();
     };
     shoulder(-s * 0.46, s * 0.06, s * 0.62, 1);
@@ -1418,10 +2095,87 @@ export class Atlas {
     ctx.restore();
   }
 
-  drawTree({ x, y, s, conifer }) {
+  /** Flat-topped desert mesa / butte for Arid Wastes biome. */
+  drawMesa({ x, y, s, tilt }) {
     const { ctx } = this;
     ctx.save();
-    ctx.strokeStyle = rgba(INK, 0.34);
+    ctx.translate(x, y);
+    ctx.rotate(tilt || 0);
+    const w = s * 0.68;
+    const topW = s * 0.36;
+    const h = s * 0.38;
+    ctx.beginPath();
+    ctx.moveTo(-w, h);
+    ctx.lineTo(-topW, -h);
+    ctx.lineTo(topW, -h);
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(224, 174, 118, 0.48)';
+    ctx.fill();
+    ctx.strokeStyle = rgba(INK, 0.52);
+    ctx.lineWidth = 0.68;
+    ctx.stroke();
+    // Cliff striations on the shaded eastern escarpment
+    ctx.beginPath();
+    ctx.moveTo(topW * 0.2, -h);
+    ctx.lineTo(w * 0.32, h);
+    ctx.moveTo(topW * 0.7, -h);
+    ctx.lineTo(w * 0.75, h);
+    ctx.strokeStyle = rgba(INK, 0.32);
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Crescent barchan sand dune for Arid Wastes biome. */
+  drawDune({ x, y, s, tilt }) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(tilt || 0);
+    ctx.beginPath();
+    ctx.moveTo(-s, s * 0.28);
+    ctx.quadraticCurveTo(0, -s * 0.55, s, s * 0.24);
+    ctx.quadraticCurveTo(0, -s * 0.12, -s, s * 0.28);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(182, 118, 56, 0.28)';
+    ctx.fill();
+    ctx.strokeStyle = rgba(INK, 0.38);
+    ctx.lineWidth = 0.55;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Cattail reed tuft over water ripples for Marsh & Fen biome. */
+  drawMarsh({ x, y, s }) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.strokeStyle = rgba(RIVER, 0.52);
+    ctx.lineWidth = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.85, y + 1.5);
+    ctx.lineTo(x + s * 0.85, y + 1.5);
+    ctx.moveTo(x - s * 0.5, y + 3.3);
+    ctx.lineTo(x + s * 0.55, y + 3.3);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(54, 88, 72, 0.56)';
+    ctx.lineWidth = 0.65;
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.32, y + 1.2);
+    ctx.lineTo(x - s * 0.52, y - s * 0.72);
+    ctx.moveTo(x, y + 1.2);
+    ctx.lineTo(x + 0.3, y - s * 0.92);
+    ctx.moveTo(x + s * 0.34, y + 1.2);
+    ctx.lineTo(x + s * 0.56, y - s * 0.68);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawTree({ x, y, s, conifer, frost }) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.strokeStyle = rgba(INK, 0.36);
     ctx.lineWidth = 0.55;
     ctx.beginPath();
     ctx.moveTo(x, y + s * 0.6);
@@ -1434,10 +2188,14 @@ export class Atlas {
         ctx.moveTo(x - s * (0.55 - tier * 0.12), top + s * 0.5);
         ctx.lineTo(x, top);
         ctx.lineTo(x + s * (0.55 - tier * 0.12), top + s * 0.5);
+        if (frost) {
+          ctx.fillStyle = 'rgba(226, 238, 246, 0.42)';
+          ctx.fill();
+        }
         ctx.stroke();
       }
     } else {
-      ctx.fillStyle = 'rgba(104, 116, 72, 0.22)';
+      ctx.fillStyle = 'rgba(92, 124, 66, 0.26)';
       ctx.beginPath();
       ctx.arc(x, y - s * 0.62, s * 0.5, 0, Math.PI * 2);
       ctx.fill();
@@ -1469,6 +2227,18 @@ export class Atlas {
 
   setRoutes(show) {
     this.showRoutes = Boolean(show);
+    this.worldDirty = true;
+    this.dirty = true;
+  }
+
+  setBiomes(show) {
+    this.showBiomes = Boolean(show);
+    this.worldDirty = true;
+    this.dirty = true;
+  }
+
+  setDisabledBiomes(disabled) {
+    this.disabledBiomes = disabled instanceof Set ? disabled : new Set(disabled || []);
     this.worldDirty = true;
     this.dirty = true;
   }
@@ -1851,8 +2621,11 @@ export class Atlas {
     ctx.lineJoin = 'round';
     for (const country of this.countries) {
       if (this.hidden.has(country.name)) continue;
+      const fillRgb = this.isBiomeActive(country) && country.biomeDef
+        ? country.biomeDef.wash
+        : country.ink;
       for (const islet of country.islets) {
-        ctx.fillStyle = rgba(country.ink, 0.4);
+        ctx.fillStyle = rgba(fillRgb, 0.42);
         ctx.fill(islet);
         ctx.strokeStyle = rgba(INK, 0.68);
         ctx.lineWidth = 1.1;
@@ -1870,8 +2643,11 @@ export class Atlas {
     for (const country of this.countries) {
       if (!country.path) continue;
       const dim = this.hidden.has(country.name);
+      const biomeActive = this.isBiomeActive(country);
+      const fillRgb = biomeActive && country.biomeDef ? country.biomeDef.wash : country.ink;
+      const hatchRgb = biomeActive && country.biomeDef ? country.biomeDef.ink : country.ink;
       ctx.save();
-      ctx.fillStyle = rgba(country.ink, dim ? 0.06 : 0.4);
+      ctx.fillStyle = rgba(fillRgb, dim ? 0.06 : (biomeActive ? 0.44 : 0.36));
       ctx.fill(country.path);
 
       if (!dim) {
@@ -1882,7 +2658,7 @@ export class Atlas {
         ctx.clip(country.path);
         ctx.translate(country.capital.x, country.capital.y);
         ctx.rotate(country.hatch);
-        ctx.strokeStyle = rgba(country.ink, 0.08);
+        ctx.strokeStyle = rgba(hatchRgb, biomeActive ? 0.11 : 0.075);
         ctx.lineWidth = 0.9;
         ctx.beginPath();
         const reach = WORLD;
@@ -1904,15 +2680,16 @@ export class Atlas {
     for (const country of this.countries) {
       if (!country.path) continue;
       const dim = this.hidden.has(country.name);
+      const biomeActive = this.isBiomeActive(country);
       ctx.save();
       if (!dim) {
         this.drawTerrainMarks(country);
 
-        // Wilderness fills the land nobody settled.
-        if (country.wilderness) {
+        // Wilderness fills the land nobody settled (skip in arid wastes if biome active).
+        if (country.wilderness && (!biomeActive || country.biome !== 'wastes')) {
           ctx.save();
           ctx.clip(country.path);
-          ctx.strokeStyle = rgba(INK, 0.26);
+          ctx.strokeStyle = rgba(INK, biomeActive && country.biome === 'steppe' ? 0.34 : 0.24);
           ctx.lineWidth = 0.8;
           ctx.stroke(country.wilderness);
           ctx.restore();
@@ -2010,23 +2787,173 @@ export class Atlas {
   }
 
   drawRoads() {
-    if (!this.showRoads || !this.roadBands?.length) return;
+    if (!this.showRoads || (!this.roadSegments?.length && !this.tunnels?.length)) return;
     const { ctx } = this;
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    // A pale casing first, so roads cut through the wilderness marks instead
-    // of colliding with them.
-    ctx.strokeStyle = 'rgba(240, 229, 202, 0.66)';
-    for (const band of this.roadBands) {
-      ctx.lineWidth = band.width + 2.8;
-      ctx.stroke(band.path);
+
+    // 1. Subterranean mountain tunnels (dashed underground passage + masonry portals).
+    if (this.tunnels?.length) {
+      for (const tunnel of this.tunnels) {
+        ctx.save();
+        ctx.setLineDash([2.6, 3.2]);
+        ctx.strokeStyle = 'rgba(244, 234, 210, 0.48)';
+        ctx.lineWidth = tunnel.width + 1.4;
+        ctx.stroke(tunnel.path);
+        ctx.strokeStyle = rgba(RUBRIC, 0.72);
+        ctx.lineWidth = Math.max(1.1, tunnel.width * 0.78);
+        ctx.stroke(tunnel.path);
+        ctx.restore();
+      }
     }
-    ctx.strokeStyle = 'rgba(74, 56, 34, 0.58)';
-    for (const band of this.roadBands) {
-      ctx.lineWidth = band.width;
-      ctx.stroke(band.path);
+
+    // 2. Surface medieval roads (Tier 1 parish tracks, Tier 2 county roads, Tier 3 King's Highways).
+    if (this.roadSegments?.length) {
+      // Pale clearing halo so roads cut cleanly through hatching and grass tufts.
+      ctx.strokeStyle = 'rgba(244, 234, 210, 0.76)';
+      for (const seg of this.roadSegments) {
+        ctx.lineWidth = seg.width + 2.8;
+        ctx.stroke(seg.path);
+      }
+
+      for (const seg of this.roadSegments) {
+        if (seg.tier === 1) {
+          // Tier 1: Parish cart track (1–2 links)
+          ctx.save();
+          ctx.setLineDash([6.5, 2.2]);
+          ctx.strokeStyle = 'rgba(68, 49, 28, 0.76)';
+          ctx.lineWidth = seg.width;
+          ctx.stroke(seg.path);
+          ctx.restore();
+        } else if (seg.tier === 2) {
+          // Tier 2: Cased medieval cobblestone county road (3–11 links)
+          ctx.strokeStyle = 'rgba(46, 32, 18, 0.88)';
+          ctx.lineWidth = seg.width + 1.4;
+          ctx.stroke(seg.path);
+          ctx.strokeStyle = '#efe0be';
+          ctx.lineWidth = seg.width * 0.92;
+          ctx.stroke(seg.path);
+        } else {
+          // Tier 3: King's Highway / Royal Via (12+ links, double-cased with stone paving ticks)
+          ctx.strokeStyle = 'rgba(36, 24, 12, 0.94)';
+          ctx.lineWidth = seg.width + 1.9;
+          ctx.stroke(seg.path);
+          ctx.strokeStyle = '#f5e6c2';
+          ctx.lineWidth = seg.width * 1.04;
+          ctx.stroke(seg.path);
+          ctx.save();
+          ctx.setLineDash([1.6, 4.2]);
+          ctx.strokeStyle = rgba(RUBRIC, 0.52);
+          ctx.lineWidth = Math.max(1.0, seg.width * 0.48);
+          ctx.stroke(seg.path);
+          ctx.restore();
+        }
+      }
     }
+
+    // 3. Draw stone tunnel portals at mountain entrances/exits.
+    if (this.tunnels?.length) {
+      for (const tunnel of this.tunnels) {
+        this.drawTunnelPortal(tunnel.entry[0], tunnel.entry[1], tunnel.entryAngle, tunnel.width);
+        this.drawTunnelPortal(tunnel.exit[0], tunnel.exit[1], tunnel.exitAngle, tunnel.width);
+      }
+    }
+
+    // 4. Draw stone river bridges where roads cross rivers.
+    if (this.bridges?.length) {
+      for (const bridge of this.bridges) {
+        this.drawBridge(bridge);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /** Draws a medieval masonry tunnel portal arch at the base of a mountain. */
+  drawTunnelPortal(x, y, angle, roadWidth) {
+    const { ctx } = this;
+    const r = Math.max(2.6, roadWidth * 0.82 + 1.1);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+
+    // Dark tunnel mouth shadow facing into the mountain
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.88, -Math.PI * 0.55, Math.PI * 0.55);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(28, 18, 10, 0.9)';
+    ctx.fill();
+
+    // Stone masonry horseshoe arch collar & wing buttresses
+    ctx.strokeStyle = '#f5e6c2';
+    ctx.lineWidth = 2.1;
+    ctx.beginPath();
+    ctx.moveTo(-2.6, -r * 1.28);
+    ctx.lineTo(0, -r);
+    ctx.arc(0, 0, r, -Math.PI * 0.5, Math.PI * 0.5);
+    ctx.lineTo(-2.6, r * 1.28);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(34, 22, 12, 0.96)';
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.moveTo(-2.6, -r * 1.28);
+    ctx.lineTo(0, -r);
+    ctx.arc(0, 0, r, -Math.PI * 0.5, Math.PI * 0.5);
+    ctx.lineTo(-2.6, r * 1.28);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /** Draws a medieval stone bridge with flared wing-walls over a river crossing. */
+  drawBridge({ x, y, angle, width, riverWidth }) {
+    const { ctx } = this;
+    const halfSpan = Math.max(4.4, (riverWidth || 1.2) * 1.7 + 3.2);
+    const halfDeck = Math.max(1.85, width * 0.66 + 0.7);
+    const flare = 2.2;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+
+    // Stone cutwater pier shadow in the river
+    ctx.fillStyle = 'rgba(36, 24, 14, 0.34)';
+    ctx.fillRect(-halfSpan * 0.65, -halfDeck - 1.1, halfSpan * 1.3, (halfDeck + 1.1) * 2);
+
+    // Bridge roadbed deck
+    ctx.fillStyle = '#f4e5c3';
+    ctx.fillRect(-halfSpan, -halfDeck, halfSpan * 2, halfDeck * 2);
+
+    // Cobble arch joints across deck
+    ctx.strokeStyle = 'rgba(52, 40, 24, 0.35)';
+    ctx.lineWidth = 0.65;
+    ctx.beginPath();
+    ctx.moveTo(0, -halfDeck);
+    ctx.lineTo(0, halfDeck);
+    ctx.moveTo(-halfSpan * 0.5, -halfDeck);
+    ctx.lineTo(-halfSpan * 0.5, halfDeck);
+    ctx.moveTo(halfSpan * 0.5, -halfDeck);
+    ctx.lineTo(halfSpan * 0.5, halfDeck);
+    ctx.stroke();
+
+    // Heavy stone parapets with flared medieval wing-walls (>===<)
+    ctx.strokeStyle = 'rgba(32, 20, 10, 0.96)';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    // Top parapet
+    ctx.moveTo(-halfSpan - flare, -halfDeck - flare * 0.75);
+    ctx.lineTo(-halfSpan, -halfDeck);
+    ctx.lineTo(halfSpan, -halfDeck);
+    ctx.lineTo(halfSpan + flare, -halfDeck - flare * 0.75);
+    // Bottom parapet
+    ctx.moveTo(-halfSpan - flare, halfDeck + flare * 0.75);
+    ctx.lineTo(-halfSpan, halfDeck);
+    ctx.lineTo(halfSpan, halfDeck);
+    ctx.lineTo(halfSpan + flare, halfDeck + flare * 0.75);
+    ctx.stroke();
+
     ctx.restore();
   }
 
