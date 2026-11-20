@@ -67,11 +67,7 @@ pub fn compute(
             edges,
             opts.seed ^ (group as u64).wrapping_mul(0x9E37_79B9),
         );
-        let shared = if group_count > CROWN_GROUPS {
-            0.65
-        } else {
-            1.0
-        };
+        let shared = if group_count > MANY_GROUPS { 0.65 } else { 1.0 };
         let radius = (0.20 + 0.35 * (list.len() as f64 / 100.0).sqrt()).min(0.55) * shared;
         for (slot, node) in list.iter().enumerate() {
             positions[*node] = [
@@ -90,9 +86,9 @@ pub fn compute(
 }
 
 const RING_THRESHOLD: usize = 48;
-/// Above this many folders, two crowns turn into two crowded arcs. Spread the
-/// galaxies over a sphere instead so every folder keeps its own patch of sky.
-const CROWN_GROUPS: usize = 12;
+/// Above this many folders, shrink each local cluster so every galaxy still
+/// keeps its own patch of sky on a crowded sphere.
+const MANY_GROUPS: usize = 12;
 const GOLDEN_ANGLE: f64 = 2.399_963_229_728_653;
 
 /// Is this folder a diary? Large is not enough: a 120-note topic folder is
@@ -157,30 +153,22 @@ fn layout_ring(list: &[usize], times: &[i64], seed: u64) -> Vec<[f64; 3]> {
     out
 }
 
+/// Every folder galaxy sits on a Fibonacci sphere: even spacing, both
+/// hemispheres, and the same arrangement on every load. No two-crown rings of
+/// galaxies, so the view reads as a universe from any angle.
 fn galaxy_center(group: usize, group_count: usize) -> [f64; 3] {
     if group_count <= 1 {
         return [0.0; 3];
     }
-    if group_count > CROWN_GROUPS {
-        // A Fibonacci sphere of galaxies: even spacing without a flat band,
-        // and the same arrangement on every load.
-        let t = (group as f64 + 0.5) / group_count as f64;
-        let y = 1.0 - 2.0 * t;
-        let ring = (1.0 - y * y).max(0.0).sqrt();
-        let theta = group as f64 * GOLDEN_ANGLE;
-        return [
-            ring * theta.cos() * 1.55,
-            y * 1.1,
-            ring * theta.sin() * 1.55,
-        ];
-    }
-    // Two offset crowns: symmetric around the origin from any angle, with a
-    // clear upper/lower hemisphere instead of a flat band.
-    let half = group_count.div_ceil(2);
-    let lane = group / 2;
-    let theta = lane as f64 * std::f64::consts::TAU / half as f64 + (group % 2) as f64 * 0.55;
-    let y = if group % 2 == 0 { 1.05 } else { -1.05 };
-    [theta.cos() * 1.5, y, theta.sin() * 1.5]
+    let t = (group as f64 + 0.5) / group_count as f64;
+    let y = 1.0 - 2.0 * t;
+    let ring = (1.0 - y * y).max(0.0).sqrt();
+    let theta = group as f64 * GOLDEN_ANGLE;
+    [
+        ring * theta.cos() * 1.55,
+        y * 1.1,
+        ring * theta.sin() * 1.55,
+    ]
 }
 
 /// Force layout inside one galaxy, returned normalised to a unit ball.
@@ -585,6 +573,33 @@ mod tests {
                 assert!(distance > 0.25, "galaxies should not share a centre");
             }
         }
+    }
+
+    #[test]
+    fn few_galaxies_spread_over_the_sphere_too() {
+        // Seven folders used to become two crowns: a barrel with the journal
+        // ring for a rim. A small vault must get the same universe as a large
+        // one, with galaxies on several heights instead of two hoops.
+        let centers: Vec<[f64; 3]> = (0..7).map(|group| galaxy_center(group, 7)).collect();
+        let mut heights: Vec<i64> = centers
+            .iter()
+            .map(|point| (point[1] * 100.0).round() as i64)
+            .collect();
+        heights.sort_unstable();
+        heights.dedup();
+        assert!(
+            heights.len() >= 6,
+            "a small vault should not collapse into two crowns, got {heights:?}"
+        );
+        let low = centers.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
+        let high = centers
+            .iter()
+            .map(|p| p[1])
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(
+            low < 0.0 && high > 0.0,
+            "galaxies should cover both hemispheres"
+        );
     }
 
     #[test]
