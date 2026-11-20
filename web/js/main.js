@@ -74,6 +74,9 @@ const state = {
     folderFilter: null,
     filterQuery: '',
     sortBy: 'recent',
+    listView: 'folders',
+    openFolders: new Set(),
+    revealedFor: null,
     listCollapsed: false,
     inspectorCollapsed: false,
     zenMode: false,
@@ -186,6 +189,9 @@ const els = {
   notesQuickForm: document.getElementById('notes-quick-form'),
   notesQuickInput: document.getElementById('notes-quick-input'),
   notesFeed: document.getElementById('notes-feed'),
+  notesViewToggle: document.getElementById('notes-view-toggle'),
+  notesMoreBtn: document.getElementById('notes-more-btn'),
+  notesMoreMenu: document.getElementById('notes-more-menu'),
   notesToggleList: document.getElementById('notes-toggle-list'),
   notesTabs: document.getElementById('notes-tabs'),
   notesTabNew: document.getElementById('notes-tab-new'),
@@ -464,6 +470,8 @@ function selectionIndices() {
 }
 
 function boot() {
+  state.studio.listView = prefs.get('cortex.notes.listView', 'folders') === 'list' ? 'list' : 'folders';
+  state.studio.openFolders = new Set(prefs.get('cortex.notes.openFolders', []));
   wire();
   start();
 }
@@ -3515,6 +3523,48 @@ function renderNotesStudioFeed() {
     }
   }
 
+  const treeMode = state.studio.listView === 'folders';
+  if (els.notesViewToggle) {
+    els.notesViewToggle.querySelectorAll('[data-list-view]').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.listView === state.studio.listView);
+    });
+  }
+  if (els.notesSort) els.notesSort.hidden = treeMode;
+  els.notesFeed.classList.toggle('is-tree', treeMode);
+
+  if (treeMode) {
+    const activeId = state.detail?.id || state.studio.activeId;
+    // Open the path to the current note once, so it is never hidden in a closed folder.
+    if (activeId && state.studio.revealedFor !== activeId) {
+      state.studio.revealedFor = activeId;
+      const parts = String(activeId).split('/');
+      parts.pop();
+      let path = '';
+      for (const part of parts) {
+        path = path ? `${path}/${part}` : part;
+        state.studio.openFolders.add(path);
+      }
+    }
+    const ordered = state.studio.sortBy === 'recent'
+      ? [...notes].sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }))
+      : notes;
+    ui.renderNotesStudioTree(els.notesFeed, ordered, {
+      activeId,
+      pinnedSet: new Set(getPinnedIds()),
+      openFolders: state.studio.openFolders,
+      forceOpen: Boolean((state.studio.filterQuery || '').trim()) || ['pinned', 'recent'].includes(state.studio.scope),
+      onToggleFolder: (path, open) => {
+        if (open) state.studio.openFolders.add(path);
+        else state.studio.openFolders.delete(path);
+        prefs.set('cortex.notes.openFolders', [...state.studio.openFolders]);
+        renderNotesStudioFeed();
+      },
+      onSelectNote: (id) => openNoteInStudio(id),
+      onTogglePin: (id) => togglePinNote(id),
+    });
+    return;
+  }
+
   ui.renderNotesStudioList(els.notesFeed, notes, {
     activeId: state.detail?.id || state.studio.activeId,
     pinnedSet: new Set(getPinnedIds()),
@@ -3542,6 +3592,7 @@ function renderNotesStudioTabsBar() {
       onCloseTab: (id) => closeStudioTab(id),
     },
   );
+  els.notesTabs.querySelector('.is-active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 function renderNotesStudioHeaderControls() {
@@ -3871,6 +3922,34 @@ function wireNotesStudioEvents() {
   if (els.notesScopes) {
     els.notesScopes.querySelectorAll('[data-scope]').forEach((btn) => {
       btn.addEventListener('click', () => setStudioScope(btn.dataset.scope));
+    });
+  }
+  if (els.notesViewToggle) {
+    els.notesViewToggle.querySelectorAll('[data-list-view]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.studio.listView = btn.dataset.listView === 'list' ? 'list' : 'folders';
+        prefs.set('cortex.notes.listView', state.studio.listView);
+        renderNotesStudioFeed();
+      });
+    });
+  }
+  if (els.notesMoreBtn && els.notesMoreMenu) {
+    const closeMore = () => {
+      els.notesMoreMenu.hidden = true;
+      els.notesMoreBtn.setAttribute('aria-expanded', 'false');
+    };
+    els.notesMoreBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const open = els.notesMoreMenu.hidden;
+      els.notesMoreMenu.hidden = !open;
+      els.notesMoreBtn.setAttribute('aria-expanded', String(open));
+    });
+    els.notesMoreMenu.addEventListener('click', closeMore);
+    document.addEventListener('click', (event) => {
+      if (!els.notesMoreMenu.hidden && !event.target.closest('.notes-more')) closeMore();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !els.notesMoreMenu.hidden) closeMore();
     });
   }
   if (els.notesSort) {

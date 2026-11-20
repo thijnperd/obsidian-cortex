@@ -1667,3 +1667,119 @@ export function renderPaletteHits(container, hits, active) {
   const activeElement = container.querySelector('.is-active');
   if (activeElement) activeElement.scrollIntoView({ block: 'nearest' });
 }
+
+/**
+ * Folder explorer for the Notes studio: the vault's real folder hierarchy,
+ * collapsible, with notes as single-line rows.
+ */
+export function renderNotesStudioTree(
+  container,
+  notes,
+  {
+    activeId = null,
+    pinnedSet = new Set(),
+    openFolders = new Set(),
+    forceOpen = false,
+    onToggleFolder,
+    onSelectNote,
+    onTogglePin,
+  } = {},
+) {
+  if (!container) return;
+  container.innerHTML = '';
+  if (!notes.length) {
+    const empty = document.createElement('div');
+    empty.className = 'notes-feed-empty';
+    empty.innerHTML =
+      '<p>No notes match this filter.</p>' +
+      '<p class="notes-feed-empty-sub">Clear the filter above or switch scope.</p>';
+    container.appendChild(empty);
+    return;
+  }
+
+  const root = { name: '', path: '', folders: new Map(), notes: [], count: 0 };
+  for (const note of notes) {
+    const parts = String(note.id).split('/');
+    parts.pop();
+    let node = root;
+    node.count += 1;
+    let path = '';
+    for (const part of parts) {
+      path = path ? `${path}/${part}` : part;
+      if (!node.folders.has(part)) {
+        node.folders.set(part, { name: part, path, folders: new Map(), notes: [], count: 0 });
+      }
+      node = node.folders.get(part);
+      node.count += 1;
+    }
+    node.notes.push(note);
+  }
+
+  const frag = document.createDocumentFragment();
+
+  const addNote = (note, depth) => {
+    const row = document.createElement('div');
+    row.className = `tree-note${note.id === activeId ? ' is-active' : ''}`;
+    row.setAttribute('role', 'treeitem');
+    row.dataset.noteId = note.id;
+    row.style.setProperty('--depth', String(depth));
+    const main = document.createElement('button');
+    main.type = 'button';
+    main.className = 'tree-note-main';
+    main.title = note.id;
+    main.textContent = note.title;
+    main.addEventListener('click', () => onSelectNote?.(note.id));
+    row.appendChild(main);
+    if (onTogglePin) {
+      const pinned = pinnedSet.has(note.id);
+      const pin = document.createElement('button');
+      pin.type = 'button';
+      pin.className = `tree-note-pin${pinned ? ' is-pinned' : ''}`;
+      pin.title = pinned ? `Unpin ${note.title}` : `Pin ${note.title}`;
+      pin.setAttribute('aria-label', pin.title);
+      pin.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg>';
+      pin.addEventListener('click', (event) => {
+        event.stopPropagation();
+        onTogglePin(note.id);
+      });
+      row.appendChild(pin);
+    }
+    frag.appendChild(row);
+  };
+
+  const addFolder = (folder, depth) => {
+    const open = forceOpen || openFolders.has(folder.path);
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = `tree-folder${open ? ' is-open' : ''}`;
+    row.setAttribute('role', 'treeitem');
+    row.setAttribute('aria-expanded', String(open));
+    row.style.setProperty('--depth', String(depth));
+    row.dataset.folderPath = folder.path;
+    const chevron = document.createElement('span');
+    chevron.className = 'tree-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    const name = document.createElement('span');
+    name.className = 'tree-folder-name';
+    name.textContent = folder.name;
+    const count = document.createElement('span');
+    count.className = 'tree-folder-count';
+    count.textContent = String(folder.count);
+    row.append(chevron, name, count);
+    row.addEventListener('click', () => onToggleFolder?.(folder.path, !open));
+    frag.appendChild(row);
+    if (open) walk(folder, depth + 1);
+  };
+
+  const walk = (folder, depth) => {
+    const subfolders = [...folder.folders.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    for (const sub of subfolders) addFolder(sub, depth);
+    for (const note of folder.notes) addNote(note, depth);
+  };
+
+  walk(root, 0);
+  container.appendChild(frag);
+  const active = container.querySelector('.tree-note.is-active');
+  if (active) active.scrollIntoView({ block: 'nearest' });
+}

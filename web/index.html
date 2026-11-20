@@ -66,7 +66,11 @@
           <span class="notes-list-count" id="notes-list-count">0</span>
         </div>
         <div class="notes-list-actions">
-          <button class="text-button" id="notes-sort" type="button" title="Cycle sort order">Recent</button>
+          <div class="notes-view-toggle" id="notes-view-toggle" role="group" aria-label="Note list layout">
+            <button class="notes-view-opt is-active" data-list-view="folders" type="button" title="Browse by folder">Folders</button>
+            <button class="notes-view-opt" data-list-view="list" type="button" title="Flat list">List</button>
+          </div>
+          <button class="text-button" id="notes-sort" type="button" title="Cycle sort order" hidden>Recent</button>
           <button class="btn btn-primary btn-compact" id="notes-new-btn" type="button" title="New note (n)">+ New</button>
         </div>
       </header>
@@ -111,18 +115,17 @@
           <button class="icon-button" id="notes-pin-btn" type="button" title="Pin note (p)" aria-label="Pin note" aria-pressed="false">
             <svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg>
           </button>
-          <button class="icon-button" id="notes-copy-link" type="button" title="Copy [[Wikilink]]" aria-label="Copy wikilink">
-            <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
-          </button>
-          <button class="icon-button" id="notes-reveal-file" type="button" title="Reveal Markdown file in folder" aria-label="Reveal in folder">
-            <svg class="icon" aria-hidden="true"><use href="#i-external-link"></use></svg>
-          </button>
-          <button class="icon-button" id="notes-locate-graph" type="button" title="Locate in 3D Graph" aria-label="Locate in 3D Graph">
-            <svg class="icon" aria-hidden="true"><use href="#i-compass"></use></svg>
-          </button>
-          <button class="icon-button" id="notes-zen-btn" type="button" title="Zen distraction-free mode (z)" aria-label="Zen mode" aria-pressed="false">
-            <svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg>
-          </button>
+          <div class="notes-more">
+            <button class="icon-button" id="notes-more-btn" type="button" title="More actions" aria-label="More actions" aria-haspopup="true" aria-expanded="false">
+              <span class="notes-more-dots" aria-hidden="true">&#8943;</span>
+            </button>
+            <div class="notes-more-menu" id="notes-more-menu" role="menu" hidden>
+              <button class="notes-more-item" id="notes-copy-link" type="button" role="menuitem"><svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg><span>Copy [[wikilink]]</span></button>
+              <button class="notes-more-item" id="notes-reveal-file" type="button" role="menuitem"><svg class="icon" aria-hidden="true"><use href="#i-external-link"></use></svg><span>Reveal file in folder</span></button>
+              <button class="notes-more-item" id="notes-locate-graph" type="button" role="menuitem"><svg class="icon" aria-hidden="true"><use href="#i-compass"></use></svg><span>Locate in graph</span></button>
+              <button class="notes-more-item" id="notes-zen-btn" type="button" role="menuitem" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg><span>Zen mode</span></button>
+            </div>
+          </div>
           <button class="icon-button" id="notes-toggle-inspector" type="button" title="Toggle connections &amp; outline inspector" aria-label="Toggle connections inspector" aria-pressed="true">
             <svg class="icon" aria-hidden="true"><use href="#i-columns"></use></svg>
           </button>
