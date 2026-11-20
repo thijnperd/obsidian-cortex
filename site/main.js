@@ -101,7 +101,7 @@ function wireViewTabs() {
 function highlightPlatform() {
   const ua = `${navigator.userAgentData?.platform || ''} ${navigator.platform || ''} ${navigator.userAgent || ''}`.toLowerCase();
   let os = null;
-  let label = 'Download v2.2.0';
+  let label = 'Download v2.2.1';
   if (ua.includes('win')) {
     os = 'windows';
     label = 'Download for Windows';

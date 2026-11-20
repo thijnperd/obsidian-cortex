@@ -1567,3 +1567,103 @@ export function setTimelineDate(text) {
   const element = document.getElementById('replay-date');
   if (element) element.textContent = text;
 }
+
+// Restored from 2.1.0: the 2.2.0 rewrite dropped these exports, so the boot overlay never hid.
+let toastTimer = null;
+
+export function toast(message, duration = 3200) {
+  const element = document.getElementById('toast');
+  element.textContent = message;
+  element.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    element.hidden = true;
+  }, duration);
+}
+
+export function setBootStatus(message) {
+  const element = document.getElementById('boot-status');
+  if (element) element.textContent = message;
+}
+
+export function hideBoot() {
+  const element = document.getElementById('boot');
+  if (!element) return;
+  element.classList.add('is-done');
+  setTimeout(() => {
+    element.hidden = true;
+  }, 500);
+}
+
+export function setCrumbs(text) {
+  const element = document.getElementById('panel-crumbs');
+  if (element) element.textContent = text;
+}
+
+export function setModeButtons(mode) {
+  document.querySelectorAll('.view[data-mode]').forEach((button) => {
+    const active = button.dataset.mode === mode;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+}
+
+export function showTooltip(node, x, y) {
+  const element = document.getElementById('tooltip');
+  element.hidden = false;
+  element.querySelector('.tooltip-title').textContent = node.title;
+  element.querySelector('.tooltip-meta').textContent = `${node.folder} · ${node.degree} links`;
+  const rect = element.getBoundingClientRect();
+  const left = Math.min(Math.max(12, x + 14), window.innerWidth - rect.width - 12);
+  const top = Math.min(Math.max(12, y + 14), window.innerHeight - rect.height - 12);
+  element.style.left = `${left}px`;
+  element.style.top = `${top}px`;
+}
+
+export function hideTooltip() {
+  const element = document.getElementById('tooltip');
+  if (element) element.hidden = true;
+}
+
+export function renderPaletteHits(container, hits, active) {
+  if (!hits.length) {
+    container.innerHTML = '<p class="palette-empty">No notes or commands match that.</p>';
+    return;
+  }
+
+  let html = '';
+  let lastKind = null;
+  const hasBothKinds = hits.some((h) => h.kind === 'command') && hits.some((h) => h.kind !== 'command');
+
+  hits.forEach((hit, index) => {
+    const kind = hit.kind === 'command' ? 'command' : 'note';
+    if (kind !== lastKind && (hasBothKinds || kind === 'command')) {
+      html += `<p class="palette-group">${kind === 'command' ? 'Commands' : 'Notes'}</p>`;
+      lastKind = kind;
+    }
+    if (kind === 'command') {
+      const kbd = hit.shortcut ? `<kbd class="palette-hit-kbd">${escapeHtml(hit.shortcut)}</kbd>` : '';
+      const sub = hit.subtitle ? `<span class="palette-hit-snippet">${escapeHtml(hit.subtitle)}</span>` : '';
+      html += `
+        <button type="button" class="palette-hit palette-hit-command${index === active ? ' is-active' : ''}" data-hit-index="${index}">
+          <span class="palette-hit-main">
+            <svg class="icon palette-hit-icon" aria-hidden="true"><use href="#i-bolt"></use></svg>
+            <span class="palette-hit-title">${escapeHtml(hit.title)}</span>
+          </span>
+          <span class="palette-hit-path">${kbd}</span>
+          ${sub}
+        </button>`;
+    } else {
+      html += `
+        <button type="button" class="palette-hit${index === active ? ' is-active' : ''}" data-hit-index="${index}">
+          <span class="palette-hit-title">${escapeHtml(hit.title)}</span>
+          <span class="palette-hit-path">${escapeHtml(hit.folder)}</span>
+          <span class="palette-hit-snippet">${escapeHtml(cleanSnippet(hit.snippet || ''))}</span>
+        </button>`;
+    }
+  });
+
+  container.innerHTML = html;
+  const activeElement = container.querySelector('.is-active');
+  if (activeElement) activeElement.scrollIntoView({ block: 'nearest' });
+}
