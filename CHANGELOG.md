@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.0.0 — Precision Editorial Studio
+
+### Studio shell & themes
+
+- **Precision Editorial Studio visual language:** refined tonal layering, hairline depth, tabular numerals, and upgraded card craft across Launch, Decisions, Bento, Timeline, and Settings.
+- **Dark, Warm Light, and System appearance:** three-way theme control in Vault settings plus a one-click toolbar toggle, backed by a zero-FOUC CSP-safe bootstrap. Atlas keeps its signature cartographic parchment look in every theme; 3D WebGL views retain their deep obsidian canvas for contrast.
+- **Collapsible & drag-resizable shell:** collapse the sidebar from the toolbar or with `[`, drag-resize both the sidebar and the note panel (double-click any handle to reset), and enjoy a calmer centered toolbar with vault stats moved to a quiet bottom-left status pill.
+
+### Studio Reader & Unified Command Palette
+
+- **Focus reader & tabbed connections:** expand the note reading panel to a centered editorial reading column, inspect decision trails with visual confidence meters, and switch cleanly between Sources, Backlinks, Mentions, and Related tabs.
+- **Compact Edit formatting bar:** a minimal Markdown toolbar sits above the plain `<textarea>` in Edit mode, driving the same selection-safe undo-preserving helpers as keyboard shortcuts.
+- **Unified Command Palette (`Ctrl K` / `⌘K`):** search notes and run app commands (switch views, toggle theme or sidebar, reframe camera, today's note, settings, tour) from one keyboard-first overlay; prefix with `>` to filter commands only.
+
+### GitHub Pages landing site
+
+- Dedicated zero-build landing page at `site/` deployed to `https://thijnperd.github.io/obsidian-cortex/`, with the live interactive demo at `/demo/` and automatic redirect for legacy `?view=` links.
+
+### Release
+
+- Version 2.0.0 across the binary, installer, README, and About panel.
+
 ## 1.3.0 — Your Notes, as a Brain
 
 ### The brain is the front door

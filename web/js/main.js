@@ -7,7 +7,7 @@ import { renderMarkdown } from './markdown.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
 import { Atlas } from './atlas.js';
-import { attachEditor } from './editor.js';
+import { attachEditor, runEditorCommand } from './editor.js';
 import { Tutorial } from './tutorial.js';
 import { diaryFolders, isOverview } from './scale.js';
 import { applyPlatformHints, key, mod } from './platform.js';
@@ -50,6 +50,9 @@ const state = {
   about: null,
   update: null,
   launching: false,
+  theme: 'dark',
+  sidebarCollapsed: false,
+  panelExpanded: false,
   time: 0,
   dragging: false,
   dragMoved: false,
@@ -93,8 +96,13 @@ const els = {
   settingsMcpStatus: document.getElementById('settings-mcp-status'),
   settingsAbout: document.getElementById('settings-about'),
   settingsUpdate: document.getElementById('settings-update'),
+  settingsTheme: document.getElementById('settings-theme'),
+  settingsThemeSystem: document.getElementById('settings-theme-system'),
   launchBrowse: document.getElementById('launch-browse'),
   sidebar: document.getElementById('sidebar'),
+  sidebarToggle: document.getElementById('sidebar-toggle'),
+  sidebarResize: document.getElementById('sidebar-resize'),
+  themeToggle: document.getElementById('theme-toggle'),
   vaultButton: document.getElementById('vault-button'),
   vaultTitle: document.getElementById('vault-title'),
   vaultSub: document.getElementById('vault-sub'),
@@ -107,6 +115,8 @@ const els = {
   tourButton: document.getElementById('tour-button'),
   newNote: document.getElementById('new-note'),
   panel: document.getElementById('panel'),
+  panelResize: document.getElementById('panel-resize'),
+  panelExpand: document.getElementById('panel-expand'),
   panelBody: document.getElementById('panel-body'),
   panelActions: document.getElementById('panel-actions'),
   panelCrumbs: document.getElementById('panel-crumbs'),
@@ -162,6 +172,177 @@ const prefs = {
 };
 
 const TOUR_COMPLETE_KEY = 'cortex.tour.completed';
+const THEME_KEY = 'cortex.theme';
+const SIDEBAR_COLLAPSED_KEY = 'cortex.sidebar.collapsed';
+const SIDEBAR_WIDTH_KEY = 'cortex.sidebar.width';
+const PANEL_WIDTH_KEY = 'cortex.panel.width';
+const DEFAULT_SIDEBAR_W = 236;
+const DEFAULT_PANEL_W = 460;
+
+const systemLightQuery = window.matchMedia
+  ? window.matchMedia('(prefers-color-scheme: light)')
+  : null;
+
+function effectiveTheme() {
+  if (state.theme === 'light' || state.theme === 'dark') return state.theme;
+  return systemLightQuery?.matches ? 'light' : 'dark';
+}
+
+function syncThemeUI() {
+  const rendered = effectiveTheme();
+  const osLabel = systemLightQuery?.matches ? 'light' : 'dark';
+  if (els.settingsThemeSystem) {
+    els.settingsThemeSystem.textContent = `System (${osLabel})`;
+  }
+  if (els.settingsTheme) {
+    els.settingsTheme.querySelectorAll('[data-theme-choice]').forEach((button) => {
+      const active = button.dataset.themeChoice === state.theme;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+  }
+  if (els.themeToggle) {
+    const nextLabel = rendered === 'dark' ? 'Switch to Warm Light theme' : 'Switch to Dark theme';
+    els.themeToggle.title = nextLabel;
+    els.themeToggle.setAttribute('aria-label', nextLabel);
+  }
+}
+
+function applyTheme(pref, { persist = true } = {}) {
+  const valid = pref === 'dark' || pref === 'light' || pref === 'system' ? pref : 'dark';
+  state.theme = valid;
+  document.documentElement.dataset.theme = valid;
+  const meta = document.querySelector('meta[name="color-scheme"]');
+  if (meta) meta.content = valid === 'system' ? 'light dark' : valid;
+  if (persist) prefs.set(THEME_KEY, valid);
+  syncThemeUI();
+}
+
+function toggleTheme() {
+  applyTheme(effectiveTheme() === 'dark' ? 'light' : 'dark');
+}
+
+function setSidebarWidth(px, { persist = false } = {}) {
+  const clamped = Math.round(clamp(px, 188, 380));
+  document.documentElement.style.setProperty('--sidebar-w', `${clamped}px`);
+  if (persist) prefs.set(SIDEBAR_WIDTH_KEY, clamped);
+}
+
+function setPanelWidth(px, { persist = false } = {}) {
+  const max = Math.max(420, Math.min(760, window.innerWidth - 120));
+  const clamped = Math.round(clamp(px, 360, max));
+  document.documentElement.style.setProperty('--panel-w', `${clamped}px`);
+  if (persist) prefs.set(PANEL_WIDTH_KEY, clamped);
+}
+
+function syncSidebar() {
+  const available = !state.launching && Boolean(state.graph);
+  if (els.sidebarToggle) {
+    els.sidebarToggle.hidden = !available;
+    els.sidebarToggle.setAttribute('aria-expanded', String(available && !state.sidebarCollapsed));
+    els.sidebarToggle.classList.toggle('is-active', available && !state.sidebarCollapsed);
+  }
+  if (!available) {
+    els.sidebar.hidden = true;
+    document.body.classList.remove('has-sidebar');
+    return;
+  }
+  els.sidebar.hidden = state.sidebarCollapsed;
+  document.body.classList.toggle('has-sidebar', !state.sidebarCollapsed);
+  onResize();
+}
+
+function toggleSidebar(force) {
+  if (state.launching || !state.graph) return;
+  state.sidebarCollapsed = typeof force === 'boolean' ? force : !state.sidebarCollapsed;
+  prefs.set(SIDEBAR_COLLAPSED_KEY, state.sidebarCollapsed);
+  syncSidebar();
+}
+
+function setPanelExpanded(expanded) {
+  state.panelExpanded = Boolean(expanded);
+  document.body.classList.toggle('panel-expanded', state.panelExpanded);
+  if (els.panelExpand) {
+    els.panelExpand.setAttribute('aria-pressed', String(state.panelExpanded));
+    const label = state.panelExpanded ? 'Restore panel width' : 'Expand focus reader';
+    els.panelExpand.title = label;
+    els.panelExpand.setAttribute('aria-label', label);
+    const expandIcon = els.panelExpand.querySelector('.panel-icon-expand');
+    const compressIcon = els.panelExpand.querySelector('.panel-icon-compress');
+    if (expandIcon) expandIcon.hidden = state.panelExpanded;
+    if (compressIcon) compressIcon.hidden = !state.panelExpanded;
+  }
+}
+
+function wireResizeHandles() {
+  if (els.sidebarResize) {
+    let dragging = false;
+    els.sidebarResize.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || state.sidebarCollapsed) return;
+      event.preventDefault();
+      dragging = true;
+      document.body.classList.add('is-resizing');
+      els.sidebarResize.setPointerCapture(event.pointerId);
+    });
+    els.sidebarResize.addEventListener('pointermove', (event) => {
+      if (!dragging) return;
+      setSidebarWidth(event.clientX);
+      onResize();
+    });
+    const finish = (event) => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove('is-resizing');
+      setSidebarWidth(event.clientX, { persist: true });
+      onResize();
+    };
+    els.sidebarResize.addEventListener('pointerup', finish);
+    els.sidebarResize.addEventListener('pointercancel', finish);
+    els.sidebarResize.addEventListener('dblclick', () => {
+      setSidebarWidth(DEFAULT_SIDEBAR_W, { persist: true });
+      onResize();
+    });
+    els.sidebarResize.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      const current = els.sidebar.getBoundingClientRect().width || DEFAULT_SIDEBAR_W;
+      setSidebarWidth(current + (event.key === 'ArrowRight' ? 16 : -16), { persist: true });
+      onResize();
+    });
+  }
+
+  if (els.panelResize) {
+    let dragging = false;
+    els.panelResize.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || state.panelExpanded) return;
+      event.preventDefault();
+      dragging = true;
+      document.body.classList.add('is-resizing');
+      els.panelResize.setPointerCapture(event.pointerId);
+    });
+    els.panelResize.addEventListener('pointermove', (event) => {
+      if (!dragging) return;
+      setPanelWidth(window.innerWidth - event.clientX);
+    });
+    const finish = (event) => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove('is-resizing');
+      setPanelWidth(window.innerWidth - event.clientX, { persist: true });
+    };
+    els.panelResize.addEventListener('pointerup', finish);
+    els.panelResize.addEventListener('pointercancel', finish);
+    els.panelResize.addEventListener('dblclick', () => {
+      setPanelWidth(DEFAULT_PANEL_W, { persist: true });
+    });
+    els.panelResize.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      const current = els.panel.getBoundingClientRect().width || DEFAULT_PANEL_W;
+      setPanelWidth(current + (event.key === 'ArrowLeft' ? 24 : -24), { persist: true });
+    });
+  }
+}
 
 function syncTourButton() {
   const complete = prefs.get(TOUR_COMPLETE_KEY, false);
@@ -177,7 +358,7 @@ function syncTourButton() {
 }
 
 function viewForVault(id) {
-  return prefs.get(`cortex.view.${id}`, prefs.get('cortex.launchView', 'universe'));
+  return prefs.get(`cortex.view.${id}`, prefs.get('cortex.launchView', 'brain'));
 }
 
 function launchView() {
@@ -239,8 +420,9 @@ async function start() {
     document.body.classList.add('is-static');
     const graph = await api.loadStaticGraph();
     applyGraph(graph);
-    const view = requestedView();
-    if (view) setMode(view, { persist: false, animate: false });
+    syncSidebar();
+    const view = requestedView() || 'brain';
+    setMode(view, { persist: false, animate: false });
     document.addEventListener('visibilitychange', onVisibility);
     ui.hideBoot();
     requestAnimationFrame(loop);
@@ -258,10 +440,41 @@ async function start() {
 function wire() {
   applyPlatformHints();
   syncTourButton();
-  const storedView = prefs.get('cortex.launchView', 'universe');
+  applyTheme(prefs.get(THEME_KEY, 'dark'), { persist: false });
+  state.sidebarCollapsed = Boolean(prefs.get(SIDEBAR_COLLAPSED_KEY, false));
+  const savedSidebarW = Number(prefs.get(SIDEBAR_WIDTH_KEY, DEFAULT_SIDEBAR_W));
+  if (Number.isFinite(savedSidebarW)) setSidebarWidth(savedSidebarW);
+  const savedPanelW = Number(prefs.get(PANEL_WIDTH_KEY, DEFAULT_PANEL_W));
+  if (Number.isFinite(savedPanelW)) setPanelWidth(savedPanelW);
+  wireResizeHandles();
+  if (systemLightQuery) {
+    systemLightQuery.addEventListener('change', syncThemeUI);
+  }
+  window.addEventListener('storage', (event) => {
+    if (event.key === THEME_KEY) {
+      applyTheme(prefs.get(THEME_KEY, 'dark'), { persist: false });
+    }
+  });
+
+  const storedView = prefs.get('cortex.launchView', 'brain');
   const openingView = requestedView() || storedView;
   const storedRadio = document.querySelector(`input[name="launch-view"][value="${openingView}"]`);
   if (storedRadio) storedRadio.checked = true;
+
+  if (els.sidebarToggle) {
+    els.sidebarToggle.addEventListener('click', () => toggleSidebar());
+  }
+  if (els.themeToggle) {
+    els.themeToggle.addEventListener('click', toggleTheme);
+  }
+  if (els.panelExpand) {
+    els.panelExpand.addEventListener('click', () => setPanelExpanded(!state.panelExpanded));
+  }
+  if (els.settingsTheme) {
+    els.settingsTheme.querySelectorAll('[data-theme-choice]').forEach((button) => {
+      button.addEventListener('click', () => applyTheme(button.dataset.themeChoice));
+    });
+  }
 
   els.canvas.addEventListener('pointerdown', onPointerDown);
   els.canvas.addEventListener('pointermove', onPointerMove);
@@ -394,8 +607,8 @@ function showLaunch(message) {
   state.launching = true;
   els.tourButton.hidden = true;
   els.launch.hidden = false;
-  els.sidebar.hidden = true;
-  document.body.classList.remove('has-sidebar');
+  if (els.stats) els.stats.hidden = true;
+  syncSidebar();
   showLaunchError(message);
   els.launchPath.value = '';
   refreshVaults();
@@ -412,7 +625,9 @@ function hideLaunch() {
   state.launching = false;
   els.launch.hidden = true;
   els.tourButton.hidden = !state.live || !state.graph;
+  if (els.stats && state.graph) els.stats.hidden = false;
   showLaunchError(null);
+  syncSidebar();
 }
 
 async function submitLaunch(event) {
@@ -485,10 +700,7 @@ async function switchVault(id, view) {
 
 function showApp() {
   hideLaunch();
-  if (state.live) {
-    els.sidebar.hidden = false;
-    document.body.classList.add('has-sidebar');
-  }
+  syncSidebar();
   resizeCamera();
 }
 
@@ -601,6 +813,7 @@ function applyGraph(graph) {
   syncSelection();
   syncAtlas();
   if (state.selected != null) state.renderer.setFocus(state.selected);
+  syncSidebar();
   resizeCamera();
   if (!state.replay.playing) {
     state.reveal = state.mode === 'replay' ? 0.015 : 1;
@@ -1006,6 +1219,7 @@ function setMode(mode, { persist = true, animate = true } = {}) {
   document.body.classList.toggle('mode-atlas', atlasMode);
   document.body.classList.toggle('mode-decisions', boardMode);
   document.body.classList.toggle('mode-bento', bentoMode);
+  document.body.classList.toggle('mode-replay', mode === 'replay');
 
   if (atlasMode) {
     const atlas = ensureAtlas();
@@ -1300,6 +1514,7 @@ function openSettings() {
   checkForUpdates();
   els.settingsReveal.disabled = Boolean(vault.missing);
   syncSettingsViews();
+  syncThemeUI();
   els.settings.hidden = false;
   els.settingsClose.focus();
 }
@@ -1358,6 +1573,7 @@ function openTourCompose(template, example) {
 
 function collectTourEvidence(ids) {
   closePanel();
+  if (state.sidebarCollapsed) toggleSidebar(false);
   state.selection.clear();
   for (const id of ids) {
     if (nodeIndex(id) >= 0) state.selection.add(id);
@@ -1896,6 +2112,7 @@ function onKeyDown(event) {
     else if (!els.compose.hidden) closeCompose();
     else if (state.palette.open) closePalette();
     else if (state.launching && state.vaultId) hideLaunch();
+    else if (!els.panel.hidden && state.panelExpanded) setPanelExpanded(false);
     else if (!els.panel.hidden) closePanel();
     else if (state.local) clearLocalGraph();
     else if (state.folderFocus) clearFolderFocus();
@@ -1907,6 +2124,9 @@ function onKeyDown(event) {
   if (event.key === '/') {
     event.preventDefault();
     openPalette();
+  } else if (event.key === '[') {
+    event.preventDefault();
+    toggleSidebar();
   } else if (event.key === '1') setMode('universe');
   else if (event.key === '2') setMode('brain');
   else if (event.key === '3') setMode('replay');
@@ -2149,6 +2369,60 @@ function renderPanel(detail) {
       if (index >= 0) openNote(index);
     });
   });
+
+  els.panelBody.querySelectorAll('.confidence-fill[data-confidence]').forEach((bar) => {
+    bar.style.setProperty('--confidence', `${bar.dataset.confidence}%`);
+  });
+
+  wireConnectionTabs(els.panelBody.querySelector('#note-connections'));
+}
+
+function wireConnectionTabs(root) {
+  if (!root) return;
+  const tabs = [...root.querySelectorAll('[role="tab"]')];
+  const panels = [...root.querySelectorAll('[role="tabpanel"]')];
+  if (!tabs.length) return;
+
+  const activate = (id, { focus = false } = {}) => {
+    for (const tab of tabs) {
+      const selected = tab.dataset.connTab === id;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      if (selected) {
+        tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        if (focus) tab.focus();
+      }
+    }
+    for (const panel of panels) {
+      const selected = panel.dataset.connPanel === id;
+      if (selected) {
+        panel.removeAttribute('hidden');
+        if (!panel.querySelector('button, a, [tabindex]')) panel.tabIndex = 0;
+      } else {
+        panel.hidden = 'until-found';
+        panel.removeAttribute('tabindex');
+      }
+    }
+  };
+
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => activate(tab.dataset.connTab));
+    tab.addEventListener('keydown', (event) => {
+      let next = null;
+      if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+      else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = tabs.length - 1;
+      if (next !== null) {
+        event.preventDefault();
+        activate(tabs[next].dataset.connTab, { focus: true });
+      }
+    });
+  });
+
+  panels.forEach((panel) => {
+    panel.addEventListener('beforematch', () => activate(panel.dataset.connPanel));
+  });
 }
 
 function focusDecisionTrail() {
@@ -2167,6 +2441,7 @@ function closePanel() {
   if (els.panel.hidden) return;
   if (state.local) clearLocalGraph({ resetCamera: true, rerender: false });
   openToken += 1;
+  setPanelExpanded(false);
   els.panel.hidden = true;
   state.detail = null;
   state.editing = false;
@@ -2208,6 +2483,15 @@ function requestEdit() {
       },
       onSave: saveEdits,
       onCancel: cancelEdit,
+    });
+    els.panelBody.querySelectorAll('[data-edit-cmd]').forEach((button) => {
+      button.addEventListener('mousedown', (event) => {
+        // Keep focus & text selection inside the textarea when clicking a toolbar button.
+        event.preventDefault();
+      });
+      button.addEventListener('click', () => {
+        runEditorCommand(textarea, button.dataset.editCmd);
+      });
     });
   }
 }
@@ -2371,13 +2655,194 @@ async function submitCompose(event) {
   }
 }
 
-/* ---------- search ---------- */
+/* ---------- command palette & search ---------- */
 
-function openPalette() {
+function buildPaletteCommands() {
+  const rendered = effectiveTheme();
+  const commands = [
+    {
+      kind: 'command',
+      id: 'cmd:view:brain',
+      title: 'Switch to Brain view',
+      subtitle: 'Notes folded onto a cortical surface',
+      keywords: 'view brain cortex 3d',
+      shortcut: '2',
+      pinned: state.mode !== 'brain',
+      run: () => setMode('brain'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:view:universe',
+      title: 'Switch to Graph view',
+      subtitle: 'Folder galaxies and wikilink clusters',
+      keywords: 'view graph universe 3d',
+      shortcut: '1',
+      pinned: state.mode === 'brain',
+      run: () => setMode('universe'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:view:replay',
+      title: 'Switch to Timeline view',
+      subtitle: 'Replay notes in creation order',
+      keywords: 'view timeline replay history',
+      shortcut: '3',
+      run: () => setMode('replay'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:view:atlas',
+      title: 'Switch to Atlas view',
+      subtitle: 'Folders as countries, notes as places',
+      keywords: 'view atlas map parchment',
+      shortcut: '4',
+      run: () => setMode('atlas'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:view:bento',
+      title: 'Switch to Bento view',
+      subtitle: 'Folders as boxes sized by note count',
+      keywords: 'view bento overview grid',
+      shortcut: '6',
+      run: () => setMode('bento'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:view:decisions',
+      title: 'Switch to Decisions view',
+      subtitle: 'Research briefs and idea notes by status',
+      keywords: 'view decisions briefs ideas trail',
+      shortcut: '5',
+      run: () => setMode('decisions'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:theme:toggle',
+      title: rendered === 'dark' ? 'Switch to Warm Light theme' : 'Switch to Dark theme',
+      subtitle: 'Toggle studio appearance',
+      keywords: 'theme dark light appearance color warm',
+      pinned: true,
+      run: () => toggleTheme(),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:theme:system',
+      title: 'Use System appearance',
+      subtitle: 'Follow the operating system theme',
+      keywords: 'theme system auto appearance',
+      run: () => applyTheme('system'),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:sidebar:toggle',
+      title: state.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar',
+      subtitle: 'Toggle vaults and folders panel',
+      keywords: 'sidebar collapse expand panel chrome',
+      shortcut: '[',
+      pinned: true,
+      run: () => toggleSidebar(),
+    },
+    {
+      kind: 'command',
+      id: 'cmd:camera:reframe',
+      title: 'Reframe camera',
+      subtitle: 'Reset zoom and focus to the full vault',
+      keywords: 'reframe reset camera zoom center fit',
+      shortcut: 'f',
+      run: () => {
+        clearFolderFocus({ resetCamera: false });
+        state.camera.yaw = 0.55;
+        state.camera.pitch = 0.22;
+        state.camera.frame(state.mode);
+        if (state.atlas && state.mode === 'atlas') state.atlas.fit();
+      },
+    },
+  ];
+
+  if (state.selected != null) {
+    commands.push({
+      kind: 'command',
+      id: 'cmd:local',
+      title: state.local ? 'Return to full graph' : 'Focus local graph',
+      subtitle: 'Isolate the selected note and its neighbours',
+      keywords: 'local graph focus neighbours',
+      shortcut: 'l',
+      run: () => {
+        if (state.local) clearLocalGraph();
+        else showLocalGraph(state.selected);
+      },
+    });
+  }
+
+  if (state.live) {
+    commands.push(
+      {
+        kind: 'command',
+        id: 'cmd:today',
+        title: "Open today's note",
+        subtitle: 'Journal/YYYY-MM-DD.md',
+        keywords: 'today daily journal note',
+        shortcut: 't',
+        pinned: true,
+        run: () => openDaily(),
+      },
+      {
+        kind: 'command',
+        id: 'cmd:new',
+        title: 'Create new note',
+        subtitle: 'Write a blank Markdown note in this vault',
+        keywords: 'new create note markdown',
+        shortcut: 'n',
+        run: () => createNote(),
+      },
+      {
+        kind: 'command',
+        id: 'cmd:settings',
+        title: 'Open vault settings',
+        subtitle: 'Appearance, map roads, MCP and updates',
+        keywords: 'settings preferences mcp config',
+        run: () => openSettings(),
+      },
+      {
+        kind: 'command',
+        id: 'cmd:tour',
+        title: 'Start guided tour',
+        subtitle: 'Fifteen-step walkthrough of Cortex',
+        keywords: 'tour walkthrough guide help',
+        run: () => startTour(),
+      },
+      {
+        kind: 'command',
+        id: 'cmd:vaults',
+        title: 'Open another folder…',
+        subtitle: 'Switch vault or open a new Markdown folder',
+        keywords: 'vault folder open switch launcher',
+        shortcut: key('O'),
+        run: () => showLaunch(),
+      },
+    );
+  }
+
+  return commands;
+}
+
+function matchCommands(query, commands) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return commands;
+  const terms = needle.split(/\s+/).filter(Boolean);
+  return commands.filter((cmd) => {
+    const haystack = `${cmd.title} ${cmd.subtitle || ''} ${cmd.keywords || ''}`.toLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  });
+}
+
+function openPalette(initial = '') {
+  const text = typeof initial === 'string' ? initial : '';
   state.palette.open = true;
   els.palette.hidden = false;
-  els.paletteInput.value = '';
-  state.palette.query = '';
+  els.paletteInput.value = text;
+  state.palette.query = text;
   state.palette.active = 0;
   els.paletteInput.focus();
   scheduleSearch(true);
@@ -2393,38 +2858,58 @@ function scheduleSearch(immediate = false) {
   clearTimeout(state.palette.timer);
   const run = () => search(state.palette.query);
   if (immediate) run();
-  else state.palette.timer = setTimeout(run, 130);
+  else state.palette.timer = setTimeout(run, 120);
 }
 
 async function search(query) {
   if (!state.graph) return;
-  const needle = query.trim();
+  const raw = query.trim();
+  const commandsOnly = raw.startsWith('>');
+  const needle = commandsOnly ? raw.slice(1).trim() : raw;
+  const allCommands = buildPaletteCommands();
+
+  if (commandsOnly) {
+    state.palette.hits = matchCommands(needle, allCommands);
+    state.palette.active = 0;
+    ui.renderPaletteHits(els.paletteResults, state.palette.hits, state.palette.active);
+    return;
+  }
+
+  let matchedCommands = [];
+  let noteHits = [];
+
   if (!needle) {
-    state.palette.hits = [...state.graph.nodes]
+    matchedCommands = allCommands.filter((cmd) => cmd.pinned).slice(0, 4);
+    noteHits = [...state.graph.nodes]
       .sort((a, b) => b.pagerank - a.pagerank)
-      .slice(0, 12)
-      .map((node) => ({ id: node.id, title: node.title, folder: node.folder, snippet: node.excerpt }));
-  } else if (!state.live) {
-    const lower = needle.toLowerCase();
-    state.palette.hits = state.graph.nodes
-      .filter(
-        (node) =>
-          node.title.toLowerCase().includes(lower)
-          || node.tags.some((tag) => tag.includes(lower))
-          || node.folder.toLowerCase().includes(lower),
-      )
-      .sort((a, b) => b.pagerank - a.pagerank)
-      .slice(0, 20)
-      .map((node) => ({ id: node.id, title: node.title, folder: node.folder, snippet: node.excerpt }));
+      .slice(0, 10)
+      .map((node) => ({ kind: 'note', id: node.id, title: node.title, folder: node.folder, snippet: node.excerpt }));
   } else {
-    try {
-      const hits = await api.searchNotes(needle, state.vaultId, 20);
-      if (state.palette.query.trim() !== needle) return;
-      state.palette.hits = hits;
-    } catch {
-      state.palette.hits = [];
+    matchedCommands = matchCommands(needle, allCommands).slice(0, 5);
+    if (!state.live) {
+      const lower = needle.toLowerCase();
+      noteHits = state.graph.nodes
+        .filter(
+          (node) =>
+            node.title.toLowerCase().includes(lower)
+            || node.tags.some((tag) => tag.includes(lower))
+            || node.folder.toLowerCase().includes(lower),
+        )
+        .sort((a, b) => b.pagerank - a.pagerank)
+        .slice(0, 16)
+        .map((node) => ({ kind: 'note', id: node.id, title: node.title, folder: node.folder, snippet: node.excerpt }));
+    } else {
+      try {
+        const hits = await api.searchNotes(needle, state.vaultId, 16);
+        if (state.palette.query.trim() !== raw) return;
+        noteHits = hits.map((hit) => ({ kind: 'note', ...hit }));
+      } catch {
+        noteHits = [];
+      }
     }
   }
+
+  state.palette.hits = [...matchedCommands, ...noteHits];
   state.palette.active = 0;
   ui.renderPaletteHits(els.paletteResults, state.palette.hits, state.palette.active);
 }
@@ -2445,6 +2930,7 @@ function onPaletteKey(event) {
     }
   } else if (event.key === 'Enter') {
     event.preventDefault();
+    if (event.isComposing || event.keyCode === 229) return;
     openHit(state.palette.active);
   }
 }
@@ -2453,6 +2939,10 @@ function openHit(hitIndex) {
   const hit = state.palette.hits[hitIndex];
   if (!hit) return;
   closePalette();
+  if (hit.kind === 'command') {
+    if (typeof hit.run === 'function') hit.run();
+    return;
+  }
   const index = nodeIndex(hit.id);
   if (index >= 0) openNote(index);
 }

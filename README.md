@@ -7,17 +7,20 @@
 <p align="center"><strong>Your notes, as a brain.</strong></p>
 
 <p align="center">
-  <a href="https://thijnperd.github.io/obsidian-cortex/?view=brain">
+  <a href="https://thijnperd.github.io/obsidian-cortex/demo/?view=brain">
     <img src="docs/screenshots/medium/02-brain.jpg" width="100%" alt="Screenshot of Cortex's Brain view: a translucent cortical surface with folder clusters, note stars and links drawn as fibre tracts">
   </a>
 </p>
 
 <p align="center"><em>The Brain view of a 328-note vault: 557 links on one cortical surface.</em></p>
 
-<p align="center"><a href="https://thijnperd.github.io/obsidian-cortex/?view=brain"><strong>Open the live demo</strong></a> — 328 notes, opens in the Brain, no install.</p>
+<p align="center">
+  <a href="https://thijnperd.github.io/obsidian-cortex/"><strong>Visit the product page</strong></a> ·
+  <a href="https://thijnperd.github.io/obsidian-cortex/demo/?view=brain"><strong>Open the live demo</strong></a> — 328 notes, opens in the Brain, no install.
+</p>
 
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases"><img alt="Version 1.3.0" src="https://img.shields.io/badge/version-1.3.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases"><img alt="Version 2.0.0" src="https://img.shields.io/badge/version-2.0.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
   <img alt="Licensed MIT" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-101216?style=flat-square&amp;labelColor=0a0b0d">
 </p>
@@ -43,7 +46,7 @@ are; deleting the folder is the uninstall.
 
 | Platform | File |
 | --- | --- |
-| Windows x86-64 | `CortexSetup-1.3.0.exe`, or `cortex-windows-x86_64.zip` to run unpacked |
+| Windows x86-64 | `CortexSetup-2.0.0.exe`, or `cortex-windows-x86_64.zip` to run unpacked |
 | macOS (Apple silicon) | `Cortex.app` inside `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
@@ -127,7 +130,7 @@ The small demo (21 notes) is the first-run taste: `seed-demo demo --size small`.
 ## Decisions, and the trail
 
 <p align="center">
-  <img src="docs/screenshots/v1-decisions.jpg" width="100%" alt="Cortex Decisions board showing a card with a review date and its cited sources">
+  <img src="docs/screenshots/v1-decision-trail.jpg" width="100%" alt="Cortex v2 Decisions board and Studio Reader showing a decision trail card with confidence meter, review due badge, and cited sources">
 </p>
 
 A decision here is not a note with a checkbox. It carries a confidence level, a
@@ -174,7 +177,8 @@ are on rather than showing both.
 
 | Action | Key |
 | --- | --- |
-| Search every note | `Ctrl K` / `⌘K`, or `/` |
+| Command palette &amp; note search | `Ctrl K` / `⌘K`, or `/` (`>` for commands only) |
+| Toggle sidebar | `[` |
 | Back / forward through opened notes | `Ctrl [` / `Ctrl ]` (`⌘[` / `⌘]`), or `‹` `›` |
 | Collect / uncollect a note | `Ctrl` / `⌘` / `Shift` + click, or `c` |
 | Local neighbourhood | `Local graph` in the note panel, or `l` |
@@ -367,7 +371,7 @@ opens it, and it rotates once at 1 MiB. If `cortex` says nothing at all, run
 ## License
 
 MIT. See [LICENSE](LICENSE); security reports follow [SECURITY.md](SECURITY.md),
-and the 1.3.0 notes are in [docs/releases/v1.3.0.md](docs/releases/v1.3.0.md).
+and the 2.0.0 notes are in [docs/releases/v2.0.0.md](docs/releases/v2.0.0.md).
 The in-app icons are [Tabler Icons](https://tabler.io/icons), MIT licensed, with
 the notice in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

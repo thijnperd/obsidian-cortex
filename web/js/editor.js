@@ -390,3 +390,42 @@ export function attachEditor(textarea, { onChange, onSave, onCancel }) {
     }
   });
 }
+
+/**
+ * Invoke a formatting command from the compact edit toolbar using the exact
+ * same selection-safe helpers as keyboard shortcuts so native undo stays intact.
+ */
+export function runEditorCommand(textarea, command) {
+  if (!textarea) return;
+  switch (command) {
+    case 'bold':
+      wrap(textarea, '**');
+      break;
+    case 'italic':
+      wrap(textarea, '*');
+      break;
+    case 'code':
+      wrap(textarea, '`');
+      break;
+    case 'wikilink':
+      wrap(textarea, '[[', ']]');
+      break;
+    case 'heading':
+      toggleHeading(textarea, 2);
+      break;
+    case 'bullet':
+      toggleList(textarea, 'bullet');
+      break;
+    case 'task':
+      toggleList(textarea, 'task');
+      break;
+    case 'quote':
+      toggleQuote(textarea);
+      break;
+    case 'codeblock':
+      insertCodeBlock(textarea);
+      break;
+    default:
+      break;
+  }
+}

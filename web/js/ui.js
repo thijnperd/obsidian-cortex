@@ -6,6 +6,7 @@ import { key } from './platform.js';
 
 export function setStats(meta, overview = false) {
   const element = document.getElementById('stats');
+  if (!element) return;
   const items = [
     [Number(meta.note_count) || 0, 'notes'],
     [Number(meta.link_count) || 0, 'links'],
@@ -18,6 +19,7 @@ export function setStats(meta, overview = false) {
   element.innerHTML = items
     .map(([value, label]) => `<span><b>${value}</b> ${label}</span>`)
     .join('') + flag;
+  element.hidden = false;
 }
 
 export function renderFolders(container, folders, hidden, onToggle, palette) {
@@ -158,18 +160,83 @@ export function renderLaunch(container, vaults, { onOpen, onForget }) {
   if (recents) recents.hidden = vaults.length === 0;
 }
 
-function relationList(title, notes, empty) {
+function connectionItemsHtml(notes, empty) {
   const items = (notes || [])
     .map(
       (note) =>
         `<button type="button" class="relation" data-note-id="${escapeHtml(note.id)}">` +
-        `<span>${escapeHtml(note.title)}</span><span>${escapeHtml(note.folder)}</span></button>`,
+        `<span class="relation-title">${escapeHtml(note.title)}</span>` +
+        `<span class="relation-folder">${escapeHtml(note.folder)}</span></button>`,
     )
     .join('');
-  return (
-    `<section class="relations"><h2>${escapeHtml(title)}${notes && notes.length ? ` <span>${notes.length}</span>` : ''}</h2>` +
-    `${items || `<p class="empty">${escapeHtml(empty)}</p>`}</section>`
-  );
+  return items || `<p class="empty">${escapeHtml(empty)}</p>`;
+}
+
+function connectionsHtml(detail) {
+  const groups = [];
+  if (detail.kind && detail.evidence) {
+    groups.push({
+      id: 'sources',
+      label: 'Sources',
+      notes: detail.evidence || [],
+      empty: 'No linked sources yet.',
+    });
+  }
+  groups.push({
+    id: 'backlinks',
+    label: 'Backlinks',
+    notes: detail.backlinks || [],
+    empty: 'No note links here yet.',
+  });
+  if (detail.mentions && detail.mentions.length) {
+    groups.push({
+      id: 'mentions',
+      label: 'Mentions',
+      notes: detail.mentions,
+      empty: 'No unlinked mentions.',
+    });
+  }
+  groups.push({
+    id: 'related',
+    label: 'Related',
+    notes: detail.related || [],
+    empty: 'Nothing shares a neighbour yet.',
+  });
+
+  const firstPopulated = groups.findIndex((group) => group.notes.length > 0);
+  const activeIndex = firstPopulated >= 0 ? firstPopulated : 0;
+
+  const tabs = groups
+    .map((group, index) => {
+      const active = index === activeIndex;
+      return (
+        `<button type="button" class="connections-tab" role="tab" id="conn-tab-${group.id}" ` +
+        `data-conn-tab="${group.id}" aria-selected="${active ? 'true' : 'false'}" ` +
+        `tabindex="${active ? '0' : '-1'}">` +
+        `<span>${escapeHtml(group.label)}</span>` +
+        `<span class="connections-count">${group.notes.length}</span></button>`
+      );
+    })
+    .join('');
+
+  const panels = groups
+    .map((group, index) => {
+      const active = index === activeIndex;
+      const hiddenAttr = active ? '' : ' hidden="until-found"';
+      const tabIndexAttr = active && !group.notes.length ? ' tabindex="0"' : '';
+      return (
+        `<div class="connections-panel" role="tabpanel" aria-labelledby="conn-tab-${group.id}" ` +
+        `data-conn-panel="${group.id}"${hiddenAttr}${tabIndexAttr}>` +
+        `<div class="connections-list">${connectionItemsHtml(group.notes, group.empty)}</div></div>`
+      );
+    })
+    .join('');
+
+  return `
+    <section class="connections" id="note-connections" aria-label="Note connections">
+      <div class="connections-tabs" role="tablist" aria-label="Note connections">${tabs}</div>
+      <div class="connections-panels">${panels}</div>
+    </section>`;
 }
 
 function todayIso() {
@@ -181,15 +248,25 @@ function isReviewDue(date) {
   return Boolean(date) && date <= todayIso();
 }
 
+function clampPct(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  return Math.max(0, Math.min(100, Math.round(num)));
+}
+
 function decisionTrail(detail) {
   if (detail.kind !== 'research' && detail.kind !== 'idea') return '';
   const due = isReviewDue(detail.review_on);
+  const status = detail.status || (detail.kind === 'idea' ? 'refining' : 'open');
+  const hasConfidence = detail.confidence !== null && detail.confidence !== undefined;
+  const pct = hasConfidence ? clampPct(detail.confidence) : null;
+
   const facts = [];
   facts.push(
-    `<span class="trail-fact">Status <strong>${escapeHtml(detail.status || (detail.kind === 'idea' ? 'refining' : 'open'))}</strong></span>`,
+    `<span class="trail-fact">Status <strong class="trail-status-pill">${escapeHtml(status)}</strong></span>`,
   );
-  if (detail.confidence !== null && detail.confidence !== undefined) {
-    facts.push(`<span class="trail-fact">Confidence <strong>${Number(detail.confidence)}%</strong></span>`);
+  if (hasConfidence) {
+    facts.push(`<span class="trail-fact">Confidence <strong>${pct}%</strong></span>`);
   }
   if (detail.review_on) {
     facts.push(
@@ -198,6 +275,10 @@ function decisionTrail(detail) {
   } else {
     facts.push('<span class="trail-fact">No review date</span>');
   }
+  const meter = hasConfidence
+    ? `<div class="confidence-meter" role="meter" aria-label="Confidence" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}">` +
+      `<span class="confidence-fill" data-confidence="${pct}"></span></div>`
+    : '';
   const supersedes = detail.supersedes
     ? `<button class="trail-supersedes" type="button" data-note-id="${escapeHtml(detail.supersedes.id)}">Supersedes “${escapeHtml(detail.supersedes.title)}”</button>`
     : '';
@@ -208,8 +289,9 @@ function decisionTrail(detail) {
         ${due ? '<span class="trail-flag">Review due</span>' : ''}
       </div>
       <div class="trail-facts">${facts.join('')}</div>
+      ${meter}
       ${supersedes}
-      <p class="trail-help">The evidence below is linked from this note. Press <kbd>y</kbd> to jump back here.</p>
+      <p class="trail-help">Linked sources sit below the note. Press <kbd>y</kbd> to jump back here.</p>
     </section>`;
 }
 
@@ -226,42 +308,86 @@ export function panelHtml(detail, markdownHtml) {
     .join('');
 
   return `
-    <h1 class="note-title">${escapeHtml(detail.title)}</h1>
-    <div class="note-meta">${meta}</div>
-    ${tags ? `<div class="note-tags">${tags}</div>` : ''}
-    ${decisionTrail(detail)}
-    <div class="prose" id="note-prose">${markdownHtml}</div>
-    ${detail.kind && detail.evidence ? relationList('Linked sources', detail.evidence, 'No linked sources yet.') : ''}
-    ${relationList('Backlinks', detail.backlinks, 'No note links here yet.')}
-    ${detail.mentions && detail.mentions.length ? relationList('Mentions', detail.mentions, '') : ''}
-    ${relationList('Related', detail.related, 'Nothing shares a neighbour yet.')}
+    <div class="panel-article">
+      <h1 class="note-title">${escapeHtml(detail.title)}</h1>
+      <div class="note-meta">${meta}</div>
+      ${tags ? `<div class="note-tags">${tags}</div>` : ''}
+      ${decisionTrail(detail)}
+      <div class="prose" id="note-prose">${markdownHtml}</div>
+      ${connectionsHtml(detail)}
+    </div>
   `;
 }
 
 export function editorHtml(detail, draft) {
+  const tools = [
+    ['bold', 'i-bold', `Bold (${key('B')})`],
+    ['italic', 'i-italic', `Italic (${key('I')})`],
+    ['heading', 'i-heading', `Heading (${key('2')})`],
+    ['wikilink', 'i-link', `Wikilink (${key('K')})`],
+    ['code', 'i-code', `Inline code (${key('E')})`],
+    ['bullet', 'i-list', 'Bullet list'],
+    ['task', 'i-checklist', 'Task list'],
+    ['quote', 'i-quote', 'Blockquote'],
+  ];
+  const bar = tools
+    .map(
+      ([cmd, icon, label]) =>
+        `<button type="button" class="editor-tool" data-edit-cmd="${cmd}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">` +
+        `<svg class="icon" aria-hidden="true"><use href="#${icon}"></use></svg></button>`,
+    )
+    .join('');
+
   return `
-    <p class="note-crumb">Editing · ${escapeHtml(detail.folder)}</p>
-    <h1 class="note-title">${escapeHtml(detail.title)}</h1>
-    <textarea class="editor" id="note-editor" spellcheck="false" aria-label="Note source" aria-describedby="editor-hint">${escapeHtml(draft)}</textarea>
-    <p class="editor-hint" id="editor-hint">${key('B')} bold · ${key('I')} italic · ${key('K')} wikilink · ${key('E')} code · ${key('1')}–3 heading · Shift 7/8/9 list · ${key('S')} save · Esc cancel</p>
+    <div class="panel-article panel-article-edit">
+      <p class="note-crumb">Editing · ${escapeHtml(detail.folder)}</p>
+      <h1 class="note-title">${escapeHtml(detail.title)}</h1>
+      <div class="editor-bar" role="toolbar" aria-label="Markdown formatting">${bar}</div>
+      <textarea class="editor" id="note-editor" spellcheck="false" aria-label="Note source" aria-describedby="editor-hint">${escapeHtml(draft)}</textarea>
+      <p class="editor-hint" id="editor-hint">${key('B')} bold · ${key('I')} italic · ${key('K')} wikilink · ${key('E')} code · ${key('S')} save · Esc cancel</p>
+    </div>
   `;
 }
 
 export function renderPaletteHits(container, hits, active) {
   if (!hits.length) {
-    container.innerHTML = '<p class="palette-empty">No note matches that.</p>';
+    container.innerHTML = '<p class="palette-empty">No notes or commands match that.</p>';
     return;
   }
-  container.innerHTML = hits
-    .map(
-      (hit, index) => `
-      <button type="button" class="palette-hit${index === active ? ' is-active' : ''}" data-hit-index="${index}">
-        <span class="palette-hit-title">${escapeHtml(hit.title)}</span>
-        <span class="palette-hit-path">${escapeHtml(hit.folder)}</span>
-        <span class="palette-hit-snippet">${escapeHtml(hit.snippet || '')}</span>
-      </button>`,
-    )
-    .join('');
+
+  let html = '';
+  let lastKind = null;
+  const hasBothKinds = hits.some((h) => h.kind === 'command') && hits.some((h) => h.kind !== 'command');
+
+  hits.forEach((hit, index) => {
+    const kind = hit.kind === 'command' ? 'command' : 'note';
+    if (kind !== lastKind && (hasBothKinds || kind === 'command')) {
+      html += `<p class="palette-group">${kind === 'command' ? 'Commands' : 'Notes'}</p>`;
+      lastKind = kind;
+    }
+    if (kind === 'command') {
+      const kbd = hit.shortcut ? `<kbd class="palette-hit-kbd">${escapeHtml(hit.shortcut)}</kbd>` : '';
+      const sub = hit.subtitle ? `<span class="palette-hit-snippet">${escapeHtml(hit.subtitle)}</span>` : '';
+      html += `
+        <button type="button" class="palette-hit palette-hit-command${index === active ? ' is-active' : ''}" data-hit-index="${index}">
+          <span class="palette-hit-main">
+            <svg class="icon palette-hit-icon" aria-hidden="true"><use href="#i-bolt"></use></svg>
+            <span class="palette-hit-title">${escapeHtml(hit.title)}</span>
+          </span>
+          <span class="palette-hit-path">${kbd}</span>
+          ${sub}
+        </button>`;
+    } else {
+      html += `
+        <button type="button" class="palette-hit${index === active ? ' is-active' : ''}" data-hit-index="${index}">
+          <span class="palette-hit-title">${escapeHtml(hit.title)}</span>
+          <span class="palette-hit-path">${escapeHtml(hit.folder)}</span>
+          <span class="palette-hit-snippet">${escapeHtml(hit.snippet || '')}</span>
+        </button>`;
+    }
+  });
+
+  container.innerHTML = html;
   const activeElement = container.querySelector('.is-active');
   if (activeElement) activeElement.scrollIntoView({ block: 'nearest' });
 }
@@ -335,10 +461,19 @@ function decisionCard(card, onOpen) {
   const due = isReviewDue(card.review_on);
   article.className = `decision-card${due ? ' is-due' : ''}`;
 
-  const kind = document.createElement('p');
+  const top = document.createElement('div');
+  top.className = 'decision-card-top';
+  const kind = document.createElement('span');
   kind.className = 'decision-kind';
   kind.textContent = card.kind === 'idea' ? 'Idea' : 'Research brief';
-  article.appendChild(kind);
+  top.appendChild(kind);
+  if (due) {
+    const flag = document.createElement('span');
+    flag.className = 'decision-review';
+    flag.textContent = 'Review due';
+    top.appendChild(flag);
+  }
+  article.appendChild(top);
 
   const title = document.createElement('button');
   title.type = 'button';
@@ -347,27 +482,35 @@ function decisionCard(card, onOpen) {
   title.addEventListener('click', () => onOpen(card.id));
   article.appendChild(title);
 
+  const hasConfidence = card.confidence !== null && card.confidence !== undefined;
+  const pct = hasConfidence ? clampPct(card.confidence) : null;
   const meta = document.createElement('p');
   meta.className = 'decision-meta';
   const sources = Number(card.sources) || 0;
-  const confidence =
-    card.confidence !== null && card.confidence !== undefined ? `${Number(card.confidence)}% confidence` : '';
   meta.textContent = [
     card.folder,
     card.created,
     `${sources} ${sources === 1 ? 'source' : 'sources'}`,
-    confidence,
+    hasConfidence ? `${pct}% confidence` : '',
     card.review_on ? `review ${card.review_on}` : '',
   ]
     .filter(Boolean)
     .join(' · ');
   article.appendChild(meta);
 
-  if (due) {
-    const flag = document.createElement('p');
-    flag.className = 'decision-review';
-    flag.textContent = 'Review due';
-    article.appendChild(flag);
+  if (hasConfidence) {
+    const meter = document.createElement('div');
+    meter.className = 'confidence-meter';
+    meter.setAttribute('role', 'meter');
+    meter.setAttribute('aria-label', 'Confidence');
+    meter.setAttribute('aria-valuemin', '0');
+    meter.setAttribute('aria-valuemax', '100');
+    meter.setAttribute('aria-valuenow', String(pct));
+    const fill = document.createElement('span');
+    fill.className = 'confidence-fill';
+    fill.style.setProperty('--confidence', `${pct}%`);
+    meter.appendChild(fill);
+    article.appendChild(meter);
   }
 
   if (card.supersedes) {
@@ -404,7 +547,7 @@ function decisionCard(card, onOpen) {
 
   const trail = document.createElement('button');
   trail.type = 'button';
-  trail.className = 'decision-supersedes';
+  trail.className = 'decision-supersedes decision-trail-link';
   trail.textContent = 'Open decision trail →';
   trail.addEventListener('click', () => onOpen(card.id));
   article.appendChild(trail);

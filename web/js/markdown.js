@@ -60,6 +60,11 @@ export function renderMarkdown(markdown, exists = () => true) {
       closeList();
       continue;
     }
+    if (/^<!--[\s\S]*-->$/.test(trimmed)) {
+      flushParagraph();
+      closeList();
+      continue;
+    }
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
     if (heading) {
       flushParagraph();

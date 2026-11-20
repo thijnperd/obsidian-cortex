@@ -1,11 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <!-- impeccable-disable monotonous-spacing: --s1 is the documented 4px base
        of the spacing scale; sections use the 8–48px steps. -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="color-scheme" content="dark light" />
+  <meta name="color-scheme" content="dark" />
+  <script src="./js/theme.js"></script>
   <meta name="description" content="Cortex turns a folder of Markdown into a brain you can see, with a record of why you decided what you decided." />
   <title>Cortex — your notes, as a brain</title>
   <link rel="stylesheet" href="./styles.css" />
@@ -18,6 +19,8 @@
     <symbol id="i-search" viewBox="0 0 24 24"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /><path d="M21 21l-6 -6" /></symbol>
     <symbol id="i-settings" viewBox="0 0 24 24"><path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065" /><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" /></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><path d="M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7" /></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" /></symbol>
+    <symbol id="i-calendar-day" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12z" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M4 11h16" /><path d="M8 15h2v2h-2z" /></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5l0 14" /><path d="M5 12l14 0" /></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6l-12 12" /><path d="M6 6l12 12" /></symbol>
     <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 6l-6 6l6 6" /></symbol>
@@ -26,6 +29,18 @@
     <symbol id="i-compass" viewBox="0 0 24 24"><path d="M8 16l2 -6l6 -2l-2 6l-6 2" /><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M12 3l0 2" /><path d="M12 19l0 2" /><path d="M3 12l2 0" /><path d="M19 12l2 0" /></symbol>
     <symbol id="i-external-link" viewBox="0 0 24 24"><path d="M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6" /><path d="M11 13l9 -9" /><path d="M15 4h5v5" /></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" /></symbol>
+    <symbol id="i-sidebar" viewBox="0 0 24 24"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z" /><path d="M9 4v16" /></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M16 4l4 0l0 4" /><path d="M14 10l6 -6" /><path d="M8 20l-4 0l0 -4" /><path d="M4 20l6 -6" /></symbol>
+    <symbol id="i-compress" viewBox="0 0 24 24"><path d="M5 9l4 0l0 -4" /><path d="M3 3l6 6" /><path d="M19 15l-4 0l0 4" /><path d="M15 15l6 6" /></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11" /></symbol>
+    <symbol id="i-bold" viewBox="0 0 24 24"><path d="M7 5h6a3.5 3.5 0 0 1 0 7h-6z" /><path d="M13 12h1a3.5 3.5 0 0 1 0 7h-7v-7" /></symbol>
+    <symbol id="i-italic" viewBox="0 0 24 24"><path d="M11 5l6 0" /><path d="M7 19l6 0" /><path d="M14 5l-4 14" /></symbol>
+    <symbol id="i-heading" viewBox="0 0 24 24"><path d="M7 12h10" /><path d="M7 5v14" /><path d="M17 5v14" /></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M9 15l6 -6" /><path d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464" /><path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463" /></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M7 8l-4 4l4 4" /><path d="M17 8l4 4l-4 4" /><path d="M14 4l-4 16" /></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6l11 0" /><path d="M9 12l11 0" /><path d="M9 18l11 0" /><path d="M5 6l0 .01" /><path d="M5 12l0 .01" /><path d="M5 18l0 .01" /></symbol>
+    <symbol id="i-checklist" viewBox="0 0 24 24"><path d="M9.615 20h-2.615a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8" /><path d="M14 19l2 2l4 -4" /><path d="M9 8h4" /><path d="M9 12h2" /></symbol>
+    <symbol id="i-quote" viewBox="0 0 24 24"><path d="M10 11h-4a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h3a1 1 0 0 1 1 1v6c0 2.667 -1.333 4.333 -4 5" /><path d="M19 11h-4a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h3a1 1 0 0 1 1 1v6c0 2.667 -1.333 4.333 -4 5" /></symbol>
   </svg>
 
   <canvas id="stage" aria-label="Graph of notes"></canvas>
@@ -54,13 +69,16 @@
   </div>
 
   <header class="toolbar">
-    <button class="vault-button" id="vault-button" type="button" title="Switch vault">
-      <span class="vault-name" id="vault-title">Cortex</span>
-      <span class="vault-path" id="vault-sub">no folder open</span>
-      <span class="vault-caret" aria-hidden="true"><svg class="icon"><use href="#i-chevron-down"></use></svg></span>
-    </button>
-
-    <p class="stats" id="stats"></p>
+    <div class="toolbar-left">
+      <button class="icon-button sidebar-toggle" id="sidebar-toggle" type="button" title="Toggle sidebar ([)" aria-label="Toggle sidebar" aria-expanded="true">
+        <svg class="icon" aria-hidden="true"><use href="#i-sidebar"></use></svg>
+      </button>
+      <button class="vault-button" id="vault-button" type="button" title="Switch vault">
+        <span class="vault-name" id="vault-title">Cortex</span>
+        <span class="vault-path" id="vault-sub">no folder open</span>
+        <span class="vault-caret" aria-hidden="true"><svg class="icon"><use href="#i-chevron-down"></use></svg></span>
+      </button>
+    </div>
 
     <div class="views" role="group" aria-label="View">
       <button class="view is-active" data-mode="universe" type="button" aria-pressed="true">Graph</button>
@@ -72,7 +90,7 @@
     </div>
 
     <div class="toolbar-actions">
-      <button class="search-button" id="search-button" type="button" aria-label="Search">
+      <button class="search-button" id="search-button" type="button" aria-label="Search notes or run a command">
         <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
         <span>Search</span><kbd data-mod="K"></kbd>
       </button>
@@ -81,9 +99,13 @@
         <svg class="icon tour-icon-replay" aria-hidden="true" hidden><use href="#i-refresh"></use></svg>
         <span id="tour-label">Tour</span>
       </button>
+      <button class="icon-button theme-toggle" id="theme-toggle" type="button" title="Switch theme" aria-label="Switch theme">
+        <svg class="icon theme-icon-sun" aria-hidden="true"><use href="#i-sun"></use></svg>
+        <svg class="icon theme-icon-moon" aria-hidden="true"><use href="#i-moon"></use></svg>
+      </button>
+      <button class="icon-button" id="today-note" type="button" title="Today's note (t)" aria-label="Today's note" hidden><svg class="icon" aria-hidden="true"><use href="#i-calendar-day"></use></svg></button>
+      <button class="icon-button" id="new-note" type="button" title="New note (n)" aria-label="New note" hidden><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg></button>
       <button class="icon-button" id="settings-button" type="button" title="Vault settings" aria-label="Vault settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg></button>
-      <button class="icon-button" id="today-note" type="button" title="Today's note (t)" aria-label="Today's note" hidden><svg class="icon" aria-hidden="true"><use href="#i-sun"></use></svg></button>
-      <button class="icon-button" id="new-note" type="button" title="New note" hidden><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg></button>
     </div>
   </header>
 
@@ -91,6 +113,8 @@
     <span class="section-focus-name" id="section-focus-name"></span>
     <button class="section-focus-exit" id="section-focus-exit" type="button">All folders</button>
   </div>
+
+  <p class="stats canvas-status" id="stats" hidden></p>
 
   <div class="update" id="update" hidden role="status">
     <span class="update-text" id="update-text"></span>
@@ -122,17 +146,25 @@
       </div>
     </section>
 
-    <p class="sidebar-hint" id="hint">Drag to orbit · scroll to zoom · click a folder title to fly in · <kbd data-mod="K"></kbd> to search</p>
+    <p class="sidebar-hint" id="hint">Drag to orbit · scroll to zoom · <kbd>[</kbd> sidebar · <kbd data-mod="K"></kbd> palette</p>
+    <div class="resize-handle resize-handle-sidebar" id="sidebar-resize" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0" title="Drag to resize · double-click to reset"></div>
   </aside>
 
   <aside class="panel" id="panel" hidden aria-label="Note">
+    <div class="resize-handle resize-handle-panel" id="panel-resize" role="separator" aria-orientation="vertical" aria-label="Resize note panel" tabindex="0" title="Drag to resize · double-click to reset"></div>
     <header class="panel-head">
       <div class="panel-history">
         <button class="icon-button" id="panel-back" type="button" aria-label="Back" data-title="Back" data-shortcut="[" disabled><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"></use></svg></button>
         <button class="icon-button" id="panel-forward" type="button" aria-label="Forward" data-title="Forward" data-shortcut="]" disabled><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg></button>
       </div>
       <p class="panel-crumbs" id="panel-crumbs"></p>
-      <button class="icon-button" id="panel-close" type="button" title="Close (esc)" aria-label="Close note"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+      <div class="panel-head-actions">
+        <button class="icon-button" id="panel-expand" type="button" title="Focus reader" aria-label="Expand note reader" aria-pressed="false">
+          <svg class="icon panel-icon-expand" aria-hidden="true"><use href="#i-expand"></use></svg>
+          <svg class="icon panel-icon-compress" aria-hidden="true" hidden><use href="#i-compress"></use></svg>
+        </button>
+        <button class="icon-button" id="panel-close" type="button" title="Close (esc)" aria-label="Close note"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+      </div>
     </header>
     <div class="panel-scroll" id="panel-body"></div>
     <footer class="panel-actions" id="panel-actions"></footer>
@@ -150,10 +182,13 @@
   </div>
 
   <div class="palette" id="palette" hidden>
-    <div class="palette-box" role="dialog" aria-modal="true" aria-label="Search notes">
-      <input id="palette-input" type="search" placeholder="Search notes" autocomplete="off" spellcheck="false" aria-label="Search notes" />
+    <div class="palette-box" role="dialog" aria-modal="true" aria-label="Command palette and search">
+      <div class="palette-input-wrap">
+        <svg class="icon palette-input-icon" aria-hidden="true"><use href="#i-search"></use></svg>
+        <input id="palette-input" type="search" placeholder="Search notes or type > for commands…" autocomplete="off" spellcheck="false" aria-label="Search notes or run a command" />
+      </div>
       <div class="palette-results" id="palette-results"></div>
-      <p class="palette-foot"><span>↑↓ move</span><span>↵ open</span><span>esc close</span></p>
+      <p class="palette-foot"><span>↑↓ move</span><span>↵ open / run</span><span>&gt; commands</span><span>esc close</span></p>
     </div>
   </div>
 
@@ -172,6 +207,16 @@
           <div class="settings-actions">
             <button class="btn" id="settings-reveal" type="button">Show in folder</button>
           </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Appearance</h3>
+          <div class="choice-row" id="settings-theme" role="group" aria-label="Appearance">
+            <button class="choice" data-theme-choice="dark" type="button" aria-pressed="true">Dark</button>
+            <button class="choice" data-theme-choice="light" type="button" aria-pressed="false">Warm Light</button>
+            <button class="choice" data-theme-choice="system" type="button" aria-pressed="false" id="settings-theme-system">System</button>
+          </div>
+          <p class="field-help">Atlas keeps its cartographic parchment palette in both themes.</p>
         </section>
 
         <section class="settings-section">
@@ -238,7 +283,7 @@
       <header class="launch-brand">
         <img class="launch-logo" src="./logo.svg" width="40" height="40" alt="" />
         <span class="launch-wordmark">Cortex</span>
-        <span class="launch-tag">local-first</span>
+        <span class="launch-tag">v2 · local-first</span>
       </header>
       <h1 class="launch-title">Pick up where you left off.</h1>
       <p class="launch-sub">Six views of the folder you already have, and a record of why you decided what you decided. Nothing is copied, moved or synced.</p>
@@ -260,8 +305,8 @@
         <fieldset class="launch-views">
           <legend class="field-label">Open in</legend>
           <div class="choice-row" id="launch-views">
-            <label class="choice"><input type="radio" name="launch-view" value="universe" checked /><span>Graph</span></label>
-            <label class="choice"><input type="radio" name="launch-view" value="brain" /><span>Brain</span></label>
+            <label class="choice"><input type="radio" name="launch-view" value="brain" checked /><span>Brain</span></label>
+            <label class="choice"><input type="radio" name="launch-view" value="universe" /><span>Graph</span></label>
             <label class="choice"><input type="radio" name="launch-view" value="replay" /><span>Timeline</span></label>
             <label class="choice"><input type="radio" name="launch-view" value="atlas" /><span>Atlas</span></label>
             <label class="choice"><input type="radio" name="launch-view" value="bento" /><span>Bento</span></label>
@@ -270,13 +315,13 @@
         </fieldset>
       </form>
 
-              <ul class="launch-points">
-          <li>Your files, in place</li>
-          <li>No account or cloud</li>
-          <li>MCP when you want it</li>
-        </ul>
+      <ul class="launch-points">
+        <li>Your files, in place</li>
+        <li>No account or cloud</li>
+        <li>MCP when you want it</li>
+      </ul>
 
-        <p class="launch-foot">Or start it directly: <code>cortex serve ~/Notes</code> · <kbd data-mod="O"></kbd> opens this screen</p>
+      <p class="launch-foot">Or start it directly: <code>cortex serve ~/Notes</code> · <kbd data-mod="O"></kbd> opens this screen</p>
     </div>
   </div>
 

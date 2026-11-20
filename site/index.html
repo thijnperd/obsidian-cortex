@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <script src="./theme.js"></script>
+  <meta name="description" content="Cortex turns a folder of Markdown into a brain you can see — and keeps the reasoning trail behind every decision. Local-first desktop app in Rust + WebGL." />
+  <title>Cortex — Your notes, as a brain.</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+</head>
+<body>
+  <!-- Tabler Icons, MIT: https://tabler.io/icons -->
+  <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-sun" viewBox="0 0 24 24"><path d="M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7" /></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" /></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12l14 0" /><path d="M13 18l6 -6" /><path d="M13 6l6 6" /></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 5l5 -5" /><path d="M12 4l0 12" /></symbol>
+    <symbol id="i-brand-github" viewBox="0 0 24 24"><path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" /></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><path d="M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z" /><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1" /></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5l10 -10" /></symbol>
+  </svg>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="./">
+        <img src="./logo.svg" width="30" height="30" alt="" />
+        <span class="brand-name">Cortex</span>
+        <span class="brand-version">v2.0</span>
+      </a>
+
+      <nav class="site-nav" aria-label="Primary">
+        <a href="#views">Six views</a>
+        <a href="#decisions">Decisions</a>
+        <a href="#local-first">Local-first</a>
+        <a href="#download">Download</a>
+      </nav>
+
+      <div class="header-actions">
+        <button class="icon-btn" id="theme-toggle" type="button" title="Switch theme" aria-label="Switch theme">
+          <svg class="icon theme-icon-sun" aria-hidden="true"><use href="#i-sun"></use></svg>
+          <svg class="icon theme-icon-moon" aria-hidden="true"><use href="#i-moon"></use></svg>
+        </button>
+        <a class="icon-btn" href="https://github.com/thijnperd/obsidian-cortex" target="_blank" rel="noopener" title="GitHub repository" aria-label="GitHub repository">
+          <svg class="icon" aria-hidden="true"><use href="#i-brand-github"></use></svg>
+        </a>
+        <a class="btn btn-primary btn-sm" href="./demo/?view=brain">Open live demo</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-inner">
+        <p class="hero-kicker">Cortex 2.0 · Precision Editorial Studio · MIT Open Source</p>
+        <h1 class="hero-title">Your notes, as a brain.</h1>
+        <p class="hero-sub">
+          Cortex reads a folder of Markdown and draws it as a cortical surface — folders as regions, notes as stars, wikilinks as fibre tracts — and keeps the reasoning trail behind every decision.
+        </p>
+
+        <div class="hero-actions">
+          <a class="btn btn-primary btn-lg" href="./demo/?view=brain">
+            <span>Open live demo</span>
+            <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"></use></svg>
+          </a>
+          <a class="btn btn-lg" id="hero-download" href="#download">
+            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
+            <span id="hero-download-label">Download v2.0.0</span>
+          </a>
+        </div>
+
+        <p class="hero-meta">
+          <span>328-note live demo, no install</span>
+          <span>Windows · macOS · Linux</span>
+          <span>No account, no cloud, no database</span>
+        </p>
+
+        <figure class="hero-frame">
+          <div class="frame-chrome" aria-hidden="true">
+            <span class="frame-dots"><i></i><i></i><i></i></span>
+            <span class="frame-title">Cortex Demo — Brain view · 328 notes · 557 links</span>
+            <a class="frame-live" href="./demo/?view=brain">Launch interactive ↗</a>
+          </div>
+          <a class="frame-link" href="./demo/?view=brain">
+            <img src="./screenshots/02-brain.jpg" width="1440" height="900" alt="Cortex v2 Brain view showing 328 notes mapped onto a translucent cortical surface with fibre-tract links and the v2 studio shell" fetchpriority="high" />
+          </a>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="views" aria-labelledby="views-heading">
+      <div class="container">
+        <header class="section-head">
+          <p class="section-kicker">One vault scan, six lenses</p>
+          <h2 class="section-title" id="views-heading">Switch the lens, keep the map.</h2>
+          <p class="section-sub">
+            The layout is deterministic, so a folder stays where you learned it. Switch between Brain, Graph, Timeline, Atlas, Bento, and Decisions in a keystroke — or run anything from the unified Command Palette.
+          </p>
+        </header>
+
+        <div class="showcase">
+          <div class="showcase-tabs" role="tablist" aria-label="Cortex views">
+            <button class="showcase-tab" type="button" role="tab" id="tab-brain" data-view-tab="brain" aria-selected="true" tabindex="0">Brain</button>
+            <button class="showcase-tab" type="button" role="tab" id="tab-universe" data-view-tab="universe" aria-selected="false" tabindex="-1">Graph</button>
+            <button class="showcase-tab" type="button" role="tab" id="tab-replay" data-view-tab="replay" aria-selected="false" tabindex="-1">Timeline</button>
+            <button class="showcase-tab" type="button" role="tab" id="tab-atlas" data-view-tab="atlas" aria-selected="false" tabindex="-1">Atlas</button>
+            <button class="showcase-tab" type="button" role="tab" id="tab-bento" data-view-tab="bento" aria-selected="false" tabindex="-1">Bento</button>
+            <button class="showcase-tab" type="button" role="tab" id="tab-decisions" data-view-tab="decisions" aria-selected="false" tabindex="-1">Decisions</button>
+          </div>
+
+          <div class="showcase-stage">
+            <div class="showcase-panel" role="tabpanel" aria-labelledby="tab-brain" data-view-panel="brain">
+              <div class="showcase-card">
+                <img src="./screenshots/02-brain.jpg" width="1440" height="900" alt="Cortex v2 Brain view: cortical surface with folder clusters and fibre tracts" />
+                <div class="showcase-caption">
+                  <div>
+                    <h3>Brain — folded cortical memory palace</h3>
+                    <p>Folders become regions on a translucent cortical surface and wikilinks become fibre tracts you can orbit and click straight into.</p>
+                  </div>
+                  <a class="btn btn-primary" href="./demo/?view=brain">Try Brain live →</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="showcase-panel" role="tabpanel" aria-labelledby="tab-universe" data-view-panel="universe" hidden="until-found">
+              <div class="showcase-card">
+                <img src="./screenshots/01-graph.jpg" width="1440" height="900" loading="lazy" alt="Cortex v2 Graph view: folder galaxies with local clusters and journal orbit" />
+                <div class="showcase-caption">
+                  <div>
+                    <h3>Graph — folder galaxies unwrapped</h3>
+                    <p>Spot orphan notes, cross-project bridges, and local two-hop neighbourhoods without losing the global vault context.</p>
+                  </div>
+                  <a class="btn btn-primary" href="./demo/?view=universe">Try Graph live →</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="showcase-panel" role="tabpanel" aria-labelledby="tab-replay" data-view-panel="replay" hidden="until-found">
+              <div class="showcase-card">
+                <img src="./screenshots/03-timeline.jpg" width="1440" height="900" loading="lazy" alt="Cortex v2 Timeline view: scrubbing note history over time" />
+                <div class="showcase-caption">
+                  <div>
+                    <h3>Timeline — replay how your thinking grew</h3>
+                    <p>Scrub or play your vault in creation order to answer “what was I thinking then?” without digging through nested directories.</p>
+                  </div>
+                  <a class="btn btn-primary" href="./demo/?view=replay">Try Timeline live →</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="showcase-panel" role="tabpanel" aria-labelledby="tab-atlas" data-view-panel="atlas" hidden="until-found">
+              <div class="showcase-card">
+                <img src="./screenshots/04-atlas.jpg" width="1440" height="900" loading="lazy" alt="Cortex v2 Atlas view: cartographic parchment map with folders as countries and links as roads" />
+                <div class="showcase-caption">
+                  <div>
+                    <h3>Atlas — folders as countries, links as roads</h3>
+                    <p>A deterministic cartographic parchment map sized by note count, turning dense journals into stippled terrain instead of label walls.</p>
+                  </div>
+                  <a class="btn btn-primary" href="./demo/?view=atlas">Try Atlas live →</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="showcase-panel" role="tabpanel" aria-labelledby="tab-bento" data-view-panel="bento" hidden="until-found">
+              <div class="showcase-card">
+                <img src="./screenshots/06-bento.jpg" width="1440" height="900" loading="lazy" alt="Cortex v2 Bento view: every folder sized proportionally as a box with its strongest notes" />
+                <div class="showcase-caption">
+                  <div>
+                    <h3>Bento — every folder at a glance</h3>
+                    <p>Each folder becomes a box sized by its share of the vault, surfacing its highest-signal notes with zero WebGL overhead.</p>
+                  </div>
+                  <a class="btn btn-primary" href="./demo/?view=bento">Try Bento live →</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="showcase-panel" role="tabpanel" aria-labelledby="tab-decisions" data-view-panel="decisions" hidden="until-found">
+              <div class="showcase-card">
+                <img src="./screenshots/05-decisions.jpg" width="1440" height="900" loading="lazy" alt="Cortex v2 Decisions view: research briefs and idea refinements grouped by status with confidence meters" />
+                <div class="showcase-caption">
+                  <div>
+                    <h3>Decisions — what you concluded, and on what</h3>
+                    <p>Research briefs and idea refinements grouped by frontmatter status, complete with confidence meters, review dates, and clickable sources.</p>
+                  </div>
+                  <a class="btn btn-primary" href="./demo/?view=decisions">Try Decisions live →</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="decisions" aria-labelledby="decisions-heading">
+      <div class="container">
+        <div class="split-grid">
+          <div class="split-copy">
+            <p class="section-kicker">The “why” layer</p>
+            <h2 class="section-title" id="decisions-heading">Most tools help you collect. Cortex helps you conclude.</h2>
+            <p class="section-sub">
+              Select two or more notes to scaffold a <strong>Research brief</strong> or <strong>Refine idea</strong> note in plain Markdown. Cortex tracks confidence, review dates, and superseded choices directly from your frontmatter — no proprietary database, no AI required.
+            </p>
+
+            <div class="code-card">
+              <div class="code-card-head">
+                <span>Synthesis/ship-the-why-layer.md</span>
+                <button class="copy-btn" type="button" data-copy-target="frontmatter-code" aria-label="Copy frontmatter example">
+                  <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
+                  <span>Copy</span>
+                </button>
+              </div>
+              <pre><code id="frontmatter-code">---
+type: idea
+status: accepted
+confidence: 0.8
+review_on: 2027-01-15
+supersedes: "[[Earlier decision]]"
+---</code></pre>
+            </div>
+
+            <ul class="feature-list">
+              <li><strong>Visual confidence meters</strong> on every decision card and trail header.</li>
+              <li><strong>Review due alerts</strong> automatically surface past review dates so choices never go stale.</li>
+              <li><strong>Focus reader &amp; tabbed connections</strong> let you read long briefs without losing the vault behind them.</li>
+            </ul>
+          </div>
+
+          <figure class="split-media">
+            <img src="./screenshots/decision-trail.jpg" width="1440" height="900" loading="lazy" alt="Cortex v2 Decisions view with open Studio Reader panel showing a Decision trail card, confidence bar, and tabbed connections" />
+            <figcaption>Press <code>y</code> inside any brief or idea note to jump straight to its reasoning trail.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="local-first" aria-labelledby="local-heading">
+      <div class="container">
+        <header class="section-head">
+          <p class="section-kicker">Built to outlive any app</p>
+          <h2 class="section-title" id="local-heading">Your folder. Plain Markdown. Zero lock-in.</h2>
+          <p class="section-sub">
+            One self-contained Rust binary with a native window on Windows and macOS, Dark &amp; Warm Light studio themes, and an optional MCP server when you want an AI client to work inside your guardrails.
+          </p>
+        </header>
+
+        <div class="pillar-grid">
+          <article class="pillar">
+            <h3>Native &amp; fast</h3>
+            <p>WebView2 on Windows, WKWebView on macOS, loopback server on Linux. Incremental file watching updates your graph in ~400 ms.</p>
+          </article>
+          <article class="pillar">
+            <h3>Precision Editorial Studio</h3>
+            <p>v2 introduces Dark, Warm Light &amp; System themes, collapsible drag-resizable panels, Focus reading mode, and a unified <code>Ctrl K</code> command palette.</p>
+          </article>
+          <article class="pillar">
+            <h3>Obsidian &amp; Logseq ready</h3>
+            <p>Open your existing vault in place. Wikilinks, aliases, anchors, tags, and YAML frontmatter work untouched — deleting the app leaves your notes spotless.</p>
+          </article>
+          <article class="pillar">
+            <h3>Optional MCP server</h3>
+            <p>No built-in model or API key. When you want Claude Desktop or Cursor to assist, <code>cortex mcp</code> enforces deny-by-default access, hash preconditions, and zero delete tools.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="download" aria-labelledby="download-heading">
+      <div class="container">
+        <header class="section-head">
+          <p class="section-kicker">Install Cortex 2.0.0</p>
+          <h2 class="section-title" id="download-heading">Open your vault in thirty seconds.</h2>
+          <p class="section-sub">
+            Signed checksums (<code>SHA256SUMS.txt</code>) ship with every GitHub Release. Prefer to test first? Launch the 328-note live demo in your browser.
+          </p>
+        </header>
+
+        <div class="download-grid">
+          <article class="download-card" data-platform="windows">
+            <div class="download-top">
+              <h3>Windows</h3>
+              <span class="download-arch">x86-64</span>
+            </div>
+            <p>Per-user installer (no admin rights) or portable unpacked archive. Native WebView2 window + system tray.</p>
+            <div class="download-links">
+              <a class="btn btn-primary" href="https://github.com/thijnperd/obsidian-cortex/releases/latest" target="_blank" rel="noopener">CortexSetup-2.0.0.exe</a>
+              <a class="btn" href="https://github.com/thijnperd/obsidian-cortex/releases/latest" target="_blank" rel="noopener">Portable .zip</a>
+            </div>
+          </article>
+
+          <article class="download-card" data-platform="macos">
+            <div class="download-top">
+              <h3>macOS</h3>
+              <span class="download-arch">Apple Silicon</span>
+            </div>
+            <p>Self-contained <code>Cortex.app</code> bundle using native WKWebView and menu-bar tray integration.</p>
+            <div class="download-links">
+              <a class="btn btn-primary" href="https://github.com/thijnperd/obsidian-cortex/releases/latest" target="_blank" rel="noopener">cortex-macos-arm64.tar.gz</a>
+            </div>
+          </article>
+
+          <article class="download-card" data-platform="linux">
+            <div class="download-top">
+              <h3>Linux</h3>
+              <span class="download-arch">x86-64</span>
+            </div>
+            <p>Single self-contained binary with zero GTK/WebKit system dependencies — opens directly in your browser or app window.</p>
+            <div class="download-links">
+              <a class="btn btn-primary" href="https://github.com/thijnperd/obsidian-cortex/releases/latest" target="_blank" rel="noopener">cortex-linux-x86_64.tar.gz</a>
+            </div>
+          </article>
+        </div>
+
+        <div class="code-card source-card">
+          <div class="code-card-head">
+            <span>Or build &amp; run from source (Rust 1.85+)</span>
+            <button class="copy-btn" type="button" data-copy-target="source-code" aria-label="Copy source build commands">
+              <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
+              <span>Copy</span>
+            </button>
+          </div>
+          <pre><code id="source-code">git clone https://github.com/thijnperd/obsidian-cortex.git
+cd obsidian-cortex
+cargo run -p cortex -- seed-demo demo
+cargo run -p cortex -- serve demo --open</code></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <img src="./logo.svg" width="22" height="22" alt="" />
+        <span>Cortex — MIT Licensed · Local-first knowledge studio</span>
+      </div>
+      <div class="footer-links">
+        <a href="./demo/?view=brain">Live demo</a>
+        <a href="https://github.com/thijnperd/obsidian-cortex" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/thijnperd/obsidian-cortex/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/thijnperd/obsidian-cortex/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
