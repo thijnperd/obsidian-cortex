@@ -677,12 +677,23 @@ async function main() {
       return Boolean(hit && last.contains(hit));
     });
     assert.equal(hitOk, true, 'Expected bottom-most note card to be unobstructed and hit-testable');
+    const lastNoteId = await lastCard.getAttribute('data-note-id');
     await lastCard.locator('.notes-card-main').click();
+    if (lastNoteId) {
+      await page.waitForFunction(
+        (id) => document.querySelector('#notes-canvas .studio-doc-top')?.getAttribute('data-note-id') === id,
+        lastNoteId,
+      );
+    }
 
     const firstCard = page.locator('#notes-feed .notes-card').first();
     const targetNoteId = await firstCard.getAttribute('data-note-id');
     assert.ok(targetNoteId, 'Expected a note card in Notes Studio list');
     await firstCard.locator('.notes-card-main').click();
+    await page.waitForFunction(
+      (id) => document.querySelector('#notes-canvas .studio-doc-top')?.getAttribute('data-note-id') === id,
+      targetNoteId,
+    );
 
     await page.locator('[data-editor-mode="edit"]').click();
     const editor = page.locator('#studio-editor');
@@ -708,6 +719,10 @@ async function main() {
     await page.locator('.view[data-mode="notes"]').click();
     await page.locator('[data-list-view="list"]').click();
     await page.locator(`#notes-feed .notes-card[data-note-id=${JSON.stringify(targetNoteId)}] .notes-card-main`).click();
+    await page.waitForFunction(
+      (id) => document.querySelector('#notes-canvas .studio-doc-top')?.getAttribute('data-note-id') === id,
+      targetNoteId,
+    );
     await page.locator('[data-editor-mode="read"]').click();
     await page.waitForFunction(
       (token) => document.getElementById('studio-prose')?.textContent?.includes(token),

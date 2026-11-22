@@ -1056,7 +1056,7 @@ export function renderNotesStudioCanvas(
     : '';
 
   const docTopHtml = `
-    <div class="studio-doc-top">
+    <div class="studio-doc-top" data-note-id="${escapeHtml(detail.id)}">
       <div class="studio-breadcrumbs">
         <button type="button" class="studio-folder-crumb" data-filter-folder="${escapeHtml(detail.folder)}">
           <span class="studio-crumb-dot" id="studio-crumb-dot"></span>
