@@ -17,6 +17,7 @@ import { attachEditor, runEditorCommand } from './editor.js';
 import { Tutorial } from './tutorial.js';
 import { diaryFolders, isOverview } from './scale.js';
 import { applyPlatformHints, key, mod } from './platform.js';
+import * as localvault from './localvault.js';
 
 const state = {
   graph: null,
@@ -470,10 +471,85 @@ function selectionIndices() {
   return indices;
 }
 
+// ------------------------------------------------------------- local vaults
+
+async function openLocalVaultDialog(message) {
+  const dialog = document.getElementById('local-vault');
+  if (!dialog) return;
+  const status = document.getElementById('local-vault-status');
+  if (status) status.textContent = message || '';
+  const forget = document.getElementById('local-vault-forget');
+  if (forget) forget.hidden = !(await localvault.hasLocalVault());
+  dialog.hidden = false;
+}
+
+function closeLocalVaultDialog() {
+  const dialog = document.getElementById('local-vault');
+  if (dialog) dialog.hidden = true;
+}
+
+async function importLocalVault(input) {
+  const files = input.files;
+  if (!files || !files.length) return;
+  const status = document.getElementById('local-vault-status');
+  const previous = status ? status.textContent : '';
+  if (status) status.textContent = `Reading ${files.length} file${files.length === 1 ? '' : 's'}…`;
+  try {
+    const graph = await localvault.buildLocalVault(files);
+    state.live = false;
+    state.vaultId = null;
+    document.body.classList.add('is-static');
+    applyGraph(graph);
+    setMode(requestedView() || 'brain', { persist: false, animate: false });
+    closeLocalVaultDialog();
+    ui.hideBoot();
+    ui.toast(`${graph.meta.note_count} notes from this device`);
+    if (!graph.local.persisted) {
+      ui.toast('This browser refused storage, so the vault lasts until you close the tab');
+    }
+  } catch (error) {
+    if (status) status.textContent = error.message || 'Could not read that vault.';
+  } finally {
+    input.value = '';
+    if (status && !status.textContent) status.textContent = previous;
+  }
+}
+
+function wireLocalVault() {
+  const dialog = document.getElementById('local-vault');
+  if (!dialog) return;
+  const folder = document.getElementById('local-vault-folder');
+  const files = document.getElementById('local-vault-files');
+  // iPhone and iPad have no folder picker; the Files multi-select is the path.
+  const mobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const folderButton = document.getElementById('local-vault-folder-button');
+  if (folderButton && mobile) folderButton.hidden = true;
+
+  document.getElementById('open-vault')?.addEventListener('click', () => openLocalVaultDialog(''));
+  document.getElementById('local-vault-close')?.addEventListener('click', closeLocalVaultDialog);
+  folderButton?.addEventListener('click', () => folder?.click());
+  document.getElementById('local-vault-files-button')?.addEventListener('click', () => files?.click());
+  folder?.addEventListener('change', () => importLocalVault(folder));
+  files?.addEventListener('change', () => importLocalVault(files));
+  document.getElementById('local-vault-forget')?.addEventListener('click', async () => {
+    await localvault.forgetLocalVault();
+    closeLocalVaultDialog();
+    ui.toast('Saved vault removed from this device');
+    if (!state.live) location.reload();
+  });
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) closeLocalVaultDialog();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !dialog.hidden) closeLocalVaultDialog();
+  });
+}
+
 function boot() {
   state.studio.listView = prefs.get('cortex.notes.listView', 'folders') === 'list' ? 'list' : 'folders';
   state.studio.openFolders = new Set(prefs.get('cortex.notes.openFolders', []));
   wire();
+  wireLocalVault();
   start();
 }
 
@@ -521,6 +597,7 @@ async function start() {
       requestAnimationFrame(loop);
     } else {
       ui.setBootStatus(error.message || 'Could not open that folder');
+      openLocalVaultDialog('Open a vault from this device to get started.');
     }
   }
 }
@@ -1014,7 +1091,9 @@ function applyGraph(graph) {
   els.vaultTitle.textContent = graph.meta.title;
   els.vaultSub.textContent = state.live
     ? (currentVault()?.path || '')
-    : 'static demo';
+    : localvault.isDeviceGraph(graph)
+      ? 'on this device'
+      : 'static demo';
   els.newNote.hidden = !state.live;
   els.todayNote.hidden = !state.live;
   els.tourButton.hidden = !state.live;

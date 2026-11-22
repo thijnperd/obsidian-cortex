@@ -6,7 +6,19 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#08090c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Cortex" />
+  <link rel="manifest" href="./manifest.json" />
   <script src="./js/theme.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      window.addEventListener('load', () =>
+        navigator.serviceWorker.register('./sw.js').catch(() => {}),
+      );
+    }
+  </script>
   <meta name="description" content="Cortex turns a folder of Markdown into a native note-taking studio and a 3D brain you can see, comparing your sources and keeping the reasoning behind every decision." />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Cortex — Your notes, as a brain." />
@@ -207,6 +219,7 @@
         <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
         <span>Search</span><kbd data-mod="K"></kbd>
       </button>
+      <button class="icon-button" id="open-vault" type="button" title="Open a vault from this device" aria-label="Open a vault from this device"><svg class="icon" aria-hidden="true"><use href="#i-notes"></use></svg></button>
       <button class="tour-button" id="tour-button" type="button" title="Take the guided tour" aria-haspopup="dialog" hidden>
         <svg class="icon tour-icon-start" aria-hidden="true"><use href="#i-compass"></use></svg>
         <svg class="icon tour-icon-replay" aria-hidden="true" hidden><use href="#i-refresh"></use></svg>
@@ -600,5 +613,23 @@
   <div class="toast" id="toast" hidden role="status"></div>
 
   <script type="module" src="./js/main.js"></script>
+  <div class="local-vault" id="local-vault" hidden role="dialog" aria-modal="true" aria-labelledby="local-vault-title">
+    <div class="local-vault-card">
+      <h2 id="local-vault-title">Open a vault on this device</h2>
+      <p class="local-vault-copy">Cortex reads the Markdown you pick and keeps a copy in this browser, so the graph, the notes and search keep working offline. Nothing is uploaded, and nothing on your phone is changed.</p>
+      <p class="local-vault-status" id="local-vault-status" role="status"></p>
+      <div class="local-vault-actions">
+        <button class="btn btn-primary" id="local-vault-folder-button" type="button">Choose a folder</button>
+        <button class="btn" id="local-vault-files-button" type="button">Choose files</button>
+      </div>
+      <p class="local-vault-help">On iPhone, use <strong>Choose files</strong> and pick your notes (or the whole folder) in the Files app. Cortex reads them read-only: edits you make in another app stay in your vault and are not written back from here.</p>
+      <div class="local-vault-foot">
+        <button class="text-button" id="local-vault-forget" type="button" hidden>Forget the saved vault</button>
+        <button class="text-button" id="local-vault-close" type="button">Close</button>
+      </div>
+      <input id="local-vault-folder" type="file" webkitdirectory directory multiple hidden />
+      <input id="local-vault-files" type="file" accept=".md,.markdown,.mdown,.txt,text/markdown" multiple hidden />
+    </div>
+  </div>
 </body>
 </html>

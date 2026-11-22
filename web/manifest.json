@@ -1,0 +1,28 @@
+{
+  "name": "Cortex — your notes, as a brain",
+  "short_name": "Cortex",
+  "description": "A local-first Markdown studio and 3D brain view. Open a vault from your device and read it offline.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#08090c",
+  "theme_color": "#08090c",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "./logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

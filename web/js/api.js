@@ -1,5 +1,7 @@
 // Thin API client. The same UI runs live (Rust server) or static (graph.json).
 
+import { loadLocalGraph } from './localvault.js';
+
 function withVault(path, vault) {
   if (!vault) return path;
   return `${path}${path.includes('?') ? '&' : '?'}vault=${encodeURIComponent(vault)}`;
@@ -49,6 +51,10 @@ export async function fetchGraph(vault) {
 
 /** Only for a static export: the Pages demo has no server behind it. */
 export async function loadStaticGraph() {
+  // A vault opened on this device wins over the bundled demo, so the installed
+  // web app reopens your own notes on launch without asking again.
+  const local = await loadLocalGraph();
+  if (local) return local;
   const response = await fetch('./graph.json', { headers: { accept: 'application/json' } });
   if (!response.ok) throw new Error('No folder is open. Choose one to get started.');
   return response.json();

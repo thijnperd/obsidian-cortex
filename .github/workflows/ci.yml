@@ -39,7 +39,7 @@ jobs:
       - name: Repo hygiene & module check
         run: node tools/check-repo.mjs
       - name: Test (Web JS)
-        run: node --test tests/web.test.mjs
+        run: node --test tests/*.test.mjs
 
   smoke:
     name: web smoke (playwright)

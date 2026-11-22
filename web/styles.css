@@ -4021,3 +4021,102 @@ body.mode-atlas .note-title { letter-spacing: 0; }
 .notes-feed { padding-bottom: 44px; }
 .notes-list-head { flex-wrap: wrap; row-gap: 6px; }
 .notes-list-title { white-space: nowrap; }
+
+/* ---- local vaults, installable web app, phone layout ------------------ */
+
+.local-vault {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 6, 11, 0.78);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.local-vault[hidden] { display: none; }
+
+.local-vault-card {
+  width: min(480px, 100%);
+  border: 1px solid var(--line, #262c38);
+  border-radius: 18px;
+  background: var(--panel, #12151c);
+  color: var(--text, #e8ecf4);
+  padding: 22px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+}
+
+.local-vault-card h2 {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.local-vault-copy,
+.local-vault-help {
+  margin: 0 0 12px;
+  color: var(--muted, #9aa5b8);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.local-vault-status {
+  min-height: 1.2em;
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--accent, #8fb4ff);
+}
+
+.local-vault-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.local-vault-actions .btn { min-height: 40px; }
+
+.local-vault-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (max-width: 760px) {
+  .toolbar {
+    padding-top: max(6px, env(safe-area-inset-top));
+    padding-right: max(10px, env(safe-area-inset-right));
+    padding-left: max(10px, env(safe-area-inset-left));
+    gap: 6px;
+  }
+
+  .views {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .views::-webkit-scrollbar { display: none; }
+
+  .view { min-height: 38px; }
+
+  .icon-button,
+  .search-button { min-width: 40px; min-height: 40px; }
+
+  .panel { width: min(100vw, 460px); }
+
+  .local-vault { padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
+
+  .local-vault-card { padding: 18px; border-radius: 16px; }
+
+  .local-vault-actions { flex-direction: column; }
+
+  .local-vault-actions .btn { width: 100%; min-height: 46px; }
+}
+
+@media (display-mode: standalone) {
+  .toolbar { padding-top: max(10px, env(safe-area-inset-top)); }
+}
