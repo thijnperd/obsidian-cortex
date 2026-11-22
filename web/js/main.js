@@ -545,11 +545,21 @@ function wireLocalVault() {
   });
 }
 
+// The page ships a strict CSP (no inline script), so the shell worker is
+// registered from this module instead of a <script> tag in index.html.
+function registerShell() {
+  if (!('serviceWorker' in navigator) || !location.protocol.startsWith('http')) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
 function boot() {
   state.studio.listView = prefs.get('cortex.notes.listView', 'folders') === 'list' ? 'list' : 'folders';
   state.studio.openFolders = new Set(prefs.get('cortex.notes.openFolders', []));
   wire();
   wireLocalVault();
+  registerShell();
   start();
 }
 

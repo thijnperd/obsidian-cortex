@@ -12,13 +12,6 @@
   <meta name="apple-mobile-web-app-title" content="Cortex" />
   <link rel="manifest" href="./manifest.json" />
   <script src="./js/theme.js"></script>
-  <script>
-    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-      window.addEventListener('load', () =>
-        navigator.serviceWorker.register('./sw.js').catch(() => {}),
-      );
-    }
-  </script>
   <meta name="description" content="Cortex turns a folder of Markdown into a native note-taking studio and a 3D brain you can see, comparing your sources and keeping the reasoning behind every decision." />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Cortex — Your notes, as a brain." />
