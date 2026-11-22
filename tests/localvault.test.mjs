@@ -92,3 +92,87 @@ test('file and size limits are enforced before any note is read', async () => {
     /larger than 48 MB/,
   );
 });
+
+test('strips picked root vault folder so subfolders become real regions inside unit sphere', async () => {
+  const graph = await buildLocalVault([
+    note('MyVault/Ideas/Deep Work.md', '---\ntags: [focus]\n---\n\n# Deep Work\n\nSee [[Journal/2026-01-01]] and [[Loose]].\n'),
+    note('MyVault/Journal/2026-01-01.md', '# New Year\n\nBack to [[Deep Work]].\n'),
+    note('MyVault/Loose.md', '# Loose\n\nTop-level inbox note.\n'),
+  ]);
+
+  assert.equal(graph.meta.title, 'MyVault');
+  assert.deepEqual(
+    graph.meta.folders.map((f) => f.name),
+    ['Ideas', 'Inbox', 'Journal'],
+  );
+  assert.equal(graph.meta.folder_count, 3);
+
+  const deepWork = graph.nodes.find((n) => n.title === 'Deep Work');
+  assert.equal(deepWork.id, 'Ideas/Deep Work');
+  assert.ok(deepWork.raw.startsWith('---\ntags: [focus]\n---'), 'preserves YAML frontmatter in raw');
+  assert.deepEqual(deepWork.links.sort(), ['Journal/2026-01-01', 'Loose']);
+
+  for (const node of graph.nodes) {
+    const r = Math.hypot(node.x, node.y, node.z);
+    assert.ok(r <= 1.05, `node ${node.id} radius ${r} exceeded camera frustum`);
+  }
+});
+
+test('peels redundant wrapper folders while keeping real nested folders intact', async () => {
+  const graph = await buildLocalVault([
+    note('Exports/MainVault/Research/Alpha.md', '# Alpha\n'),
+    note('Exports/MainVault/Craft/Beta.md', '# Beta\n\nSee [[Alpha]].\n'),
+  ]);
+
+  assert.equal(graph.meta.title, 'MainVault');
+  assert.deepEqual(
+    graph.meta.folders.map((f) => f.name),
+    ['Craft', 'Research'],
+  );
+});
+
+test('flat single-folder vault groups notes by primary #tag when at least two tags exist', async () => {
+  const graph = await buildLocalVault([
+    note('FlatVault/One.md', '#One\n\n#alpha\n\nBody one'),
+    note('FlatVault/Two.md', '---\ntags: [alpha]\n---\n\n# Two\n'),
+    note('FlatVault/Three.md', '---\ntags: [beta]\n---\n\n# Three\n'),
+    note('FlatVault/Four.md', 'Body without tag'),
+  ]);
+
+  assert.equal(graph.meta.title, 'FlatVault');
+  assert.ok(graph.meta.folder_count >= 2, 'expected flat vault to split into >= 2 regions by primary tag');
+  assert.deepEqual(
+    graph.meta.folders.map((f) => f.name),
+    ['#alpha', '#beta', 'Untagged'],
+  );
+});
+
+test('builds Decisions cards, resolves frontmatter aliases, and strips escaped pipes in wikilinks', async () => {
+  const graph = await buildLocalVault([
+    note(
+      'MyVault/Sources/Attention.md',
+      '---\naliases: [Deep Focus]\n---\n\n# Attention Study\n\nFocus lasts longer without switches.\n',
+    ),
+    note(
+      'MyVault/Sources/Prior.md',
+      '---\ntype: research\nstatus: accepted\ncreated: 2026-08-01\n---\n\n# Prior Brief\n\n[[Attention Study]]\n',
+    ),
+    note(
+      'MyVault/Decisions/Protect Mornings.md',
+      '---\ntype: idea\nstatus: refining\ncreated: 2026-10-10\nconfidence: 0.85\nreview_on: 2026-12-01\nsupersedes: Prior Brief\n---\n\n# Protect Mornings\n\nSee [[Deep Focus\\|study]] and [[Missing Note]].\n',
+    ),
+  ]);
+
+  assert.equal(graph.structures.total, 2);
+  assert.equal(graph.structures.open, 1);
+  const idea = graph.structures.cards[0];
+  assert.equal(idea.title, 'Protect Mornings');
+  assert.equal(idea.kind, 'idea');
+  assert.equal(idea.status, 'refining');
+  assert.equal(idea.confidence, 85);
+  assert.equal(idea.review_on, '2026-12-01');
+  assert.equal(idea.supersedes?.title, 'Prior Brief');
+  assert.equal(idea.sources, 1);
+  assert.equal(idea.missing, 1);
+  assert.equal(idea.evidence[0]?.id, 'Sources/Attention');
+});

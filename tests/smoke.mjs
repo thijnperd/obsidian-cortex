@@ -889,8 +889,54 @@ async function main() {
       await staticPage.locator('#open-vault').click();
       await staticPage.waitForFunction(() => document.getElementById('local-vault')?.hidden === false);
       await staticPage.locator('#local-vault-forget').waitFor({ state: 'visible' });
-      await staticPage.locator('#local-vault-close').click();
-      await staticPage.waitForFunction(() => document.getElementById('local-vault')?.hidden === true);
+
+      // Import a multi-folder nested vault directory via #local-vault-folder and verify all views adapt.
+      const nestedTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cortex-nested-'));
+      try {
+        const vaultRoot = path.join(nestedTmp, 'NestedVault');
+        fs.mkdirSync(path.join(vaultRoot, 'Ideas'), { recursive: true });
+        fs.mkdirSync(path.join(vaultRoot, 'Craft'), { recursive: true });
+        fs.mkdirSync(path.join(vaultRoot, 'Decisions'), { recursive: true });
+        fs.writeFileSync(
+          path.join(vaultRoot, 'Ideas', 'Alpha.md'),
+          '---\ntags: [focus]\n---\n\n# Alpha\n\nLinks to [[Beta]].\n',
+        );
+        fs.writeFileSync(
+          path.join(vaultRoot, 'Craft', 'Beta.md'),
+          '# Beta\n\nLinks back to [[Alpha]].\n',
+        );
+        fs.writeFileSync(
+          path.join(vaultRoot, 'Decisions', 'Brief.md'),
+          '---\ntype: research\nstatus: open\nconfidence: 0.8\n---\n\n# Brief\n\n- [[Alpha]]\n- [[Beta]]\n',
+        );
+
+        await staticPage.locator('#local-vault-folder').setInputFiles(vaultRoot);
+        await staticPage.waitForFunction(() => document.getElementById('local-vault')?.hidden === true, { timeout: 10000 });
+        await staticPage.waitForFunction(
+          () => (document.getElementById('vault-title')?.textContent || '').includes('NestedVault'),
+          { timeout: 10000 },
+        );
+
+        // Bento must show the stripped subfolders, not collapse the whole vault into one NestedVault box.
+        await staticPage.locator('.view[data-mode="bento"]').click();
+        await staticPage.waitForFunction(() => document.querySelectorAll('#bento-board .bento-cell').length >= 3);
+
+        // Decisions board must populate from frontmatter type: research.
+        await staticPage.locator('.view[data-mode="decisions"]').click();
+        await staticPage.waitForFunction(() => document.querySelectorAll('#decisions-board .decision-card').length >= 1);
+
+        // Atlas & Graph must switch cleanly without errors.
+        await staticPage.locator('.view[data-mode="atlas"]').click();
+        await staticPage.waitForFunction(() => !document.getElementById('atlas')?.hidden);
+        await staticPage.locator('.view[data-mode="universe"]').click();
+        await staticPage.waitForFunction(() => !document.getElementById('stage')?.hidden);
+
+        // Notes view must expose Download .md export in the more menu.
+        await staticPage.locator('.view[data-mode="notes"]').click();
+        await staticPage.locator('#notes-export-md').waitFor({ state: 'attached' });
+      } finally {
+        fs.rmSync(nestedTmp, { recursive: true, force: true });
+      }
 
       assert.deepEqual(staticPageErrors, [], `Uncaught static page errors: ${staticPageErrors.join(' | ')}`);
       assert.deepEqual(staticBadResponses, [], `Unexpected static HTTP errors: ${staticBadResponses.join(' | ')}`);

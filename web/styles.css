@@ -3369,6 +3369,7 @@ body.mode-atlas .note-title { letter-spacing: 0; }
 }
 .notes-tabs::-webkit-scrollbar { display: none; }
 .notes-tab {
+  flex: none;
   display: inline-flex;
   align-items: center;
   max-width: 190px;

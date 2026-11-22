@@ -72,6 +72,7 @@
     <symbol id="i-clock" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 7v5l3 3" /></symbol>
     <symbol id="i-grid" viewBox="0 0 24 24"><path d="M4 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" /><path d="M14 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" /><path d="M4 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" /><path d="M14 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" /></symbol>
     <symbol id="i-folder-open" viewBox="0 0 24 24"><path d="M5 19l2.757 -7.351a1 1 0 0 1 .936 -.649h12.307a1 1 0 0 1 .986 1.164l-.996 5.211a2 2 0 0 1 -1.964 1.625h-14.026a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2h4l3 3h7a2 2 0 0 1 2 2v2" /></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 5l5 -5" /><path d="M12 4l0 12" /></symbol>
   </svg>
 
   <canvas id="stage" aria-label="Graph of notes"></canvas>
@@ -147,6 +148,7 @@
             </button>
             <div class="notes-more-menu" id="notes-more-menu" role="menu" hidden>
               <button class="notes-more-item" id="notes-copy-link" type="button" role="menuitem"><svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg><span>Copy [[wikilink]]</span></button>
+              <button class="notes-more-item" id="notes-export-md" type="button" role="menuitem"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span>Download .md</span></button>
               <button class="notes-more-item" id="notes-reveal-file" type="button" role="menuitem"><svg class="icon" aria-hidden="true"><use href="#i-external-link"></use></svg><span>Reveal file in folder</span></button>
               <button class="notes-more-item" id="notes-locate-graph" type="button" role="menuitem"><svg class="icon" aria-hidden="true"><use href="#i-compass"></use></svg><span>Locate in graph</span></button>
               <button class="notes-more-item" id="notes-zen-btn" type="button" role="menuitem" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg><span>Zen mode</span></button>
@@ -297,7 +299,7 @@
       </div>
     </section>
 
-    <p class="sidebar-hint" id="hint">Drag to orbit · <kbd>0</kbd> notes · <kbd>n</kbd> new · <kbd>?</kbd> shortcuts · <kbd data-mod="K"></kbd> palette</p>
+    <p class="sidebar-hint" id="hint">Drag to orbit · <kbd>0</kbd> Notes view · <kbd>n</kbd> new · <kbd>?</kbd> shortcuts · <kbd data-mod="K"></kbd> palette</p>
     <div class="resize-handle resize-handle-sidebar" id="sidebar-resize" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0" title="Drag to resize · double-click to reset"></div>
   </aside>
 

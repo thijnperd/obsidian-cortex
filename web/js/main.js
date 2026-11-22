@@ -1397,10 +1397,13 @@ async function refreshGraph() {
 function applyGraph(graph) {
   state.graph = graph;
   state.meta = graph.meta;
-  if (!state.live) {
+  if (!state.live && !localvault.isDeviceGraph(graph)) {
     const overrides = prefs.get(staticNoteOverridesKey(), {});
     for (const node of graph.nodes) {
-      if (overrides[node.id]) node.body = overrides[node.id];
+      if (overrides[node.id]) {
+        node.body = overrides[node.id];
+        node.raw = overrides[node.id];
+      }
     }
   }
   document.title = `${graph.meta.title} — Cortex`;
@@ -2129,7 +2132,10 @@ function renderSidebarTallies() {
 async function persistModifiedNoteSource(noteId, updatedSource) {
   const idx = nodeIndex(noteId);
   const node = idx >= 0 ? state.graph.nodes[idx] : null;
-  if (node) node.body = updatedSource;
+  if (node) {
+    node.body = updatedSource;
+    node.raw = updatedSource;
+  }
 
   if (state.cache.has(noteId)) {
     const cached = state.cache.get(noteId);
@@ -2148,6 +2154,8 @@ async function persistModifiedNoteSource(noteId, updatedSource) {
     } catch (error) {
       ui.toast(error.message || 'Could not save tally change');
     }
+  } else if (localvault.isDeviceGraph(state.graph)) {
+    await localvault.updateLocalNote(noteId, updatedSource);
   } else {
     const overrides = prefs.get(staticNoteOverridesKey(), {});
     overrides[noteId] = updatedSource;
@@ -3370,7 +3378,7 @@ function localDetail(node) {
     links: node.links || [],
     markdown: node.body || node.excerpt,
     body: node.body || node.excerpt,
-    raw: node.body || node.excerpt,
+    raw: node.raw ?? node.body ?? node.excerpt ?? '',
     backlinks,
     mentions,
     related,
@@ -4719,6 +4727,23 @@ function wireNotesStudioEvents() {
       }
     });
   }
+  document.getElementById('notes-export-md')?.addEventListener('click', () => {
+    if (!state.detail) return;
+    const raw = state.draft ?? state.detail.raw ?? state.detail.markdown ?? '';
+    const baseName = String(state.detail.title || state.detail.id || 'note')
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, '-')
+      .trim() || 'note';
+    const blob = new Blob([raw], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${baseName}.md`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    ui.toast(`Downloaded ${baseName}.md`);
+  });
   if (els.notesRevealFile) {
     els.notesRevealFile.addEventListener('click', async () => {
       if (!state.detail) return;

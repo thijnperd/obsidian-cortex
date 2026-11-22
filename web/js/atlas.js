@@ -744,9 +744,10 @@ export class Atlas {
   /* ---------- data ---------- */
 
   setGraph(graph) {
-    const same = this.graph && this.graph.meta.generated_at === graph.meta.generated_at;
+    const same = this.graph === graph;
     this.graph = graph;
     if (same) return;
+    this.worldDirty = true;
     this.build();
     this.dirty = true;
   }
