@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { deflateRawSync } from 'node:zlib';
 
 import { buildLocalVault, LIMITS } from '../web/js/localvault.js';
 
@@ -175,4 +176,127 @@ test('builds Decisions cards, resolves frontmatter aliases, and strips escaped p
   assert.equal(idea.sources, 1);
   assert.equal(idea.missing, 1);
   assert.equal(idea.evidence[0]?.id, 'Sources/Attention');
+});
+
+function buildSyntheticZip(entries) {
+  const localChunks = [];
+  const cdChunks = [];
+  let offset = 0;
+
+  for (const entry of entries) {
+    const nameBuf = Buffer.from(entry.path, 'utf8');
+    const rawBuf = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(entry.data || '', 'utf8');
+    const method = entry.method ?? 8;
+    const compBuf = method === 8 ? deflateRawSync(rawBuf) : rawBuf;
+    const dataDescriptor = Boolean(entry.dataDescriptor);
+    let flags = 0x0800;
+    if (dataDescriptor) flags |= 0x0008;
+    if (entry.encrypted) flags |= 0x0001;
+
+    const lfh = Buffer.alloc(30 + nameBuf.length);
+    lfh.writeUInt32LE(0x04034b50, 0);
+    lfh.writeUInt16LE(20, 4);
+    lfh.writeUInt16LE(flags, 6);
+    lfh.writeUInt16LE(method, 8);
+    lfh.writeUInt32LE(dataDescriptor ? 0 : compBuf.length, 18);
+    lfh.writeUInt32LE(dataDescriptor ? 0 : rawBuf.length, 22);
+    lfh.writeUInt16LE(nameBuf.length, 26);
+    nameBuf.copy(lfh, 30);
+
+    const dd = dataDescriptor ? Buffer.alloc(16) : Buffer.alloc(0);
+    if (dataDescriptor) {
+      dd.writeUInt32LE(0x08074b50, 0);
+      dd.writeUInt32LE(compBuf.length, 8);
+      dd.writeUInt32LE(rawBuf.length, 12);
+    }
+
+    const cdh = Buffer.alloc(46 + nameBuf.length);
+    cdh.writeUInt32LE(0x02014b50, 0);
+    cdh.writeUInt16LE(20, 4);
+    cdh.writeUInt16LE(20, 6);
+    cdh.writeUInt16LE(flags, 8);
+    cdh.writeUInt16LE(method, 10);
+    cdh.writeUInt32LE(compBuf.length, 20);
+    cdh.writeUInt32LE(rawBuf.length, 24);
+    cdh.writeUInt16LE(nameBuf.length, 28);
+    cdh.writeUInt32LE(offset, 42);
+    nameBuf.copy(cdh, 46);
+
+    localChunks.push(lfh, compBuf, dd);
+    cdChunks.push(cdh);
+    offset += lfh.length + compBuf.length + dd.length;
+  }
+
+  const cdBuf = Buffer.concat(cdChunks);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(cdBuf.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+
+  return Buffer.concat([...localChunks, cdBuf, eocd]);
+}
+
+function zipBlob(name, buffer) {
+  return {
+    name,
+    type: 'application/zip',
+    size: buffer.length,
+    arrayBuffer: async () => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+  };
+}
+
+test('imports iOS-style deflated .zip vaults with data descriptors and ignores __MACOSX / dotfiles', async () => {
+  const buf = buildSyntheticZip([
+    { path: '__MACOSX/MyVault/._Alpha.md', data: 'resource fork', dataDescriptor: true },
+    { path: 'MyVault/.obsidian/workspace.json', data: '{"active": "x"}', dataDescriptor: true },
+    { path: 'MyVault/assets/photo.png', data: Buffer.from([137, 80, 78, 71]), dataDescriptor: true },
+    { path: '../evil.md', data: '# Should Be Skipped', dataDescriptor: true },
+    { path: 'MyVault/Ideas/Alpha.md', data: '# Alpha\n\nLinks to [[Beta]].\n', dataDescriptor: true },
+    { path: 'MyVault/Craft/Beta.md', data: '# Beta\n\nLinks back to [[Alpha]].\n', dataDescriptor: true },
+    {
+      path: 'MyVault/Decisions/Brief.md',
+      data: '---\ntype: research\nstatus: open\nconfidence: 0.8\n---\n\n# Brief\n\n- [[Alpha]]\n',
+      dataDescriptor: true,
+    },
+  ]);
+
+  const graph = await buildLocalVault([zipBlob('MyVault.zip', buf)]);
+  assert.equal(graph.meta.title, 'MyVault');
+  assert.deepEqual(
+    graph.meta.folders.map((f) => f.name),
+    ['Craft', 'Decisions', 'Ideas'],
+  );
+  assert.equal(graph.meta.note_count, 3);
+  assert.equal(graph.structures.total, 1);
+});
+
+test('uses stored (method 0) zip stem as title fallback and enforces zip security & byte limits', async () => {
+  const flatBuf = buildSyntheticZip([
+    { path: 'Ideas/One.md', data: '# One\n\nFirst.', method: 0 },
+    { path: 'Craft/Two.md', data: '# Two\n\nSecond.', method: 0 },
+  ]);
+  const graph = await buildLocalVault([zipBlob('NotesArchive.zip', flatBuf)]);
+  assert.equal(graph.meta.title, 'NotesArchive');
+  assert.deepEqual(
+    graph.meta.folders.map((f) => f.name),
+    ['Craft', 'Ideas'],
+  );
+
+  const encryptedBuf = buildSyntheticZip([
+    { path: 'Secret.md', data: 'secret', method: 0, encrypted: true },
+  ]);
+  await assert.rejects(
+    buildLocalVault([zipBlob('Locked.zip', encryptedBuf)]),
+    /Encrypted \.zip vaults are not supported/,
+  );
+
+  const oversizedBuf = buildSyntheticZip([
+    { path: 'Big.md', data: Buffer.alloc(LIMITS.bytes + 1024, 'a'), method: 8 },
+  ]);
+  await assert.rejects(
+    buildLocalVault([zipBlob('Huge.zip', oversizedBuf)]),
+    /larger than 48 MB/,
+  );
 });

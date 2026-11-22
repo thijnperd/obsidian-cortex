@@ -691,15 +691,24 @@
       <p class="local-vault-status" id="local-vault-status" role="status"></p>
       <div class="local-vault-actions">
         <button class="btn btn-primary" id="local-vault-folder-button" type="button">Choose a folder</button>
-        <button class="btn" id="local-vault-files-button" type="button">Choose files</button>
+        <button class="btn" id="local-vault-files-button" type="button">Choose files or .zip</button>
       </div>
-      <p class="local-vault-help">On PC/Mac, use <strong>Choose a folder</strong> for an Obsidian vault or <strong>Choose files</strong> for individual notes. On iPhone/iPad, use <strong>Choose files</strong> in the Files app.</p>
+      <p class="local-vault-help" id="local-vault-help">On PC/Mac, use <strong>Choose a folder</strong> for an Obsidian vault, or pick a <code>.zip</code> archive or individual <code>.md</code> notes.</p>
+      <div class="local-vault-ios-guide" id="local-vault-ios-guide" hidden>
+        <p class="local-vault-ios-title">Safari on iPhone &amp; iPad blocks direct folder picking. Import your full vault in 2 taps:</p>
+        <ol class="local-vault-ios-steps">
+          <li>Open the Apple <strong>Files</strong> app and find your vault folder.</li>
+          <li>Long-press the folder → tap <strong>Compress</strong> to make a <code>.zip</code>.</li>
+          <li>Tap <strong>Import vault (.zip)</strong> above to load every folder &amp; subfolder, or tap <strong>Choose .md files</strong> for loose notes.</li>
+        </ol>
+      </div>
       <div class="local-vault-foot">
         <button class="text-button" id="local-vault-forget" type="button" hidden>Return to demo vault</button>
         <button class="text-button" id="local-vault-close" type="button">Close</button>
       </div>
       <input id="local-vault-folder" type="file" webkitdirectory directory multiple hidden />
-      <input id="local-vault-files" type="file" accept=".md,.markdown,.mdown,.txt,text/markdown" multiple hidden />
+      <input id="local-vault-zip" type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden />
+      <input id="local-vault-files" type="file" accept=".md,.markdown,.mdown,.txt,.zip,text/markdown,text/plain,application/zip" multiple hidden />
     </div>
   </div>
 </body>

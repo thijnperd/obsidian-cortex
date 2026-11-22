@@ -6,6 +6,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { deflateRawSync } from 'node:zlib';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -1002,12 +1003,117 @@ async function main() {
       assert.deepEqual(staticBadResponses, [], `Unexpected static HTTP errors: ${staticBadResponses.join(' | ')}`);
     } finally {
       await staticContext.close();
+    }
+
+    // 7b. Static iOS Safari test: folder button switches to compressed .zip vault import & .md files are unlocked.
+    const iosContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+    });
+    try {
+      const iosPage = await iosContext.newPage();
+      const iosErrors = [];
+      iosPage.on('pageerror', (err) => iosErrors.push(err.message));
+
+      await iosPage.goto(staticServer.url, { waitUntil: 'domcontentloaded' });
+      await iosPage.waitForFunction(() => document.getElementById('boot')?.hidden === true, { timeout: 15000 });
+      await iosPage.locator('#open-vault').tap();
+      await iosPage.waitForFunction(() => document.getElementById('local-vault')?.hidden === false);
+
+      const iosUi = await iosPage.evaluate(() => ({
+        folderBtnVisible: getComputedStyle(document.getElementById('local-vault-folder-button')).display !== 'none',
+        folderBtnText: document.getElementById('local-vault-folder-button')?.textContent?.trim(),
+        iosGuideVisible: document.getElementById('local-vault-ios-guide')?.hidden === false,
+        filesAccept: document.getElementById('local-vault-files')?.getAttribute('accept'),
+      }));
+      assert.equal(iosUi.folderBtnVisible, true, 'Expected folder/zip button visible on iOS');
+      assert.equal(iosUi.folderBtnText, 'Import vault (.zip)');
+      assert.equal(iosUi.iosGuideVisible, true, 'Expected 2-tap iOS Files compress guide visible');
+      assert.equal(iosUi.filesAccept, null, 'Expected accept attribute removed on iOS so .md notes stay selectable');
+
+      const buildSmokeZip = (entries) => {
+        const locals = [];
+        const cds = [];
+        let off = 0;
+        for (const e of entries) {
+          const nameBuf = Buffer.from(e.path, 'utf8');
+          const rawBuf = Buffer.from(e.data, 'utf8');
+          const compBuf = deflateRawSync(rawBuf);
+          const lfh = Buffer.alloc(30 + nameBuf.length);
+          lfh.writeUInt32LE(0x04034b50, 0);
+          lfh.writeUInt16LE(20, 4);
+          lfh.writeUInt16LE(0x0808, 6);
+          lfh.writeUInt16LE(8, 8);
+          lfh.writeUInt16LE(nameBuf.length, 26);
+          nameBuf.copy(lfh, 30);
+          const dd = Buffer.alloc(16);
+          dd.writeUInt32LE(0x08074b50, 0);
+          dd.writeUInt32LE(compBuf.length, 8);
+          dd.writeUInt32LE(rawBuf.length, 12);
+          const cdh = Buffer.alloc(46 + nameBuf.length);
+          cdh.writeUInt32LE(0x02014b50, 0);
+          cdh.writeUInt16LE(20, 4);
+          cdh.writeUInt16LE(20, 6);
+          cdh.writeUInt16LE(0x0808, 8);
+          cdh.writeUInt16LE(8, 10);
+          cdh.writeUInt32LE(compBuf.length, 20);
+          cdh.writeUInt32LE(rawBuf.length, 24);
+          cdh.writeUInt16LE(nameBuf.length, 28);
+          cdh.writeUInt32LE(off, 42);
+          nameBuf.copy(cdh, 46);
+          locals.push(lfh, compBuf, dd);
+          cds.push(cdh);
+          off += lfh.length + compBuf.length + dd.length;
+        }
+        const cdBuf = Buffer.concat(cds);
+        const eocd = Buffer.alloc(22);
+        eocd.writeUInt32LE(0x06054b50, 0);
+        eocd.writeUInt16LE(entries.length, 8);
+        eocd.writeUInt16LE(entries.length, 10);
+        eocd.writeUInt32LE(cdBuf.length, 12);
+        eocd.writeUInt32LE(off, 16);
+        return Buffer.concat([...locals, cdBuf, eocd]);
+      };
+
+      const iosZipBuffer = buildSmokeZip([
+        { path: '__MACOSX/PhoneVault/._Alpha.md', data: 'appledouble' },
+        { path: 'PhoneVault/Ideas/Alpha.md', data: '# Alpha\n\n[[Beta]]\n' },
+        { path: 'PhoneVault/Craft/Beta.md', data: '# Beta\n\n[[Alpha]]\n' },
+        {
+          path: 'PhoneVault/Decisions/Brief.md',
+          data: '---\ntype: research\nstatus: open\n---\n\n# Brief\n\n- [[Alpha]]\n',
+        },
+      ]);
+
+      await iosPage.locator('#local-vault-zip').setInputFiles({
+        name: 'PhoneVault.zip',
+        mimeType: 'application/zip',
+        buffer: iosZipBuffer,
+      });
+      await iosPage.waitForFunction(() => document.getElementById('local-vault')?.hidden === true, { timeout: 10000 });
+      await iosPage.waitForFunction(
+        () => (document.getElementById('vault-title')?.textContent || '').includes('PhoneVault'),
+        { timeout: 10000 },
+      );
+
+      // Verify all folders and Decisions cards populated cleanly from the .zip archive.
+      await iosPage.locator('.views .view[data-mode="decisions"]').tap();
+      await iosPage.waitForFunction(() => document.querySelectorAll('#decisions-board .decision-card').length >= 1);
+      await iosPage.locator('#mobile-more-btn').tap();
+      await iosPage.locator('#mobile-more-sheet [data-mobile-mode="bento"]').tap();
+      await iosPage.waitForFunction(() => document.querySelectorAll('#bento-board .bento-cell').length >= 3);
+
+      assert.deepEqual(iosErrors, [], `Uncaught iOS static page errors: ${iosErrors.join(' | ')}`);
+    } finally {
+      await iosContext.close();
       await staticServer.close();
     }
 
     assert.deepEqual(pageErrors, [], `Uncaught page errors: ${pageErrors.join(' | ')}`);
     assert.deepEqual(consoleErrors, [], `Console errors: ${consoleErrors.join(' | ')}`);
-    console.log(`smoke ok (${opts.bin ? path.basename(opts.bin) : 'mock-web'} + site + mobile + static-pc): all 7 views, note & live-preview save, settings, site tabs, iOS/mobile shell, and static PC file opening passed.`);
+    console.log(`smoke ok (${opts.bin ? path.basename(opts.bin) : 'mock-web'} + site + mobile + static-pc + static-ios-zip): all 7 views, note & live-preview save, settings, site tabs, iOS/mobile shell, and static PC/iOS vault import passed.`);
   } finally {
     await browser.close();
     await siteServer.close();

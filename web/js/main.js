@@ -23,7 +23,7 @@ import {
 import { mountLiveEditor } from './live-editor.js';
 import { Tutorial } from './tutorial.js';
 import { diaryFolders, isOverview } from './scale.js';
-import { applyPlatformHints, key, mod } from './platform.js';
+import { applyPlatformHints, isIOSDevice, key, mod } from './platform.js';
 import * as localvault from './localvault.js';
 
 const state = {
@@ -750,7 +750,12 @@ async function importLocalVault(source) {
   if (!files || !files.length) return;
   const status = document.getElementById('local-vault-status');
   const previous = status ? status.textContent : '';
-  if (status) status.textContent = `Reading ${files.length} file${files.length === 1 ? '' : 's'}…`;
+  const hasZip = [...files].some((file) => /\.zip$/i.test(file?.name || ''));
+  if (status) {
+    status.textContent = hasZip
+      ? 'Unzipping vault…'
+      : `Reading ${files.length} file${files.length === 1 ? '' : 's'}…`;
+  }
   try {
     const graph = await localvault.buildLocalVault(files);
     resetVaultState();
@@ -783,17 +788,39 @@ function wireLocalVault() {
   if (!dialog) return;
   const card = dialog.querySelector('.local-vault-card');
   const folder = document.getElementById('local-vault-folder');
+  const zipInput = document.getElementById('local-vault-zip');
   const files = document.getElementById('local-vault-files');
-  // iPhone and iPad have no folder picker; the Files multi-select is the path.
-  const mobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const folderButton = document.getElementById('local-vault-folder-button');
-  if (folderButton && mobile) folderButton.hidden = true;
+  const filesButton = document.getElementById('local-vault-files-button');
+  const helpDesktop = document.getElementById('local-vault-help');
+  const iosGuide = document.getElementById('local-vault-ios-guide');
+  // iPhone and iPad Safari ignore webkitdirectory and fall back to loose files,
+  // while iPadOS/Desktop-mode sends a Macintosh UA with touch points; route
+  // iOS/iPadOS folder imports through compressed .zip vault archives instead.
+  const ios = isIOSDevice();
+  if (ios) {
+    if (folderButton) {
+      folderButton.hidden = false;
+      folderButton.textContent = 'Import vault (.zip)';
+    }
+    if (filesButton) filesButton.textContent = 'Choose .md files';
+    // Removing accept prevents iOS Files from greying out .md notes.
+    files?.removeAttribute('accept');
+    if (helpDesktop) helpDesktop.hidden = true;
+    if (iosGuide) iosGuide.hidden = false;
+  } else {
+    if (folderButton) folderButton.textContent = 'Choose a folder';
+    if (filesButton) filesButton.textContent = 'Choose files or .zip';
+    if (helpDesktop) helpDesktop.hidden = false;
+    if (iosGuide) iosGuide.hidden = true;
+  }
 
   document.getElementById('open-vault')?.addEventListener('click', () => openLocalVaultDialog(''));
   document.getElementById('local-vault-close')?.addEventListener('click', closeLocalVaultDialog);
-  folderButton?.addEventListener('click', () => folder?.click());
-  document.getElementById('local-vault-files-button')?.addEventListener('click', () => files?.click());
+  folderButton?.addEventListener('click', () => (ios ? zipInput?.click() : folder?.click()));
+  filesButton?.addEventListener('click', () => files?.click());
   folder?.addEventListener('change', () => importLocalVault(folder));
+  zipInput?.addEventListener('change', () => importLocalVault(zipInput));
   files?.addEventListener('change', () => importLocalVault(files));
 
   const preventDrop = (event) => {

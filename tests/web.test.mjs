@@ -19,6 +19,7 @@ import {
 import { clamp, easeInOut, lookAt, multiply, perspective, project, smoothstep } from '../web/js/math.js';
 import { buildAppearValues, buildBrainPositions } from '../web/js/morph.js';
 import { diaryFolders, isOverview, OVERVIEW_NOTES } from '../web/js/scale.js';
+import { isIOSDevice } from '../web/js/platform.js';
 import { cleanDisplayPath } from '../web/js/ui.js';
 
 test('math helpers clamp, interpolate, and project deterministically', () => {
@@ -354,4 +355,27 @@ test('cleanDisplayPath strips Windows verbatim prefixes cleanly', () => {
   assert.equal(cleanDisplayPath('/home/user/vault'), '/home/user/vault');
   assert.equal(cleanDisplayPath(''), '');
   assert.equal(cleanDisplayPath(null), '');
+});
+
+test('isIOSDevice identifies iPhone, iPad, and iPadOS desktop-mode Safari while excluding Macs', () => {
+  assert.equal(
+    isIOSDevice({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', maxTouchPoints: 5 }),
+    true,
+  );
+  assert.equal(
+    isIOSDevice({ userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X)', maxTouchPoints: 5 }),
+    true,
+  );
+  assert.equal(
+    isIOSDevice({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', maxTouchPoints: 5 }),
+    true,
+  );
+  assert.equal(
+    isIOSDevice({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', maxTouchPoints: 0 }),
+    false,
+  );
+  assert.equal(
+    isIOSDevice({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', maxTouchPoints: 0 }),
+    false,
+  );
 });

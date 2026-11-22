@@ -4596,6 +4596,8 @@ body.mode-atlas .note-title { letter-spacing: 0; }
 .local-vault[hidden] { display: none; }
 .local-vault-card {
   width: min(480px, 100%);
+  max-height: calc(100svh - 32px);
+  overflow-y: auto;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-lg);
   background: var(--surface-elevated);
@@ -4622,6 +4624,27 @@ body.mode-atlas .note-title { letter-spacing: 0; }
   color: var(--ink-2);
   font-size: 13px;
   line-height: 1.55;
+}
+.local-vault-ios-guide {
+  margin: 0 0 var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.local-vault-ios-title {
+  margin: 0 0 var(--s2);
+  color: var(--ink);
+  font-weight: 500;
+}
+.local-vault-ios-steps {
+  margin: 0;
+  padding-left: var(--s4);
+  display: grid;
+  gap: 4px;
 }
 .local-vault-status {
   min-height: 1.2em;

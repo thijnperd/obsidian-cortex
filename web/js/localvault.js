@@ -2,6 +2,8 @@
 // Rust server serves, so the whole UI (graph, brain, atlas, bento, decisions,
 // notes, search, links) works in the browser with no server behind it.
 
+import { extractMarkdownFromZip, isZipFile } from './zip.js';
+
 const DB_NAME = 'cortex.localvault';
 const STORE = 'vault';
 const RECORD_KEY = 'current';
@@ -645,22 +647,25 @@ function buildStructures(entries, resolveTarget) {
  */
 export async function buildLocalVault(fileList, options = {}) {
   const files = [...(fileList || [])];
-  const accepted = files.filter((file) => MARKDOWN.test(file.name) && file.size > 0);
-  if (!accepted.length) throw new Error('No Markdown notes in that selection.');
+  const zipFiles = files.filter((file) => isZipFile(file));
+  const accepted = files.filter((file) => !isZipFile(file) && MARKDOWN.test(file?.name || '') && file.size > 0);
+  if (!accepted.length && !zipFiles.length) throw new Error('No Markdown notes in that selection.');
   if (accepted.length > MAX_FILES) {
     throw new Error(`That is ${accepted.length} notes; this build caps a local vault at ${MAX_FILES}.`);
   }
-  const total = accepted.reduce((sum, file) => sum + file.size, 0);
-  if (total > MAX_BYTES) throw new Error('That selection is larger than 48 MB.');
+  const acceptedBytes = accepted.reduce((sum, file) => sum + file.size, 0);
+  if (acceptedBytes > MAX_BYTES) throw new Error('That selection is larger than 48 MB.');
 
   const sortedFiles = [...accepted].sort((a, b) =>
     (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name),
   );
   const rawRecords = [];
+  let actualBytes = 0;
   for (const file of sortedFiles) {
     const path = normalisePath(file.webkitRelativePath || file.name);
     if (isIgnored(path)) continue;
     const raw = await file.text();
+    actualBytes += file.size;
     rawRecords.push({
       path,
       raw,
@@ -669,8 +674,22 @@ export async function buildLocalVault(fileList, options = {}) {
       fromPicker: Boolean(file.webkitRelativePath),
     });
   }
+  for (const zipFile of zipFiles) {
+    const extracted = await extractMarkdownFromZip(zipFile, {
+      maxFiles: MAX_FILES - rawRecords.length,
+      maxBytes: MAX_BYTES - actualBytes,
+    });
+    for (const rec of extracted) {
+      actualBytes += rec.size;
+      rawRecords.push(rec);
+    }
+  }
   if (!rawRecords.length) throw new Error('No Markdown notes in that selection.');
+  rawRecords.sort((a, b) => a.path.localeCompare(b.path));
 
+  const zipLabel = zipFiles.length === 1 && !accepted.length
+    ? String(zipFiles[0].name || '').replace(/\.zip$/i, '').trim()
+    : '';
   const { entries: normalised, label: strippedLabel } = stripCommonRoot(rawRecords);
   const entries = normalised.map((rec) =>
     parseMarkdownEntry(rec.raw, rec.path, { lastModified: rec.lastModified, size: rec.size }),
@@ -679,6 +698,7 @@ export async function buildLocalVault(fileList, options = {}) {
   const label =
     options.title
     || strippedLabel
+    || zipLabel
     || entries.find((entry) => entry.path.includes('/'))?.path.split('/')[0]
     || 'On this device';
 
