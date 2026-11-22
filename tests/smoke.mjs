@@ -737,7 +737,12 @@ async function main() {
     await page.waitForFunction(
       () => document.querySelectorAll('#studio-live-host .live-block').length > 0,
     );
-    const liveParagraph = liveHost.locator('.live-block.is-paragraph').last();
+    // A paragraph with a wikilink in it opens that note instead of editing, so
+    // pick one that only holds plain text.
+    const liveParagraph = liveHost
+      .locator('.live-block.is-paragraph')
+      .filter({ hasNot: page.locator('.wikilink') })
+      .last();
     await liveParagraph.click();
     const liveInput = liveHost.locator('.live-block-input');
     await liveInput.waitFor({ state: 'visible' });
@@ -890,7 +895,13 @@ async function main() {
       await mobilePage.waitForFunction(
         () => document.querySelectorAll('#studio-live-host .live-block').length > 0,
       );
-      await mobilePage.locator('#studio-live-host .live-block.is-paragraph').last().tap();
+      // Same as desktop: tap a plain-text paragraph, never one that would
+      // navigate through a wikilink.
+      await mobilePage
+        .locator('#studio-live-host .live-block.is-paragraph')
+        .filter({ hasNot: mobilePage.locator('.wikilink') })
+        .last()
+        .tap();
       await mobilePage.locator('#studio-live-host .live-block-input').waitFor({ state: 'visible' });
 
       // Mobile inspector drawer open/close

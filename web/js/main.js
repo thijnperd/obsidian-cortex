@@ -3369,9 +3369,22 @@ async function openHistoryEntry() {
 // response of the page that lost the race.
 let openToken = 0;
 
+/**
+ * True while the note on screen holds edits that a reload would throw away.
+ * Clicking a note that is already open (its card, its tab, a history entry)
+ * refetches it; doing that mid-edit used to overwrite the draft with the copy
+ * from disk, silently dropping what had been typed since the last save.
+ */
+function hasUnsavedEdits(noteId) {
+  if (!state.detail || state.detail.id !== noteId) return false;
+  if (state.editing || state.studio.saving) return true;
+  return state.mode === 'notes' && state.studio.dirty;
+}
+
 async function openNote(index, { record = true, reveal = true } = {}) {
   const node = state.graph.nodes[index];
   if (!node) return;
+  if (hasUnsavedEdits(node.id)) return;
   if (state.mode === 'notes' && state.studio.dirty && state.detail && state.detail.id !== node.id) {
     await saveStudioDraft({ quiet: true });
   }
@@ -3386,6 +3399,9 @@ async function openNote(index, { record = true, reveal = true } = {}) {
   ensureTabInStudio(node.id, true);
   const detail = await getDetail(node);
   if (!detail || token !== openToken) return;
+  // Edits may have started while this load was in flight; a note that landed
+  // after the first keystroke must not overwrite the draft underneath it.
+  if (hasUnsavedEdits(detail.id)) return;
   state.detail = detail;
   state.draft = detail.raw ?? detail.markdown ?? '';
   state.editing = false;
