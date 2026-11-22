@@ -71,6 +71,7 @@
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="M7 7h-1a2 2 0 0 0 -2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2 -2v-1" /><path d="M20.385 6.585a2.1 2.1 0 0 0 -2.97 -2.97l-8.415 8.385v3h3l8.385 -8.415z" /><path d="M16 5l3 3" /></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 7v5l3 3" /></symbol>
     <symbol id="i-grid" viewBox="0 0 24 24"><path d="M4 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" /><path d="M14 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" /><path d="M4 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" /><path d="M14 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" /></symbol>
+    <symbol id="i-folder-open" viewBox="0 0 24 24"><path d="M5 19l2.757 -7.351a1 1 0 0 1 .936 -.649h12.307a1 1 0 0 1 .986 1.164l-.996 5.211a2 2 0 0 1 -1.964 1.625h-14.026a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2h4l3 3h7a2 2 0 0 1 2 2v2" /></symbol>
   </svg>
 
   <canvas id="stage" aria-label="Graph of notes"></canvas>
@@ -228,7 +229,7 @@
         <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
         <span>Search</span><kbd data-mod="K"></kbd>
       </button>
-      <button class="icon-button" id="open-vault" type="button" title="Open a vault from this device" aria-label="Open a vault from this device"><svg class="icon" aria-hidden="true"><use href="#i-notes"></use></svg></button>
+      <button class="open-vault-button" id="open-vault" type="button" title="Open a folder or Markdown files from this device" aria-label="Open a folder or Markdown files from this device"><svg class="icon" aria-hidden="true"><use href="#i-folder-open"></use></svg><span>Open</span></button>
       <button class="tour-button" id="tour-button" type="button" title="Take the guided tour" aria-haspopup="dialog" hidden>
         <svg class="icon tour-icon-start" aria-hidden="true"><use href="#i-compass"></use></svg>
         <svg class="icon tour-icon-replay" aria-hidden="true" hidden><use href="#i-refresh"></use></svg>
@@ -634,7 +635,7 @@
     </div>
     <div class="mobile-more-group" role="group" aria-label="Quick actions">
       <p class="mobile-more-kicker">Actions</p>
-      <button class="mobile-sheet-item" id="mobile-action-vault" type="button"><svg class="icon" aria-hidden="true"><use href="#i-notes"></use></svg><span>Open device vault</span></button>
+      <button class="mobile-sheet-item" id="mobile-action-vault" type="button"><svg class="icon" aria-hidden="true"><use href="#i-folder-open"></use></svg><span>Open device vault</span></button>
       <button class="mobile-sheet-item" id="mobile-action-theme" type="button"><svg class="icon theme-icon-sun" aria-hidden="true"><use href="#i-sun"></use></svg><svg class="icon theme-icon-moon" aria-hidden="true"><use href="#i-moon"></use></svg><span>Switch theme</span></button>
       <button class="mobile-sheet-item" id="mobile-action-surprise" type="button"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg><span>Random note</span></button>
     </div>
@@ -645,16 +646,16 @@
   <script type="module" src="./js/main.js"></script>
   <div class="local-vault" id="local-vault" hidden role="dialog" aria-modal="true" aria-labelledby="local-vault-title">
     <div class="local-vault-card">
-      <h2 id="local-vault-title">Open a vault on this device</h2>
-      <p class="local-vault-copy">Cortex reads the Markdown you pick and keeps a copy in this browser, so the graph, the notes and search keep working offline. Nothing is uploaded, and nothing on your phone is changed.</p>
+      <h2 id="local-vault-title">Open a folder or Markdown files</h2>
+      <p class="local-vault-copy">Choose a vault folder or Markdown (.md) files from your computer or phone — or drop them onto this card. Everything stays local in your browser; nothing is uploaded and your files on disk are never changed.</p>
       <p class="local-vault-status" id="local-vault-status" role="status"></p>
       <div class="local-vault-actions">
         <button class="btn btn-primary" id="local-vault-folder-button" type="button">Choose a folder</button>
         <button class="btn" id="local-vault-files-button" type="button">Choose files</button>
       </div>
-      <p class="local-vault-help">On iPhone, use <strong>Choose files</strong> and pick your notes (or the whole folder) in the Files app. Cortex reads them read-only: edits you make in another app stay in your vault and are not written back from here.</p>
+      <p class="local-vault-help">On PC/Mac, use <strong>Choose a folder</strong> for an Obsidian vault or <strong>Choose files</strong> for individual notes. On iPhone/iPad, use <strong>Choose files</strong> in the Files app.</p>
       <div class="local-vault-foot">
-        <button class="text-button" id="local-vault-forget" type="button" hidden>Forget the saved vault</button>
+        <button class="text-button" id="local-vault-forget" type="button" hidden>Return to demo vault</button>
         <button class="text-button" id="local-vault-close" type="button">Close</button>
       </div>
       <input id="local-vault-folder" type="file" webkitdirectory directory multiple hidden />

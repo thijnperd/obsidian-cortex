@@ -449,6 +449,34 @@ kbd {
 .search-button:hover { color: var(--ink); border-color: var(--line-strong); background: var(--surface-2); }
 .search-button kbd { font-size: 11px; }
 
+.open-vault-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg);
+  color: var(--ink-2);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms var(--ease), border-color 140ms var(--ease), background 140ms var(--ease);
+}
+.open-vault-button[hidden] { display: none; }
+.open-vault-button .icon { width: 14px; height: 14px; }
+@media (hover: hover) {
+  .open-vault-button:hover {
+    color: var(--ink);
+    border-color: var(--line-strong);
+    background: var(--surface-2);
+  }
+}
+
 .icon-button {
   appearance: none;
   display: inline-grid;
@@ -512,6 +540,7 @@ body.mode-replay .canvas-status {
   top: calc(var(--toolbar-h) + 14px);
   bottom: auto;
 }
+body.mode-notes .canvas-status,
 body.mode-atlas .canvas-status {
   display: none;
 }
@@ -4450,6 +4479,12 @@ body.mode-atlas .note-title { letter-spacing: 0; }
   color: var(--ink);
   padding: var(--s5);
   box-shadow: var(--shadow-lg);
+  transition: border-color 140ms var(--ease), background 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+.local-vault-card.is-dragover {
+  border-color: var(--accent);
+  background: var(--surface-elevated);
+  box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-lg);
 }
 .local-vault-card h2 {
   margin: 0 0 var(--s2);
@@ -4677,6 +4712,17 @@ body.mode-atlas .note-title { letter-spacing: 0; }
   .icon-button {
     width: 40px;
     height: 40px;
+  }
+  .open-vault-button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+    border-color: transparent;
+    background: transparent;
+  }
+  .open-vault-button span {
+    display: none;
   }
 
   /* Bottom iOS-style 5-tab navigation dock */

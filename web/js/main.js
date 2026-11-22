@@ -653,29 +653,85 @@ function closeLocalVaultDialog() {
   if (dialog) dialog.hidden = true;
 }
 
-async function importLocalVault(input) {
-  const files = input.files;
+async function readDroppedEntry(entry, prefix = '') {
+  if (!entry) return [];
+  if (entry.isFile) {
+    return new Promise((resolve) => {
+      entry.file((file) => {
+        if (prefix && !file.webkitRelativePath) {
+          try {
+            Object.defineProperty(file, 'webkitRelativePath', { value: `${prefix}${file.name}` });
+          } catch {
+            /* read-only property in some browsers */
+          }
+        }
+        resolve([file]);
+      }, () => resolve([]));
+    });
+  }
+  if (entry.isDirectory) {
+    const reader = entry.createReader();
+    const entries = [];
+    const readChunk = () => new Promise((resolve) => {
+      reader.readEntries((batch) => resolve(batch || []), () => resolve([]));
+    });
+    while (true) {
+      const batch = await readChunk();
+      if (!batch.length) break;
+      entries.push(...batch);
+    }
+    const nested = await Promise.all(
+      entries.map((child) => readDroppedEntry(child, `${prefix}${entry.name}/`)),
+    );
+    return nested.flat();
+  }
+  return [];
+}
+
+async function extractDroppedFiles(dataTransfer) {
+  if (!dataTransfer) return [];
+  const items = [...(dataTransfer.items || [])];
+  if (items.length && typeof items[0]?.webkitGetAsEntry === 'function') {
+    const entries = items.map((item) => item.webkitGetAsEntry()).filter(Boolean);
+    if (entries.length) {
+      const resolved = await Promise.all(entries.map((entry) => readDroppedEntry(entry, '')));
+      const flat = resolved.flat();
+      if (flat.length) return flat;
+    }
+  }
+  return [...(dataTransfer.files || [])];
+}
+
+async function importLocalVault(source) {
+  const isInput = source && 'files' in source;
+  const files = isInput ? source.files : source;
   if (!files || !files.length) return;
   const status = document.getElementById('local-vault-status');
   const previous = status ? status.textContent : '';
   if (status) status.textContent = `Reading ${files.length} file${files.length === 1 ? '' : 's'}…`;
   try {
     const graph = await localvault.buildLocalVault(files);
+    resetVaultState();
     state.live = false;
     state.vaultId = null;
     document.body.classList.add('is-static');
     applyGraph(graph);
-    setMode(requestedView() || 'brain', { persist: false, animate: false });
+    if (graph.nodes.length === 1) {
+      setMode('notes', { persist: false, animate: false });
+      await openNote(0);
+    } else {
+      setMode(requestedView() || state.mode || 'brain', { persist: false, animate: false });
+    }
     closeLocalVaultDialog();
     ui.hideBoot();
-    ui.toast(`${graph.meta.note_count} notes from this device`);
+    ui.toast(`${graph.meta.note_count} ${graph.meta.note_count === 1 ? 'note' : 'notes'} from this device`);
     if (!graph.local.persisted) {
       ui.toast('This browser refused storage, so the vault lasts until you close the tab');
     }
   } catch (error) {
     if (status) status.textContent = error.message || 'Could not read that vault.';
   } finally {
-    input.value = '';
+    if (isInput) source.value = '';
     if (status && !status.textContent) status.textContent = previous;
   }
 }
@@ -683,6 +739,7 @@ async function importLocalVault(input) {
 function wireLocalVault() {
   const dialog = document.getElementById('local-vault');
   if (!dialog) return;
+  const card = dialog.querySelector('.local-vault-card');
   const folder = document.getElementById('local-vault-folder');
   const files = document.getElementById('local-vault-files');
   // iPhone and iPad have no folder picker; the Files multi-select is the path.
@@ -696,6 +753,28 @@ function wireLocalVault() {
   document.getElementById('local-vault-files-button')?.addEventListener('click', () => files?.click());
   folder?.addEventListener('change', () => importLocalVault(folder));
   files?.addEventListener('change', () => importLocalVault(files));
+
+  const preventDrop = (event) => {
+    event.preventDefault();
+  };
+  dialog.addEventListener('dragover', preventDrop);
+  dialog.addEventListener('drop', preventDrop);
+  if (card) {
+    card.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      card.classList.add('is-dragover');
+    });
+    card.addEventListener('dragleave', (event) => {
+      if (!card.contains(event.relatedTarget)) card.classList.remove('is-dragover');
+    });
+    card.addEventListener('drop', async (event) => {
+      event.preventDefault();
+      card.classList.remove('is-dragover');
+      const dropped = await extractDroppedFiles(event.dataTransfer);
+      if (dropped.length) importLocalVault(dropped);
+    });
+  }
+
   document.getElementById('local-vault-forget')?.addEventListener('click', async () => {
     await localvault.forgetLocalVault();
     closeLocalVaultDialog();
@@ -1076,8 +1155,8 @@ function wire() {
   }
   els.updateAction.addEventListener('click', installUpdate);
   els.updateClose.addEventListener('click', dismissUpdate);
-  els.vaultButton.addEventListener('click', () => showLaunch());
-  els.addVault.addEventListener('click', () => showLaunch());
+  els.vaultButton.addEventListener('click', () => (state.live ? showLaunch() : openLocalVaultDialog('')));
+  els.addVault.addEventListener('click', () => (state.live ? showLaunch() : openLocalVaultDialog('')));
   els.foldersReset.addEventListener('click', resetFolders);
   els.launchForm.addEventListener('submit', submitLaunch);
   document.addEventListener('visibilitychange', onVisibility);
@@ -1135,6 +1214,10 @@ async function refreshVaults() {
 }
 
 function showLaunch(message) {
+  if (!state.live) {
+    openLocalVaultDialog(message || '');
+    return;
+  }
   closeMobileDrawers();
   state.launching = true;
   els.tourButton.hidden = true;
@@ -1330,6 +1413,8 @@ function applyGraph(graph) {
   els.newNote.hidden = !state.live;
   els.todayNote.hidden = !state.live;
   els.tourButton.hidden = !state.live;
+  const openVaultBtn = document.getElementById('open-vault');
+  if (openVaultBtn) openVaultBtn.hidden = state.live;
   const overview = isOverview(graph.nodes.length);
   ui.setStats(graph.meta, overview);
   ui.renderDecisions(els.decisionsBoard, graph.structures, openDecision);
@@ -3055,7 +3140,7 @@ function onKeyDown(event) {
     else if (!els.compose.hidden) closeCompose();
     else if (state.palette.open) closePalette();
     else if (hasOpenMobileDrawer()) closeMobileDrawers();
-    else if (state.launching && state.vaultId) hideLaunch();
+    else if (state.launching && (state.vaultId || state.graph)) hideLaunch();
     else if (state.mode === 'notes' && state.studio.zenMode) toggleStudioZen(false);
     else if (!els.panel.hidden && state.panelExpanded) setPanelExpanded(false);
     else if (!els.panel.hidden) closePanel();
@@ -5358,6 +5443,16 @@ function buildPaletteCommands() {
         run: () => showLaunch(),
       },
     );
+  } else {
+    commands.push({
+      kind: 'command',
+      id: 'cmd:vaults:local',
+      title: 'Open folder or Markdown files from this device',
+      subtitle: 'Load a local vault folder or .md files directly in the browser',
+      keywords: 'vault folder open file markdown local pc device import',
+      pinned: true,
+      run: () => openLocalVaultDialog(''),
+    });
   }
 
   return commands;

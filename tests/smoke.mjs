@@ -427,6 +427,88 @@ async function startMockAppServer() {
   };
 }
 
+async function startStaticDemoServer() {
+  const staticGraph = {
+    meta: {
+      title: 'Static Demo Vault',
+      note_count: 2,
+      link_count: 1,
+      orphan_count: 0,
+      word_count: 30,
+      cluster_count: 1,
+      folder_count: 1,
+      density: 0.5,
+      generated_at: 1700000000,
+      source: 'demo',
+      folders: [{ name: 'Ideas', count: 2, color: 0 }],
+      hub: 'Ideas/Demo Note',
+    },
+    nodes: [
+      {
+        id: 'Ideas/Demo Note',
+        title: 'Demo Note',
+        folder: 'Ideas',
+        tags: ['demo'],
+        created: '2026-10-01',
+        words: 15,
+        degree: 1,
+        pagerank: 1,
+        community: 0,
+        size: 1.2,
+        x: -0.2,
+        y: 0.1,
+        z: 0.1,
+        excerpt: 'Demo note body.',
+        body: '# Demo Note\n\nDemo note body.\n',
+      },
+      {
+        id: 'Ideas/Second Note',
+        title: 'Second Note',
+        folder: 'Ideas',
+        tags: ['demo'],
+        created: '2026-10-02',
+        words: 15,
+        degree: 1,
+        pagerank: 0.8,
+        community: 0,
+        size: 1.0,
+        x: 0.2,
+        y: -0.1,
+        z: -0.1,
+        excerpt: 'Second demo note.',
+        body: '# Second Note\n\nLinks to [[Demo Note]].\n',
+      },
+    ],
+    edges: [{ source: 1, target: 0, weight: 1 }],
+    structures: { total: 0, open: 0, cards: [] },
+  };
+
+  const server = http.createServer((req, res) => {
+    const p = new URL(req.url || '/', 'http://127.0.0.1').pathname;
+    if (p.startsWith('/api/')) {
+      res.writeHead(req.method === 'GET' ? 404 : 405, { 'content-type': 'text/plain' });
+      return res.end('static export');
+    }
+    if (p === '/graph.json') {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      return res.end(JSON.stringify(staticGraph));
+    }
+    const staticFile = safeResolve(path.join(root, 'web'), p === '/' ? 'index.html' : p);
+    if (!staticFile) {
+      res.writeHead(403);
+      return res.end();
+    }
+    sendFile(res, staticFile);
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  return {
+    url: `http://127.0.0.1:${port}/`,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
 async function startBinAppServer(binPath) {
   if (!fs.existsSync(binPath)) {
     throw new Error(`Binary not found: ${binPath}`);
@@ -762,9 +844,64 @@ async function main() {
       await mobileContext.close();
     }
 
+    // 7. Static GitHub Pages export desktop test: #vault-button opens #local-vault (never HTTP 405 #launch) and opening a single .md file works.
+    const staticServer = await startStaticDemoServer();
+    const staticContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    try {
+      const staticPage = await staticContext.newPage();
+      const staticPageErrors = [];
+      const staticBadResponses = [];
+      staticPage.on('pageerror', (err) => staticPageErrors.push(err.message));
+      staticPage.on('response', (res) => {
+        const pathname = new URL(res.url()).pathname;
+        if (res.status() >= 400 && pathname !== '/api/vaults') {
+          staticBadResponses.push(`${res.status()} ${pathname}`);
+        }
+      });
+
+      await staticPage.goto(staticServer.url, { waitUntil: 'domcontentloaded' });
+      await staticPage.waitForFunction(() => document.getElementById('boot')?.hidden === true, { timeout: 15000 });
+      await staticPage.locator('#open-vault').waitFor({ state: 'visible' });
+
+      // Clicking top-left #vault-button on GitHub Pages must open #local-vault, never the server-only #launch screen.
+      await staticPage.locator('#vault-button').click();
+      await staticPage.waitForFunction(() => document.getElementById('local-vault')?.hidden === false);
+      const launchHidden = await staticPage.evaluate(() => document.getElementById('launch')?.hidden === true);
+      assert.equal(launchHidden, true, 'Expected #launch to stay hidden in static/GitHub Pages mode');
+
+      // Pick a single Markdown file on PC and verify it opens directly in Notes view.
+      await staticPage.locator('#local-vault-files').setInputFiles({
+        name: 'QuickNote.md',
+        mimeType: 'text/markdown',
+        buffer: Buffer.from('# Quick Note\n\nOpened from PC.\n'),
+      });
+      await staticPage.waitForFunction(() => document.getElementById('local-vault')?.hidden === true, { timeout: 10000 });
+      await staticPage.waitForFunction(
+        () => document.body.classList.contains('mode-notes') && !document.getElementById('notes-studio')?.hidden,
+        { timeout: 10000 },
+      );
+      await staticPage.waitForFunction(
+        () => (document.getElementById('notes-canvas')?.textContent || '').includes('Opened from PC.'),
+        { timeout: 10000 },
+      );
+
+      // Re-open #local-vault via #open-vault: Return-to-demo button is shown and Close dismisses cleanly.
+      await staticPage.locator('#open-vault').click();
+      await staticPage.waitForFunction(() => document.getElementById('local-vault')?.hidden === false);
+      await staticPage.locator('#local-vault-forget').waitFor({ state: 'visible' });
+      await staticPage.locator('#local-vault-close').click();
+      await staticPage.waitForFunction(() => document.getElementById('local-vault')?.hidden === true);
+
+      assert.deepEqual(staticPageErrors, [], `Uncaught static page errors: ${staticPageErrors.join(' | ')}`);
+      assert.deepEqual(staticBadResponses, [], `Unexpected static HTTP errors: ${staticBadResponses.join(' | ')}`);
+    } finally {
+      await staticContext.close();
+      await staticServer.close();
+    }
+
     assert.deepEqual(pageErrors, [], `Uncaught page errors: ${pageErrors.join(' | ')}`);
     assert.deepEqual(consoleErrors, [], `Console errors: ${consoleErrors.join(' | ')}`);
-    console.log(`smoke ok (${opts.bin ? path.basename(opts.bin) : 'mock-web'} + site + mobile): all 7 views, note & live-preview save, settings, site tabs, and iOS/mobile shell passed.`);
+    console.log(`smoke ok (${opts.bin ? path.basename(opts.bin) : 'mock-web'} + site + mobile + static-pc): all 7 views, note & live-preview save, settings, site tabs, iOS/mobile shell, and static PC file opening passed.`);
   } finally {
     await browser.close();
     await siteServer.close();
