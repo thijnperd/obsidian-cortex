@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.1 — Notes Studio keeps unsaved edits when the open note is reopened
+
+- **No more lost edits on re-open:** clicking the note that is already open (its list card, its tab, or a history entry) refetched it and reset the draft, so a load that finished mid-edit replaced what had been typed and the next save wrote the pre-edit text. `openNote()` now skips that refetch while the note on screen has unsaved work, and re-checks after the fetch so a load landing after the first keystroke cannot overwrite the draft.
+- **Live Preview smoke steps tap text, not links:** the desktop and mobile live-preview steps picked the last paragraph, which ends in wikilinks, so the tap navigated to the linked note instead of opening the editor. They now pick a paragraph that holds only plain text, keeping tap-to-edit covered on both viewports.
+- **CI green again:** `web smoke (playwright)` passes in both `ci` and `release`, on a branch dispatch and on `main`.
+
 ## 2.5.0 — Quiet Editorial Studio UI overhaul & browser vault engine
 
 - **Uncluttered desktop chrome (`docs/ui-overhaul-todo.md`):** consolidated low-frequency top-bar tools (`Today's note`, `Random note`, `Guided tour / Replay`, `Switch theme`, `Keyboard shortcuts`) into a light-dismiss `⋯` Utilities popover, removed the permanent amber `Replay` pill, turned the vault switcher into a clean single-line pill, and stripped Windows `\\?\` / `\\?\UNC\` verbatim prefixes via `cleanDisplayPath()`.

@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/thijnperd/obsidian-cortex/releases"><img alt="Version 2.5.0" src="https://img.shields.io/badge/version-2.5.0-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
+  <a href="https://github.com/thijnperd/obsidian-cortex/releases"><img alt="Version 2.5.1" src="https://img.shields.io/badge/version-2.5.1-ffd9a0?style=flat-square&amp;labelColor=0a0b0d"></a>
   <img alt="Licensed MIT" src="https://img.shields.io/badge/license-MIT-ffd9a0?style=flat-square&amp;labelColor=0a0b0d">
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-101216?style=flat-square&amp;labelColor=0a0b0d">
 </p>
@@ -46,7 +46,7 @@ are; deleting the folder is the uninstall.
 
 | Platform | File |
 | --- | --- |
-| Windows x86-64 | `CortexSetup-2.5.0.exe`, or `cortex-windows-x86_64.zip` to run unpacked |
+| Windows x86-64 | `CortexSetup-2.5.1.exe`, or `cortex-windows-x86_64.zip` to run unpacked |
 | macOS (Apple silicon) | `Cortex.app` inside `cortex-macos-arm64.tar.gz` |
 | Linux x86-64 | `cortex-linux-x86_64.tar.gz` |
 
@@ -401,7 +401,7 @@ opens it, and it rotates once at 1 MiB. If `cortex` says nothing at all, run
 ## License
 
 MIT. See [LICENSE](LICENSE); security reports follow [SECURITY.md](SECURITY.md),
-and the 2.5.0 notes are in [docs/releases/v2.5.0.md](docs/releases/v2.5.0.md).
+and the 2.5.1 notes are in [docs/releases/v2.5.1.md](docs/releases/v2.5.1.md).
 The in-app icons are [Tabler Icons](https://tabler.io/icons), MIT licensed, with
 the notice in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

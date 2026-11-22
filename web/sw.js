@@ -5,7 +5,7 @@
 // A local vault never touches this cache: its notes live in IndexedDB, which
 // the service worker does not see.
 
-const VERSION = 'cortex-v2.5.0-2';
+const VERSION = 'cortex-v2.5.1-1';
 const SHELL = ['./', './index.html', './styles.css', './manifest.json', './logo.svg', './favicon.svg'];
 
 self.addEventListener('install', (event) => {
