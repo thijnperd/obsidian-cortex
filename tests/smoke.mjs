@@ -572,6 +572,32 @@ async function main() {
       { timeout: 10000 },
     );
 
+    // 3b. Verify Live Preview (#studio-live-host) block editing and Ctrl+S save.
+    await page.locator('[data-editor-mode="live"]').click();
+    const liveHost = page.locator('#studio-live-host');
+    await liveHost.waitFor({ state: 'visible' });
+    await page.waitForFunction(
+      () => document.querySelectorAll('#studio-live-host .live-block').length > 0,
+    );
+    const liveParagraph = liveHost.locator('.live-block.is-paragraph').last();
+    await liveParagraph.click();
+    const liveInput = liveHost.locator('.live-block-input');
+    await liveInput.waitFor({ state: 'visible' });
+    const liveSentinel = `LIVE_EDIT_${Date.now()}`;
+    const existingBlockText = await liveInput.inputValue();
+    await liveInput.fill(`${existingBlockText} ${liveSentinel}`);
+    await liveInput.focus();
+
+    const liveSaveRespPromise = page.waitForResponse(
+      (res) => res.url().includes('/api/note') && res.request().method() === 'POST',
+    );
+    await page.keyboard.press('Control+s');
+    const liveSaveResp = await liveSaveRespPromise;
+    assert.equal(liveSaveResp.status(), 200, 'Expected Live Preview POST /api/note to succeed');
+    await page.waitForFunction(
+      () => document.getElementById('notes-save-status')?.textContent?.trim() === 'Saved',
+    );
+
     // 4. Open Settings modal and check update opt-out checkbox when present.
     await page.locator('#settings-button').click();
     await page.waitForFunction(() => document.getElementById('settings')?.hidden === false);
@@ -600,9 +626,145 @@ async function main() {
       );
     }
 
+    // 6. Verify iOS / Mobile shell (390x844, touch) against the app server.
+    const mobileContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+    });
+    try {
+      const mobilePage = await mobileContext.newPage();
+      mobilePage.on('pageerror', (err) => pageErrors.push(`mobile: ${err.message}`));
+      mobilePage.on('console', (msg) => {
+        if (msg.type() === 'error') consoleErrors.push(`mobile: ${msg.text()}`);
+      });
+
+      await mobilePage.goto(appServer.url, { waitUntil: 'domcontentloaded' });
+      await mobilePage.waitForFunction(() => document.getElementById('boot')?.hidden === true, { timeout: 15000 });
+
+      const layoutMetrics = await mobilePage.evaluate(() => {
+        const overflow = document.documentElement.scrollWidth;
+        const toolbar = document.querySelector('.toolbar');
+        const toolbarRect = toolbar ? toolbar.getBoundingClientRect() : null;
+        const toolbarControls = [...document.querySelectorAll('.toolbar-left > *, .toolbar-actions > *')]
+          .filter((el) => getComputedStyle(el).display !== 'none')
+          .map((el) => {
+            const r = el.getBoundingClientRect();
+            return {
+              id: el.id || el.className,
+              left: r.left,
+              right: r.right,
+              top: r.top,
+              bottom: r.bottom,
+              width: r.width,
+            };
+          });
+        const viewsEl = document.querySelector('.views');
+        const viewsRect = viewsEl ? viewsEl.getBoundingClientRect() : null;
+        return {
+          overflow,
+          toolbarRect: toolbarRect ? { left: toolbarRect.left, right: toolbarRect.right } : null,
+          toolbarControls,
+          viewsRect: viewsRect
+            ? { left: viewsRect.left, right: viewsRect.right, top: viewsRect.top, bottom: viewsRect.bottom }
+            : null,
+        };
+      });
+
+      assert.ok(
+        layoutMetrics.overflow <= 390,
+        `Expected no horizontal overflow on mobile (scrollWidth=${layoutMetrics.overflow})`,
+      );
+      assert.ok(layoutMetrics.toolbarRect, 'Expected .toolbar element on mobile');
+      assert.ok(
+        layoutMetrics.toolbarRect.left >= 0 && layoutMetrics.toolbarRect.right <= 390,
+        `Expected .toolbar inside [0, 390], got [${layoutMetrics.toolbarRect.left}, ${layoutMetrics.toolbarRect.right}]`,
+      );
+      for (const ctrl of layoutMetrics.toolbarControls) {
+        assert.ok(
+          ctrl.width > 0 && ctrl.left >= -0.5 && ctrl.right <= 390.5,
+          `Expected toolbar control ${ctrl.id} inside [0, 390], got [${ctrl.left}, ${ctrl.right}] (w=${ctrl.width})`,
+        );
+      }
+      assert.ok(layoutMetrics.viewsRect, 'Expected .views bottom dock on mobile');
+      assert.ok(
+        layoutMetrics.viewsRect.bottom <= 844 && layoutMetrics.viewsRect.top >= 700,
+        `Expected .views docked at bottom (top>=700, bottom<=844), got top=${layoutMetrics.viewsRect.top}, bottom=${layoutMetrics.viewsRect.bottom}`,
+      );
+
+      // More sheet -> Atlas -> closes sheet
+      await mobilePage.locator('#mobile-more-btn').tap();
+      await mobilePage.waitForFunction(() => document.getElementById('mobile-more-sheet')?.hidden === false);
+      await mobilePage.locator('#mobile-more-sheet [data-mobile-mode="atlas"]').tap();
+      await mobilePage.waitForFunction(
+        () =>
+          document.getElementById('atlas')?.hidden === false
+          && document.getElementById('mobile-more-sheet')?.hidden === true,
+      );
+
+      // Notes two-step navigation: list -> reading/editing -> back
+      await mobilePage.locator('.views .view[data-mode="notes"]').tap();
+      await mobilePage.waitForFunction(() => document.getElementById('notes-studio')?.hidden === false);
+      const listPaneVisible = await mobilePage.evaluate(() => {
+        const pane = document.getElementById('notes-list-pane');
+        if (!pane) return false;
+        const style = getComputedStyle(pane);
+        const rect = pane.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+      });
+      assert.equal(listPaneVisible, true, 'Expected #notes-list-pane visible on mobile before selecting a note');
+
+      await mobilePage.locator('#notes-list-pane [data-list-view="list"]').tap();
+      await mobilePage.waitForFunction(
+        () => document.querySelectorAll('#notes-feed .notes-card').length > 0,
+      );
+      const cardCount = await mobilePage.locator('#notes-feed .notes-card').count();
+      assert.ok(cardCount > 0, `Expected #notes-feed .notes-card items, found ${cardCount}`);
+
+      await mobilePage.locator('#notes-feed .notes-card .notes-card-main').first().tap();
+      await mobilePage.waitForFunction(
+        () => document.getElementById('notes-studio')?.classList.contains('is-mobile-reading') === true,
+      );
+      await mobilePage.locator('#notes-canvas').waitFor({ state: 'visible' });
+
+      // Live Preview tap-to-edit on mobile
+      await mobilePage.locator('[data-editor-mode="live"]').tap();
+      await mobilePage.waitForFunction(
+        () => document.querySelectorAll('#studio-live-host .live-block').length > 0,
+      );
+      await mobilePage.locator('#studio-live-host .live-block.is-paragraph').last().tap();
+      await mobilePage.locator('#studio-live-host .live-block-input').waitFor({ state: 'visible' });
+
+      // Mobile inspector drawer open/close
+      await mobilePage.locator('#notes-toggle-inspector').tap();
+      await mobilePage.waitForFunction(
+        () => document.getElementById('notes-inspector-pane')?.classList.contains('is-mobile-open') === true,
+      );
+      await mobilePage.locator('#notes-inspector-close').tap();
+      await mobilePage.waitForFunction(
+        () => document.getElementById('notes-inspector-pane')?.classList.contains('is-mobile-open') === false,
+      );
+
+      // Back button returns to list
+      await mobilePage.locator('#notes-mobile-back').tap();
+      await mobilePage.waitForFunction(
+        () => document.getElementById('notes-studio')?.classList.contains('is-mobile-reading') === false,
+      );
+      const listVisibleAgain = await mobilePage.evaluate(() => {
+        const pane = document.getElementById('notes-list-pane');
+        if (!pane) return false;
+        const style = getComputedStyle(pane);
+        const rect = pane.getBoundingClientRect();
+        return style.display !== 'none' && rect.width > 0 && rect.height > 0;
+      });
+      assert.equal(listVisibleAgain, true, 'Expected #notes-list-pane visible again after tapping #notes-mobile-back');
+    } finally {
+      await mobileContext.close();
+    }
+
     assert.deepEqual(pageErrors, [], `Uncaught page errors: ${pageErrors.join(' | ')}`);
     assert.deepEqual(consoleErrors, [], `Console errors: ${consoleErrors.join(' | ')}`);
-    console.log(`smoke ok (${opts.bin ? path.basename(opts.bin) : 'mock-web'} + site): all 7 views, note save, settings, and site tabs passed.`);
+    console.log(`smoke ok (${opts.bin ? path.basename(opts.bin) : 'mock-web'} + site + mobile): all 7 views, note & live-preview save, settings, site tabs, and iOS/mobile shell passed.`);
   } finally {
     await browser.close();
     await siteServer.close();

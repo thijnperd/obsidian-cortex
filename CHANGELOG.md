@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.1 — Mobile iOS shell & Obsidian-style Live Preview
+
+- **Simplified iOS & mobile web UI (`<= 760px`):** fixed the safe-area toolbar height bug, trimmed top-bar clutter, moved primary views into a 5-slot bottom dock (`Notes`, `Graph`, `Brain`, `Decisions`, `More` sheet for `Atlas`, `Timeline`, `Bento`, vault picker, theme, random note), converted sidebars/inspector into `100svh` slide-over drawers, and added two-step Notes list ↔ editor navigation with `44px` touch targets and `16px` mobile inputs.
+- **Obsidian-style Live Preview editor:** made **Live** the default Notes editor mode with collapsible YAML Properties + editable `#tag` pills, inline document title, tap-to-edit auto-sizing Markdown blocks, smooth `ArrowUp`/`ArrowDown`/Enter/`Backspace` block navigation, `#tag` autocomplete, 1-tap `/` block menu in the grouped formatting ribbon, and a selection formatting bubble.
+- **Mobile & editor verification:** added unit tests for lossless Live Preview document/block parsing (`tests/web.test.mjs`), desktop Live Preview + `390×844` iOS/touch Playwright smoke assertions (`tests/smoke.mjs`), and bumped the offline PWA shell cache to `cortex-v2.4.1-1`.
+
 ## 2.4.0 — Source comparison, offline mode & CI smoke gate
 
 - **Deterministic source comparison in Research Brief:** extracts shared tags/references, direct cross-links, unlinked phrase overlaps, line-cited key claims (`(L#)`), contrast/caveat tensions, and open questions across selected sources.

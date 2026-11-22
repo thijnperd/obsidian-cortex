@@ -693,26 +693,48 @@ export function panelHtml(detail, markdownHtml, writable = false) {
 }
 
 export function editorToolbarHtml() {
-  const tools = [
-    ['bold', 'i-bold', `Bold (${key('B')})`],
-    ['italic', 'i-italic', `Italic (${key('I')})`],
-    ['heading', 'i-heading', `Heading (${key('2')})`],
-    ['wikilink', 'i-link', `Link to note [[ (${key('K')})`],
-    ['code', 'i-code', `Inline code (${key('E')})`],
-    ['bullet', 'i-list', 'Bullet list'],
-    ['task', 'i-checklist', `Task checkbox (${key('L')})`],
-    ['callout', 'i-callout', 'Obsidian callout block (/callout)'],
-    ['table', 'i-table', 'Markdown table (/table)'],
-    ['math', 'i-math', 'LaTeX math block (/math)'],
-    ['quote', 'i-quote', 'Blockquote'],
+  const groups = [
+    {
+      label: 'Style',
+      tools: [
+        ['bold', 'i-bold', `Bold (${key('B')})`],
+        ['italic', 'i-italic', `Italic (${key('I')})`],
+        ['code', 'i-code', `Inline code (${key('E')})`],
+        ['heading', 'i-heading', `Heading (${key('2')})`],
+      ],
+    },
+    {
+      label: 'Lists & Links',
+      tools: [
+        ['bullet', 'i-list', 'Bullet list'],
+        ['task', 'i-checklist', `Task checkbox (${key('L')})`],
+        ['wikilink', 'i-link', `Link to note [[ (${key('K')})`],
+      ],
+    },
+    {
+      label: 'Blocks',
+      tools: [
+        ['callout', 'i-callout', 'Obsidian callout block (/callout)'],
+        ['table', 'i-table', 'Markdown table (/table)'],
+        ['math', 'i-math', 'LaTeX math block (/math)'],
+        ['quote', 'i-quote', 'Blockquote'],
+        ['slash', 'i-bolt', 'Insert block (/)'],
+      ],
+    },
   ];
-  return tools
-    .map(
-      ([cmd, icon, label]) =>
-        `<button type="button" class="editor-tool" data-edit-cmd="${cmd}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">` +
-        `<svg class="icon" aria-hidden="true"><use href="#${icon}"></use></svg></button>`,
-    )
-    .join('');
+
+  return groups
+    .map(({ label, tools }) => {
+      const buttons = tools
+        .map(
+          ([cmd, icon, title]) =>
+            `<button type="button" class="editor-tool" data-edit-cmd="${cmd}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">` +
+            `<svg class="icon" aria-hidden="true"><use href="#${icon}"></use></svg></button>`,
+        )
+        .join('');
+      return `<div class="editor-tool-group" role="group" aria-label="${escapeHtml(label)}">${buttons}</div>`;
+    })
+    .join('<span class="editor-sep" role="separator" aria-orientation="vertical"></span>');
 }
 
 export function editorHtml(detail, draft) {
@@ -979,13 +1001,13 @@ export function renderNotesStudioTabs(
 }
 
 /**
- * Render the center Notes Studio document canvas in Read, Split, or Edit mode.
+ * Render the center Notes Studio document canvas in Live, Read, Split, or Edit mode.
  */
 export function renderNotesStudioCanvas(
   container,
   detail,
   {
-    viewMode = 'read',
+    viewMode = 'live',
     draft = '',
     markdownHtml = '',
     writable = false,
@@ -1024,8 +1046,8 @@ export function renderNotesStudioCanvas(
       `</div>`
     : '';
 
-  const headerHtml = `
-    <header class="studio-doc-head">
+  const docTopHtml = `
+    <div class="studio-doc-top">
       <div class="studio-breadcrumbs">
         <button type="button" class="studio-folder-crumb" data-filter-folder="${escapeHtml(detail.folder)}">
           <span class="studio-crumb-dot" id="studio-crumb-dot"></span>
@@ -1041,19 +1063,33 @@ export function renderNotesStudioCanvas(
         <span>${totalLinks} ${totalLinks === 1 ? 'link' : 'links'} (${inLinks} in · ${outLinks} out)</span>
         ${tagsHtml ? `<div class="studio-tags">${tagsHtml}</div>` : ''}
       </div>
-      ${propsHtml}
       ${decisionTrail(detail)}
+    </div>
+  `;
+
+  const headerHtml = `
+    <header class="studio-doc-head">
+      ${docTopHtml}
+      ${propsHtml}
     </header>
   `;
 
   const effectiveMode = !writable ? 'read' : viewMode;
 
   let bodyHtml = '';
-  if (effectiveMode === 'read') {
+  if (effectiveMode === 'live') {
+    bodyHtml = `
+      <article class="studio-article studio-article-live">
+        <div class="editor-bar studio-editor-bar" id="studio-editor-bar" role="toolbar" focusgroup="toolbar wrap" aria-label="Markdown formatting">${editorToolbarHtml()}</div>
+        ${docTopHtml}
+        <div class="studio-live-host" id="studio-live-host"></div>
+      </article>
+    `;
+  } else if (effectiveMode === 'read') {
     const editPrompt = writable
       ? `<div class="studio-read-bar">` +
         `<h1 class="studio-doc-title">${escapeHtml(detail.title)}</h1>` +
-        `<button type="button" class="text-button studio-quick-edit" data-switch-editor-mode="split" title="Switch to Live Split editor (${key('E')})">Edit note (${escapeHtml(key('E'))})</button>` +
+        `<button type="button" class="text-button studio-quick-edit" data-switch-editor-mode="live" title="Switch to Live Preview editor (${key('E')})">Edit (${escapeHtml(key('E'))})</button>` +
         `</div>`
       : `<h1 class="studio-doc-title">${escapeHtml(detail.title)}</h1>`;
 
@@ -1069,7 +1105,7 @@ export function renderNotesStudioCanvas(
       <div class="studio-split-layout">
         <section class="studio-editor-col" aria-label="Markdown editor">
           ${headerHtml}
-          <div class="editor-bar studio-editor-bar" role="toolbar" aria-label="Markdown formatting">${editorToolbarHtml()}</div>
+          <div class="editor-bar studio-editor-bar" role="toolbar" focusgroup="toolbar wrap" aria-label="Markdown formatting">${editorToolbarHtml()}</div>
           <div class="editor-host studio-editor-host">
             <textarea class="editor studio-editor" id="studio-editor" spellcheck="false" aria-label="Note Markdown source">${escapeHtml(draft)}</textarea>
           </div>
@@ -1086,9 +1122,9 @@ export function renderNotesStudioCanvas(
     bodyHtml = `
       <article class="studio-article studio-article-edit">
         ${headerHtml}
-        <div class="editor-bar studio-editor-bar" role="toolbar" aria-label="Markdown formatting">${editorToolbarHtml()}</div>
+        <div class="editor-bar studio-editor-bar" role="toolbar" focusgroup="toolbar wrap" aria-label="Markdown formatting">${editorToolbarHtml()}</div>
         <div class="editor-host studio-editor-host">
-          <textarea class="editor studio-editor studio-editor-full" id="studio-editor" spellcheck="false" aria-label="Note Markdown source">${escapeHtml(draft)}</textarea>
+          <textarea class="editor studio-editor studio-editor-full" id="studio-editor" spellcheck="true" aria-label="Note Markdown source">${escapeHtml(draft)}</textarea>
         </div>
         <p class="editor-hint studio-editor-hint">Auto-saving enabled · <code>[[</code> link note · <code>/</code> slash commands · ${key('L')} toggle checkbox · Alt+↑/↓ move line · ${key('E')} read mode</p>
       </article>

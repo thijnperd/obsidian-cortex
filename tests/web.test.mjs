@@ -2,6 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  joinDocument,
+  joinMarkdownBlocks,
+  parseFrontmatterBlock,
+  splitDocument,
+  splitMarkdownBlocks,
+  updateFrontmatterTags,
+} from '../web/js/live-editor.js';
+import {
   escapeHtml,
   extractNoteTallies,
   renderMarkdown,
@@ -134,4 +142,207 @@ test('morph layout is deterministic and every note survives reveal animation', (
   const second = buildBrainPositions(dated, ['A', 'B']);
   assert.deepEqual([...first.positions], [...second.positions]);
   assert.ok([...first.positions].every((n) => Number.isFinite(n)));
+});
+
+test('splitDocument and joinDocument perform lossless round-trip across document shapes and line endings', () => {
+  const cases = [
+    {
+      name: 'frontmatter + H1 + body (LF)',
+      raw: '---\ntitle: Deep Work\ntags: [focus, craft]\n---\n\n# Deep Work\n\nBody paragraph.\n',
+      hasFm: true,
+      titleText: 'Deep Work',
+      body: '\nBody paragraph.\n',
+    },
+    {
+      name: 'frontmatter + H1 + body (CRLF)',
+      raw: '---\r\ntitle: Deep Work\r\ntags: [focus]\r\n---\r\n\r\n# Deep Work\r\n\r\nLine one.\r\nLine two.',
+      hasFm: true,
+      titleText: 'Deep Work',
+      body: '\r\nLine one.\r\nLine two.',
+    },
+    {
+      name: 'frontmatter without H1 (starts with H2)',
+      raw: '---\nstatus: open\n---\n\n## Section\n\nDetails here.\n',
+      hasFm: true,
+      titleText: '',
+      body: '\n## Section\n\nDetails here.\n',
+    },
+    {
+      name: 'without frontmatter, with H1',
+      raw: '# Standalone Note\n\nJust markdown.\n',
+      hasFm: false,
+      titleText: 'Standalone Note',
+      body: '\nJust markdown.\n',
+    },
+    {
+      name: 'without frontmatter and without H1',
+      raw: 'Plain opening paragraph.\n\n- item 1\n- item 2',
+      hasFm: false,
+      titleText: '',
+      body: 'Plain opening paragraph.\n\n- item 1\n- item 2',
+    },
+    {
+      name: 'BOM + ... frontmatter terminator + no trailing newline',
+      raw: '\uFEFF---\ntype: idea\n...\n# Title Only',
+      hasFm: true,
+      titleText: 'Title Only',
+      body: '',
+    },
+    {
+      name: 'empty document',
+      raw: '',
+      hasFm: false,
+      titleText: '',
+      body: '',
+    },
+  ];
+
+  for (const tc of cases) {
+    const split = splitDocument(tc.raw);
+    assert.equal(Boolean(split.frontmatter), tc.hasFm, `${tc.name}: frontmatter presence`);
+    assert.equal(split.titleText, tc.titleText, `${tc.name}: titleText`);
+    assert.equal(split.body, tc.body, `${tc.name}: body`);
+    assert.equal(joinDocument(split), tc.raw, `${tc.name}: lossless joinDocument`);
+  }
+
+  assert.equal(
+    joinDocument({ frontmatter: '---\na: 1\n---', titleLine: '# Title', body: 'Hello' }),
+    '---\na: 1\n---\n# Title\nHello',
+  );
+});
+
+test('parseFrontmatterBlock and updateFrontmatterTags preserve keys and handle add/update/remove', () => {
+  const fmBlockList = [
+    '---',
+    'title: "Quoted: Value"',
+    '# YAML comment',
+    'tags:',
+    '  - alpha',
+    '  - "beta, gamma"',
+    'confidence: 0.85',
+    'empty_key:',
+    '---',
+    '',
+  ].join('\n');
+
+  const parsed = parseFrontmatterBlock(fmBlockList);
+  assert.deepEqual(parsed, [
+    { key: 'title', value: 'Quoted: Value', isList: false, items: [] },
+    { key: 'tags', value: 'alpha, beta, gamma', isList: true, items: ['alpha', 'beta, gamma'] },
+    { key: 'confidence', value: '0.85', isList: false, items: [] },
+    { key: 'empty_key', value: '', isList: false, items: [] },
+  ]);
+
+  assert.deepEqual(parseFrontmatterBlock(''), []);
+  assert.deepEqual(parseFrontmatterBlock('not frontmatter'), []);
+
+  // Update existing block-list tags while preserving other keys and comments
+  const updated = updateFrontmatterTags(fmBlockList, ['#Focus', 'focus', 'two words']);
+  assert.ok(updated.includes('title: "Quoted: Value"'));
+  assert.ok(updated.includes('# YAML comment'));
+  assert.ok(updated.includes('confidence: 0.85'));
+  assert.ok(updated.includes('empty_key:'));
+  assert.ok(updated.includes('tags: [Focus, "two words"]'));
+  assert.ok(!updated.includes('  - alpha'));
+
+  // Remove tags cleanly when other keys exist
+  const removedWithOthers = updateFrontmatterTags(updated, []);
+  assert.ok(!/tags\s*:/i.test(removedWithOthers));
+  assert.ok(removedWithOthers.includes('title: "Quoted: Value"'));
+  assert.ok(removedWithOthers.includes('confidence: 0.85'));
+
+  // Add tags when absent in existing CRLF frontmatter
+  const noTagsCrlf = '---\r\ndate: 2026-11-22\r\nstatus: open\r\n---\r\n';
+  const addedToExisting = updateFrontmatterTags(noTagsCrlf, ['craft', 'notes']);
+  assert.equal(
+    addedToExisting,
+    '---\r\ndate: 2026-11-22\r\nstatus: open\r\ntags: [craft, notes]\r\n---\r\n',
+  );
+
+  // Add tags when frontmatter is absent, then remove all tags cleanly -> ''
+  const createdFm = updateFrontmatterTags('', ['solo']);
+  assert.equal(createdFm, '---\ntags: [solo]\n---\n');
+  assert.equal(updateFrontmatterTags(createdFm, []), '');
+});
+
+test('splitMarkdownBlocks and joinMarkdownBlocks round-trip all block kinds losslessly', () => {
+  const richBody = [
+    '## Architecture Notes',
+    '',
+    'Opening paragraph with [[Deep Work]] and **bold** text.',
+    'Continued on the next line.',
+    '',
+    '```js',
+    'const x = 1;',
+    '// ~~~ not a closing fence',
+    '```',
+    '',
+    '~~~markdown',
+    '# Heading inside tilde fence',
+    '~~~',
+    '',
+    '$$',
+    'E = mc^2',
+    '$$',
+    '',
+    '$$a^2 + b^2 = c^2$$',
+    '',
+    '> [!NOTE] Local-first',
+    '> Keep plain Markdown on disk.',
+    '',
+    '> Regular blockquote line.',
+    '> Second quote line.',
+    '',
+    '| Name | Status |',
+    '| --- | --- |',
+    '| Cortex | Ready |',
+    '',
+    '- [ ] First task',
+    '- [x] Completed task',
+    '  - Nested bullet',
+    '1. Ordered item',
+    '',
+    '---',
+    '',
+    'Final paragraph without trailing newline',
+  ].join('\n');
+
+  const blocks = splitMarkdownBlocks(richBody);
+  assert.equal(joinMarkdownBlocks(blocks), richBody);
+
+  const kinds = blocks.map((b) => b.kind);
+  assert.deepEqual(kinds, [
+    'heading',
+    'paragraph',
+    'code',
+    'code',
+    'math',
+    'math',
+    'callout',
+    'quote',
+    'table',
+    'list',
+    'hr',
+    'paragraph',
+  ]);
+
+  // CRLF round-trip
+  const crlfBody = richBody.replace(/\n/g, '\r\n');
+  const crlfBlocks = splitMarkdownBlocks(crlfBody);
+  assert.deepEqual(crlfBlocks.map((b) => b.kind), kinds);
+  assert.equal(joinMarkdownBlocks(crlfBlocks), crlfBody);
+
+  // Adjacent blocks without blank lines & whitespace edge cases
+  const edgeCases = [
+    '',
+    '   \n\n  ',
+    '\n\n# Leading Blank Lines\nParagraph immediately after\n> Quote immediately after\n***\n- list item\n```py\nprint(1)\n```\n| A | B |\n| - | - |\n| 1 | 2 |\n',
+    'Unclosed ``` fence\nstill code',
+  ];
+  for (const sample of edgeCases) {
+    assert.equal(joinMarkdownBlocks(splitMarkdownBlocks(sample)), sample);
+  }
+  assert.deepEqual(splitMarkdownBlocks(''), []);
+  assert.equal(joinMarkdownBlocks([]), '');
+  assert.equal(joinMarkdownBlocks(null), '');
 });

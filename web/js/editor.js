@@ -451,7 +451,8 @@ function typePair(textarea, event) {
 }
 
 /**
- * Inspect the text leading up to the caret for an active `[[wikilink` or `/slash` trigger.
+ * Inspect the text leading up to the caret for an active `[[wikilink`, `/slash`,
+ * or `#tag` trigger.
  */
 function detectAutocompleteContext(textarea) {
   if (textarea.selectionStart !== textarea.selectionEnd) return null;
@@ -488,13 +489,49 @@ function detectAutocompleteContext(textarea) {
     };
   }
 
+  // 3. Check for #tag trigger (after whitespace with 0+ tag chars, or at start of
+  //    line with 1+ non-# tag chars so `# Heading` and `##` don't pop up eagerly)
+  const tagMatch = /(?:^#([a-zA-Z0-9_/-]{1,40})|\s(#([a-zA-Z0-9_/-]{0,40})))$/.exec(before);
+  if (tagMatch) {
+    const isStartOfLine = tagMatch[1] !== undefined;
+    const token = isStartOfLine ? `#${tagMatch[1]}` : tagMatch[2];
+    const query = (isStartOfLine ? tagMatch[1] : tagMatch[3]).toLowerCase();
+    return {
+      kind: 'tag',
+      query,
+      replaceFrom: caret - token.length,
+      replaceTo: caret,
+    };
+  }
+
   return null;
 }
 
-function buildPopoverController(textarea, getNotes) {
+function normalizeTagEntries(rawTags) {
+  const seen = new Set();
+  const list = [];
+  for (const entry of rawTags || []) {
+    let name = '';
+    let count = null;
+    if (typeof entry === 'string') {
+      name = entry.replace(/^#/, '').trim();
+    } else if (entry && typeof entry === 'object') {
+      name = String(entry.tag ?? entry.name ?? entry.label ?? '').replace(/^#/, '').trim();
+      if (entry.count != null) count = Number(entry.count);
+    }
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push({ name, lower: key, count });
+  }
+  return list;
+}
+
+function buildPopoverController(textarea, getNotes, getTags) {
   const host = textarea.parentElement;
   if (!host || typeof document === 'undefined') {
-    return { update() {}, handleKeyDown() { return false; }, close() {} };
+    return { update() {}, handleKeyDown() { return false; }, close() {}, destroy() {} };
   }
   host.classList.add('editor-host');
 
@@ -516,6 +553,11 @@ function buildPopoverController(textarea, getNotes) {
     popover.innerHTML = '';
   }
 
+  function destroy() {
+    close();
+    popover.remove();
+  }
+
   function applySelection(index) {
     const item = items[index];
     if (!item || !activeContext) return false;
@@ -527,6 +569,12 @@ function buildPopoverController(textarea, getNotes) {
       const endPos = after === ']]' ? ctx.replaceTo + 2 : ctx.replaceTo;
       const insertion = `[[${item.title}]]`;
       replaceRange(textarea, ctx.replaceFrom, endPos, insertion, insertion.length, insertion.length);
+      return true;
+    }
+
+    if (ctx.kind === 'tag') {
+      const insertion = `#${item.tag} `;
+      replaceRange(textarea, ctx.replaceFrom, ctx.replaceTo, insertion, insertion.length, insertion.length);
       return true;
     }
 
@@ -546,7 +594,9 @@ function buildPopoverController(textarea, getNotes) {
     popover.hidden = false;
     const headerLabel = activeContext.kind === 'wikilink'
       ? 'Link to note · ↑↓ · ↵ insert'
-      : 'Slash commands · ↑↓ · ↵ run';
+      : activeContext.kind === 'tag'
+        ? 'Vault tags · ↑↓ · ↵ insert'
+        : 'Slash commands · ↑↓ · ↵ run';
 
     popover.innerHTML = '';
     const head = document.createElement('div');
@@ -636,6 +686,39 @@ function buildPopoverController(textarea, getNotes) {
       return;
     }
 
+    if (ctx.kind === 'tag') {
+      const allTags = normalizeTagEntries(typeof getTags === 'function' ? (getTags() || []) : []);
+      const q = ctx.query;
+      const scored = [];
+      for (const entry of allTags) {
+        if (!q) {
+          scored.push({ entry, score: entry.count ?? 0 });
+        } else if (entry.lower === q) {
+          scored.push({ entry, score: 1000 });
+        } else if (entry.lower.startsWith(q)) {
+          scored.push({ entry, score: 500 - entry.lower.length });
+        } else if (entry.lower.includes(q)) {
+          scored.push({ entry, score: 200 - entry.lower.indexOf(q) });
+        }
+      }
+      scored.sort((a, b) => b.score - a.score || a.entry.name.localeCompare(b.entry.name));
+      const matches = scored.slice(0, 8).map(({ entry }) => ({
+        tag: entry.name,
+        label: `#${entry.name}`,
+        meta: entry.count != null ? `${entry.count} ${entry.count === 1 ? 'note' : 'notes'}` : 'tag',
+      }));
+
+      if (!matches.length) {
+        close();
+        return;
+      }
+      activeContext = ctx;
+      items = matches;
+      selectedIndex = Math.min(selectedIndex, items.length - 1);
+      render();
+      return;
+    }
+
     if (ctx.kind === 'slash') {
       const q = ctx.query;
       const matches = SLASH_COMMANDS.filter((cmd) => (
@@ -689,29 +772,31 @@ function buildPopoverController(textarea, getNotes) {
     return false;
   }
 
-  return { update, handleKeyDown, close };
+  return { update, handleKeyDown, close, destroy };
 }
 
 /**
  * Wire the note textarea. `onChange`, `onSave` and `onCancel` are the host's
- * own callbacks, and `getNotes` optionally supplies vault notes for `[[`
- * wikilink autocomplete.
+ * own callbacks, `getNotes` supplies vault notes for `[[` wikilink autocomplete,
+ * and `getTags` supplies vault tags for `#` tag autocomplete.
  */
-export function attachEditor(textarea, { onChange, onSave, onCancel, getNotes } = {}) {
-  const popover = buildPopoverController(textarea, getNotes);
+export function attachEditor(textarea, { onChange, onSave, onCancel, getNotes, getTags } = {}) {
+  const popover = buildPopoverController(textarea, getNotes, getTags);
+  let blurTimer = null;
 
-  textarea.addEventListener('input', (event) => {
+  const onInput = (event) => {
     if (typeof onChange === 'function') onChange(event);
     popover.update();
-  });
+  };
 
-  textarea.addEventListener('click', () => popover.update());
-  textarea.addEventListener('blur', () => {
-    setTimeout(() => popover.close(), 140);
-  });
+  const onClick = () => popover.update();
+  const onPopoverRefresh = () => popover.update();
+  const onBlur = () => {
+    blurTimer = setTimeout(() => popover.close(), 140);
+  };
 
   // Smart URL paste: pasting a URL over a selection wraps it as [selection](url)
-  textarea.addEventListener('paste', (event) => {
+  const onPaste = (event) => {
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     if (start === end) return;
@@ -722,9 +807,9 @@ export function attachEditor(textarea, { onChange, onSave, onCancel, getNotes } 
     event.preventDefault();
     const link = `[${selected}](${pasted})`;
     replaceRange(textarea, start, end, link, 1, 1 + selected.length);
-  });
+  };
 
-  textarea.addEventListener('keydown', (event) => {
+  const onKeyDown = (event) => {
     if (event.isComposing || event.keyCode === 229) return;
 
     if (popover.handleKeyDown(event)) {
@@ -883,7 +968,271 @@ export function attachEditor(textarea, { onChange, onSave, onCancel, getNotes } 
       event.stopPropagation();
       popover.update();
     }
-  });
+  };
+
+  textarea.addEventListener('input', onInput);
+  textarea.addEventListener('click', onClick);
+  textarea.addEventListener('cortex:popover-update', onPopoverRefresh);
+  textarea.addEventListener('blur', onBlur);
+  textarea.addEventListener('paste', onPaste);
+  textarea.addEventListener('keydown', onKeyDown);
+
+  return {
+    updatePopover: () => popover.update(),
+    closePopover: () => popover.close(),
+    destroy() {
+      if (blurTimer) clearTimeout(blurTimer);
+      textarea.removeEventListener('input', onInput);
+      textarea.removeEventListener('click', onClick);
+      textarea.removeEventListener('cortex:popover-update', onPopoverRefresh);
+      textarea.removeEventListener('blur', onBlur);
+      textarea.removeEventListener('paste', onPaste);
+      textarea.removeEventListener('keydown', onKeyDown);
+      popover.destroy();
+    },
+  };
+}
+
+/**
+ * Insert `/` (with a leading space when adjacent to non-whitespace) at the
+ * caret and trigger the slash command popover immediately.
+ */
+export function openSlashMenu(textarea) {
+  if (!textarea) return;
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? start;
+  const prev = start > 0 ? textarea.value[start - 1] : '';
+  const prev2 = start > 1 ? textarea.value[start - 2] : '';
+
+  if (start === end && prev === '/' && (start === 1 || /\s/.test(prev2))) {
+    textarea.focus();
+    textarea.dispatchEvent(new Event('cortex:popover-update'));
+    return;
+  }
+
+  const insertion = prev && !/\s/.test(prev) ? ' /' : '/';
+  replaceRange(textarea, start, end, insertion, insertion.length, insertion.length);
+  textarea.dispatchEvent(new Event('cortex:popover-update'));
+}
+
+/**
+ * Roving-tabindex keyboard fallback for `role="toolbar"` containers when the
+ * browser does not yet implement native `focusgroup` (`HTMLElement.prototype.focusGroup`).
+ *
+ * @param {HTMLElement|null} toolbarEl
+ * @returns {() => void} Cleanup function
+ */
+export function initRovingToolbar(toolbarEl) {
+  if (!toolbarEl || typeof HTMLElement === 'undefined') return () => {};
+  if ('focusGroup' in HTMLElement.prototype) return () => {};
+
+  const getItems = () => Array.from(toolbarEl.querySelectorAll('button:not([hidden]):not([disabled])'));
+
+  const setActive = (target) => {
+    const items = getItems();
+    if (!items.length) return;
+    const chosen = items.includes(target) ? target : items[0];
+    for (const item of items) {
+      item.tabIndex = item === chosen ? 0 : -1;
+    }
+  };
+
+  setActive(null);
+
+  const onFocusIn = (event) => {
+    const btn = event.target?.closest?.('button:not([hidden])');
+    if (btn && toolbarEl.contains(btn)) {
+      setActive(btn);
+    }
+  };
+
+  const onKeyDown = (event) => {
+    const items = getItems();
+    if (!items.length) return;
+    const activeEl = typeof document !== 'undefined' ? document.activeElement : null;
+    let current = items.indexOf(activeEl);
+    if (current < 0) {
+      const targetBtn = event.target?.closest?.('button:not([hidden])');
+      current = items.indexOf(targetBtn);
+    }
+    if (current < 0) return;
+
+    const isRtl = typeof getComputedStyle === 'function'
+      && getComputedStyle(toolbarEl).direction === 'rtl';
+
+    let nextIndex = -1;
+    if (event.key === 'ArrowRight') {
+      nextIndex = (current + (isRtl ? -1 : 1) + items.length) % items.length;
+    } else if (event.key === 'ArrowLeft') {
+      nextIndex = (current + (isRtl ? 1 : -1) + items.length) % items.length;
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = items.length - 1;
+    }
+
+    if (nextIndex < 0) return;
+    event.preventDefault();
+    const target = items[nextIndex];
+    setActive(target);
+    target.focus();
+  };
+
+  toolbarEl.addEventListener('focusin', onFocusIn);
+  toolbarEl.addEventListener('keydown', onKeyDown);
+
+  return () => {
+    toolbarEl.removeEventListener('focusin', onFocusIn);
+    toolbarEl.removeEventListener('keydown', onKeyDown);
+  };
+}
+
+const SELECTION_BUBBLE_COMMANDS = [
+  { cmd: 'bold', label: 'B', title: 'Bold' },
+  { cmd: 'italic', label: 'I', title: 'Italic' },
+  { cmd: 'highlight', label: '==', title: 'Highlight' },
+  { cmd: 'strike', label: 'S', title: 'Strikethrough' },
+  { cmd: 'code', label: '`', title: 'Inline code' },
+  { cmd: 'wikilink', label: '[[]]', title: 'Wikilink' },
+];
+
+/**
+ * Attach a floating `.selection-bubble` formatting pill inside `container`.
+ * Shows whenever the active `<textarea>` has a non-empty selection and hides
+ * cleanly on selection collapse, Escape, or blur.
+ *
+ * @param {HTMLElement} container
+ * @param {() => HTMLTextAreaElement|null} getTextarea
+ * @param {(command: string) => void} onCommand
+ * @returns {() => void} Cleanup function
+ */
+export function attachSelectionBubble(container, getTextarea, onCommand) {
+  if (!container || typeof document === 'undefined') return () => {};
+
+  const bubble = document.createElement('div');
+  bubble.className = 'selection-bubble';
+  bubble.setAttribute('role', 'toolbar');
+  bubble.setAttribute('aria-label', 'Selection formatting');
+  bubble.hidden = true;
+
+  for (const { cmd, label, title } of SELECTION_BUBBLE_COMMANDS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `selection-bubble-btn is-${cmd}`;
+    btn.dataset.bubbleCmd = cmd;
+    btn.title = title;
+    btn.setAttribute('aria-label', title);
+    btn.textContent = label;
+    btn.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+    });
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof onCommand === 'function') onCommand(cmd);
+      update();
+    });
+    bubble.appendChild(btn);
+  }
+
+  container.appendChild(bubble);
+
+  let lastPointerX = null;
+
+  function resolveTextarea() {
+    const supplied = typeof getTextarea === 'function' ? getTextarea() : null;
+    if (supplied && container.contains(supplied)) return supplied;
+    const active = document.activeElement;
+    if (active && active.tagName === 'TEXTAREA' && container.contains(active)) return active;
+    return null;
+  }
+
+  function hide() {
+    bubble.hidden = true;
+    bubble.classList.remove('is-visible');
+  }
+
+  function positionBubble(ta) {
+    const hostRect = container.getBoundingClientRect?.();
+    const taRect = ta.getBoundingClientRect?.();
+    if (!hostRect || !taRect || (!hostRect.width && !taRect.width)) return;
+
+    const beforeSelection = ta.value.slice(0, ta.selectionStart);
+    const lineIndex = beforeSelection.split('\n').length - 1;
+    const computed = typeof getComputedStyle === 'function' ? getComputedStyle(ta) : null;
+    const lineHeight = Number.parseFloat(computed?.lineHeight || '') || 24;
+    const paddingTop = Number.parseFloat(computed?.paddingTop || '') || 0;
+
+    const approxLineTop = taRect.top - hostRect.top + (container.scrollTop || 0)
+      + paddingTop + (lineIndex * lineHeight) - (ta.scrollTop || 0);
+
+    const bubbleWidth = bubble.offsetWidth || 216;
+    const bubbleHeight = bubble.offsetHeight || 38;
+    const anchorClientX = lastPointerX != null
+      ? Math.min(Math.max(lastPointerX, taRect.left + 16), taRect.right - 16)
+      : (taRect.left + taRect.right) / 2;
+    const rawLeft = anchorClientX - hostRect.left - (bubbleWidth / 2);
+    const maxLeft = Math.max(8, hostRect.width - bubbleWidth - 8);
+    const clampedLeft = Math.min(Math.max(8, rawLeft), maxLeft);
+    const clampedTop = Math.max(4, approxLineTop - bubbleHeight - 8);
+
+    bubble.style.left = `${Math.round(clampedLeft)}px`;
+    bubble.style.top = `${Math.round(clampedTop)}px`;
+  }
+
+  function update() {
+    const ta = resolveTextarea();
+    if (!ta || document.activeElement !== ta) {
+      hide();
+      return;
+    }
+    const start = ta.selectionStart ?? 0;
+    const end = ta.selectionEnd ?? 0;
+    if (start === end) {
+      hide();
+      return;
+    }
+    bubble.hidden = false;
+    bubble.classList.add('is-visible');
+    positionBubble(ta);
+  }
+
+  const onMouseUp = (event) => {
+    lastPointerX = event.clientX ?? null;
+    update();
+  };
+  const onKeyUp = () => {
+    lastPointerX = null;
+    update();
+  };
+  const onSelect = () => update();
+  const onSelectionChange = () => update();
+  const onKeyDown = (event) => {
+    if (event.key === 'Escape' && !bubble.hidden) {
+      hide();
+    }
+  };
+  const onFocusOut = (event) => {
+    if (event.relatedTarget && bubble.contains(event.relatedTarget)) return;
+    hide();
+  };
+
+  container.addEventListener('mouseup', onMouseUp);
+  container.addEventListener('keyup', onKeyUp);
+  container.addEventListener('select', onSelect, true);
+  container.addEventListener('keydown', onKeyDown, true);
+  container.addEventListener('focusout', onFocusOut);
+  document.addEventListener('selectionchange', onSelectionChange);
+
+  return () => {
+    container.removeEventListener('mouseup', onMouseUp);
+    container.removeEventListener('keyup', onKeyUp);
+    container.removeEventListener('select', onSelect, true);
+    container.removeEventListener('keydown', onKeyDown, true);
+    container.removeEventListener('focusout', onFocusOut);
+    document.removeEventListener('selectionchange', onSelectionChange);
+    bubble.remove();
+  };
 }
 
 /**
@@ -954,6 +1303,9 @@ export function runEditorCommand(textarea, command) {
       break;
     case 'today':
       insertTodayDate(textarea);
+      break;
+    case 'slash':
+      openSlashMenu(textarea);
       break;
     default:
       break;

@@ -13,7 +13,14 @@ import {
 import * as api from './api.js';
 import * as ui from './ui.js';
 import { Atlas } from './atlas.js';
-import { attachEditor, runEditorCommand } from './editor.js';
+import {
+  attachEditor,
+  attachSelectionBubble,
+  initRovingToolbar,
+  openSlashMenu,
+  runEditorCommand,
+} from './editor.js';
+import { mountLiveEditor } from './live-editor.js';
 import { Tutorial } from './tutorial.js';
 import { diaryFolders, isOverview } from './scale.js';
 import { applyPlatformHints, key, mod } from './platform.js';
@@ -70,7 +77,7 @@ const state = {
   studio: {
     tabs: [],
     activeId: null,
-    viewMode: 'read',
+    viewMode: 'live',
     scope: 'all',
     folderFilter: null,
     filterQuery: '',
@@ -85,6 +92,12 @@ const state = {
     dirty: false,
     autoSaveTimer: null,
     saving: false,
+    mobileReading: false,
+    liveController: null,
+    activeTextarea: null,
+    editorHandle: null,
+    toolbarCleanup: null,
+    bubbleCleanup: null,
   },
   time: 0,
   dragging: false,
@@ -195,6 +208,7 @@ const els = {
   notesMoreBtn: document.getElementById('notes-more-btn'),
   notesMoreMenu: document.getElementById('notes-more-menu'),
   notesToggleList: document.getElementById('notes-toggle-list'),
+  notesMobileBack: document.getElementById('notes-mobile-back'),
   notesTabs: document.getElementById('notes-tabs'),
   notesTabNew: document.getElementById('notes-tab-new'),
   notesSaveStatus: document.getElementById('notes-save-status'),
@@ -208,8 +222,17 @@ const els = {
   notesCanvas: document.getElementById('notes-canvas'),
   notesMiniOutline: document.getElementById('notes-mini-outline'),
   notesInspectorPane: document.getElementById('notes-inspector-pane'),
+  notesInspectorClose: document.getElementById('notes-inspector-close'),
   notesInspectorTabs: document.getElementById('notes-inspector-tabs'),
   notesInspectorBody: document.getElementById('notes-inspector-body'),
+  mobileBackdrop: document.getElementById('mobile-backdrop'),
+  mobileMoreBtn: document.getElementById('mobile-more-btn'),
+  mobileMoreLabel: document.getElementById('mobile-more-label'),
+  mobileMoreSheet: document.getElementById('mobile-more-sheet'),
+  mobileMoreClose: document.getElementById('mobile-more-close'),
+  mobileActionVault: document.getElementById('mobile-action-vault'),
+  mobileActionTheme: document.getElementById('mobile-action-theme'),
+  mobileActionSurprise: document.getElementById('mobile-action-surprise'),
   palette: document.getElementById('palette'),
   paletteInput: document.getElementById('palette-input'),
   paletteResults: document.getElementById('palette-results'),
@@ -322,25 +345,167 @@ function setPanelWidth(px, { persist = false } = {}) {
   if (persist) prefs.set(PANEL_WIDTH_KEY, clamped);
 }
 
+const isMobileViewport = () => Boolean(window.matchMedia && window.matchMedia('(max-width: 760px)').matches);
+const isTabletViewport = () => Boolean(window.matchMedia && window.matchMedia('(max-width: 1120px)').matches);
+
+const SECONDARY_MOBILE_MODES = {
+  atlas: 'Atlas',
+  replay: 'Timeline',
+  bento: 'Bento',
+};
+
+let lastMobileViewport = isMobileViewport();
+let lastTabletViewport = isTabletViewport();
+
+function hasOpenMobileDrawer() {
+  const moreOpen = Boolean(els.mobileMoreSheet && !els.mobileMoreSheet.hidden);
+  const sidebarOpen = Boolean(els.sidebar && els.sidebar.classList.contains('is-mobile-open'));
+  const inspectorOpen = Boolean(
+    els.notesInspectorPane && els.notesInspectorPane.classList.contains('is-mobile-open'),
+  );
+  return moreOpen || sidebarOpen || inspectorOpen;
+}
+
+function syncMobileBackdrop() {
+  if (!els.mobileBackdrop) return;
+  els.mobileBackdrop.hidden = !hasOpenMobileDrawer();
+}
+
+function syncMobileMoreState() {
+  const secondaryLabel = SECONDARY_MOBILE_MODES[state.mode] || null;
+  if (els.mobileMoreBtn) {
+    els.mobileMoreBtn.classList.toggle('is-active', Boolean(secondaryLabel));
+  }
+  if (els.mobileMoreLabel) {
+    els.mobileMoreLabel.textContent = secondaryLabel || 'More';
+  }
+  if (els.mobileMoreSheet) {
+    els.mobileMoreSheet.querySelectorAll('[data-mobile-mode]').forEach((btn) => {
+      const active = btn.dataset.mobileMode === state.mode;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+  }
+}
+
+function closeMobileDrawers() {
+  if (els.mobileMoreSheet) {
+    els.mobileMoreSheet.hidden = true;
+  }
+  if (els.mobileMoreBtn) {
+    els.mobileMoreBtn.setAttribute('aria-expanded', 'false');
+  }
+  if (els.sidebar && els.sidebar.classList.contains('is-mobile-open')) {
+    els.sidebar.classList.remove('is-mobile-open');
+    if (isMobileViewport()) els.sidebar.hidden = true;
+    if (els.sidebarToggle) {
+      els.sidebarToggle.setAttribute('aria-expanded', 'false');
+      els.sidebarToggle.classList.remove('is-active');
+    }
+  }
+  if (els.notesInspectorPane && els.notesInspectorPane.classList.contains('is-mobile-open')) {
+    els.notesInspectorPane.classList.remove('is-mobile-open');
+    if (els.notesToggleInspector) {
+      els.notesToggleInspector.setAttribute('aria-pressed', 'false');
+    }
+  }
+  syncMobileBackdrop();
+}
+
+function toggleMobileMoreSheet(force) {
+  if (!els.mobileMoreSheet) return;
+  const opening = typeof force === 'boolean' ? force : els.mobileMoreSheet.hidden;
+  closeMobileDrawers();
+  if (opening) {
+    els.mobileMoreSheet.hidden = false;
+    if (els.mobileMoreBtn) els.mobileMoreBtn.setAttribute('aria-expanded', 'true');
+    syncMobileMoreState();
+    syncMobileBackdrop();
+  }
+}
+
+function handleViewportBreakpointChange() {
+  const mobile = isMobileViewport();
+  const tablet = isTabletViewport();
+  const mobileChanged = mobile !== lastMobileViewport;
+  const tabletChanged = tablet !== lastTabletViewport;
+  if (!mobileChanged && !tabletChanged) return;
+  lastMobileViewport = mobile;
+  lastTabletViewport = tablet;
+
+  closeMobileDrawers();
+  if (mobileChanged) {
+    syncSidebar();
+    syncStudioMobileReading();
+    if (state.mode === 'notes' && state.studio.viewMode === 'split') {
+      renderNotesStudioHeaderControls();
+      renderNotesStudioDocument();
+    }
+  }
+  if (tabletChanged && els.notesToggleInspector) {
+    const pressed = tablet
+      ? Boolean(els.notesInspectorPane?.classList.contains('is-mobile-open'))
+      : !state.studio.inspectorCollapsed;
+    els.notesToggleInspector.setAttribute('aria-pressed', String(pressed));
+  }
+}
+
 function syncSidebar() {
   const available = !state.launching && Boolean(state.graph);
-  if (els.sidebarToggle) {
-    els.sidebarToggle.hidden = !available;
-    els.sidebarToggle.setAttribute('aria-expanded', String(available && !state.sidebarCollapsed));
-    els.sidebarToggle.classList.toggle('is-active', available && !state.sidebarCollapsed);
-  }
   if (!available) {
+    if (els.sidebarToggle) {
+      els.sidebarToggle.hidden = true;
+      els.sidebarToggle.setAttribute('aria-expanded', 'false');
+      els.sidebarToggle.classList.remove('is-active');
+    }
     els.sidebar.hidden = true;
+    els.sidebar.classList.remove('is-mobile-open');
     document.body.classList.remove('has-sidebar');
+    syncMobileBackdrop();
     return;
+  }
+  if (isMobileViewport()) {
+    const mobileOpen = els.sidebar.classList.contains('is-mobile-open');
+    if (els.sidebarToggle) {
+      els.sidebarToggle.hidden = false;
+      els.sidebarToggle.setAttribute('aria-expanded', String(mobileOpen));
+      els.sidebarToggle.classList.toggle('is-active', mobileOpen);
+    }
+    els.sidebar.hidden = !mobileOpen;
+    document.body.classList.remove('has-sidebar');
+    syncMobileBackdrop();
+    onResize();
+    return;
+  }
+  els.sidebar.classList.remove('is-mobile-open');
+  if (els.sidebarToggle) {
+    els.sidebarToggle.hidden = false;
+    els.sidebarToggle.setAttribute('aria-expanded', String(!state.sidebarCollapsed));
+    els.sidebarToggle.classList.toggle('is-active', !state.sidebarCollapsed);
   }
   els.sidebar.hidden = state.sidebarCollapsed;
   document.body.classList.toggle('has-sidebar', !state.sidebarCollapsed);
+  syncMobileBackdrop();
   onResize();
 }
 
 function toggleSidebar(force) {
   if (state.launching || !state.graph) return;
+  if (isMobileViewport()) {
+    const currentOpen = els.sidebar.classList.contains('is-mobile-open');
+    const nextOpen = typeof force === 'boolean' ? !force : !currentOpen;
+    closeMobileDrawers();
+    if (nextOpen) {
+      els.sidebar.classList.add('is-mobile-open');
+      els.sidebar.hidden = false;
+      if (els.sidebarToggle) {
+        els.sidebarToggle.setAttribute('aria-expanded', 'true');
+        els.sidebarToggle.classList.add('is-active');
+      }
+      syncMobileBackdrop();
+    }
+    return;
+  }
   state.sidebarCollapsed = typeof force === 'boolean' ? force : !state.sidebarCollapsed;
   prefs.set(SIDEBAR_COLLAPSED_KEY, state.sidebarCollapsed);
   syncSidebar();
@@ -722,8 +887,56 @@ function wire() {
   window.addEventListener('resize', onResize);
 
   document.querySelectorAll('.view[data-mode]').forEach((button) => {
-    button.addEventListener('click', () => setMode(button.dataset.mode));
+    button.addEventListener('click', () => {
+      const targetMode = button.dataset.mode;
+      closeMobileDrawers();
+      if (targetMode === 'notes' && isMobileViewport()) {
+        if (state.mode === 'notes') {
+          if (state.studio.dirty) saveStudioDraft({ quiet: true });
+          setStudioMobileReading(false);
+          return;
+        }
+        state.studio.mobileReading = false;
+      }
+      setMode(targetMode);
+    });
   });
+  if (els.mobileMoreBtn) {
+    els.mobileMoreBtn.addEventListener('click', () => toggleMobileMoreSheet());
+  }
+  if (els.mobileMoreClose) {
+    els.mobileMoreClose.addEventListener('click', () => closeMobileDrawers());
+  }
+  if (els.mobileBackdrop) {
+    els.mobileBackdrop.addEventListener('click', () => closeMobileDrawers());
+  }
+  if (els.mobileMoreSheet) {
+    els.mobileMoreSheet.querySelectorAll('[data-mobile-mode]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const mode = button.dataset.mobileMode;
+        closeMobileDrawers();
+        if (mode) setMode(mode);
+      });
+    });
+  }
+  if (els.mobileActionTheme) {
+    els.mobileActionTheme.addEventListener('click', () => {
+      toggleTheme();
+      closeMobileDrawers();
+    });
+  }
+  if (els.mobileActionSurprise) {
+    els.mobileActionSurprise.addEventListener('click', () => {
+      closeMobileDrawers();
+      openRandomNote();
+    });
+  }
+  if (els.mobileActionVault) {
+    els.mobileActionVault.addEventListener('click', () => {
+      closeMobileDrawers();
+      openLocalVaultDialog('');
+    });
+  }
   els.sectionFocusExit.addEventListener('click', () => clearFolderFocus());
   els.panelClose.addEventListener('click', closePanel);
   els.panelBack.addEventListener('click', goBack);
@@ -731,8 +944,9 @@ function wire() {
   if (els.panelOpenStudio) {
     els.panelOpenStudio.addEventListener('click', () => {
       const targetId = state.detail?.id || (state.selected != null ? state.graph?.nodes[state.selected]?.id : null);
+      if (targetId && isMobileViewport()) state.studio.mobileReading = true;
       setMode('notes');
-      if (targetId) openNoteInStudio(targetId);
+      if (targetId) openNoteInStudio(targetId, { reveal: true });
     });
   }
   if (els.surpriseNote) {
@@ -921,6 +1135,7 @@ async function refreshVaults() {
 }
 
 function showLaunch(message) {
+  closeMobileDrawers();
   state.launching = true;
   els.tourButton.hidden = true;
   els.launch.hidden = false;
@@ -975,6 +1190,7 @@ async function openListedVault(vault) {
     showLaunchError('That folder is no longer there. Use Forget to remove it.');
     return;
   }
+  closeMobileDrawers();
   try {
     const view = launchView();
     if (!vault.loaded) await api.addVault(vault.path);
@@ -1022,6 +1238,12 @@ function showApp() {
 }
 
 function resetVaultState() {
+  closeMobileDrawers();
+  cleanupStudioCanvas();
+  clearTimeout(state.studio.autoSaveTimer);
+  state.studio.dirty = false;
+  state.studio.saving = false;
+  state.studio.mobileReading = false;
   els.tourButton.hidden = true;
   state.cache.clear();
   state.selection.clear();
@@ -1059,7 +1281,8 @@ function watchVault() {
         if (controller.signal.aborted || state.vaultId !== vaultId) break;
         if (info.vault && info.vault !== vaultId) continue;
         if (!info.version || info.version === state.version) continue;
-        if (state.editing) {
+        if (state.studio.saving) continue;
+        if (state.editing || (state.mode === 'notes' && (state.studio.dirty || state.studio.activeTextarea))) {
           // Do not pull the ground out from under a draft; offer a refresh instead.
           state.version = info.version;
           ui.toast('This note changed on disk. Save to overwrite, or close and reopen.');
@@ -1549,10 +1772,17 @@ function formatDate(progress) {
 }
 
 function setMode(mode, { persist = true, animate = true } = {}) {
+  const prevMode = state.mode;
+  if (prevMode === 'notes' && mode !== 'notes') {
+    if (state.studio.dirty) saveStudioDraft({ quiet: true });
+    cleanupStudioCanvas();
+  }
+  closeMobileDrawers();
   state.mode = mode;
   if (state.folderFocus) clearFolderFocus({ resetCamera: false });
   if (state.local) clearLocalGraph({ resetCamera: false, rerender: false });
   ui.setModeButtons(mode);
+  syncMobileMoreState();
   syncSettingsViews();
 
   const notesMode = mode === 'notes';
@@ -1631,6 +1861,7 @@ function onScrub(event) {
   els.replayPlay.textContent = 'Play';
   state.mode = 'replay';
   ui.setModeButtons('replay');
+  syncMobileMoreState();
   els.replay.hidden = false;
   state.brainTarget = 0;
   const progress = Number(event.target.value) / 1000;
@@ -1646,7 +1877,10 @@ function renderSidebarFolders() {
     expanded: state.expandedFolders,
     selectedId,
     onToggleExpand: toggleFolderExpand,
-    onOpenNote: (index) => openNote(index),
+    onOpenNote: (index) => {
+      if (isMobileViewport()) closeMobileDrawers();
+      openNote(index);
+    },
   });
   ui.syncFolders(state.hidden);
 }
@@ -1658,12 +1892,14 @@ function toggleFolderExpand(name) {
 }
 
 function toggleFolder(name) {
+  if (isMobileViewport()) closeMobileDrawers();
   if (state.mode === 'notes') {
     if (state.studio.scope === 'folder' && state.studio.folderFilter === name) {
       setStudioScope('all');
     } else {
       setStudioFolderFilter(name);
     }
+    if (isMobileViewport()) setStudioMobileReading(false);
     return;
   }
   if (state.hidden.has(name)) state.hidden.delete(name);
@@ -1676,9 +1912,11 @@ function toggleFolder(name) {
 }
 
 function resetFolders() {
+  if (isMobileViewport()) closeMobileDrawers();
   state.hidden.clear();
   if (state.mode === 'notes') {
     setStudioScope('all');
+    if (isMobileViewport()) setStudioMobileReading(false);
   }
   ui.syncFolders(state.hidden);
   state.renderer.setFolderFilter(state.hidden);
@@ -1832,6 +2070,49 @@ async function persistModifiedNoteSource(noteId, updatedSource) {
   }
 }
 
+async function syncLinkedPlayerTalliesFromSource(noteId, noteTitle, updatedSource, linkedPlayerTarget = null) {
+  const updatedSections = extractNoteTallies(updatedSource, noteId, noteTitle);
+  if (!updatedSections.length) return;
+  const targetsToSync = new Set();
+  if (linkedPlayerTarget) targetsToSync.add(linkedPlayerTarget);
+  else {
+    for (const sec of updatedSections) {
+      for (const r of sec.rows) {
+        if (r.targetNote) targetsToSync.add(r.targetNote);
+      }
+    }
+  }
+  for (const target of targetsToSync) {
+    const playerId = resolveTarget(target);
+    if (!playerId || playerId === noteId) continue;
+    let coolCount = null;
+    let crybabyCount = null;
+    for (const sec of updatedSections) {
+      const row = sec.rows.find(
+        (r) => r.targetNote && resolveTarget(r.targetNote) === playerId,
+      );
+      if (!row) continue;
+      const mainPips = row.pips.filter((p) => !p.isBonus).slice(0, 3);
+      const count = mainPips.filter((p) => p.checked).length;
+      if (/cool/i.test(sec.title)) coolCount = count;
+      else if (/crybaby/i.test(sec.title)) crybabyCount = count;
+    }
+    if (coolCount !== null || crybabyCount !== null) {
+      const pIdx = nodeIndex(playerId);
+      const pNode = pIdx >= 0 ? state.graph.nodes[pIdx] : null;
+      if (pNode) {
+        const pSource = getNoteSourceForTally(pNode);
+        if (pSource && /cool\s+[\u2610\u2611\u2612]/i.test(pSource)) {
+          const syncedPlayer = syncInlinePlayerTally(pSource, coolCount, crybabyCount);
+          if (syncedPlayer !== pSource) {
+            await persistModifiedNoteSource(playerId, syncedPlayer);
+          }
+        }
+      }
+    }
+  }
+}
+
 async function toggleNoteBallotPip(noteId, pipIndex, linkedPlayerTarget = null) {
   const idx = nodeIndex(noteId);
   if (idx < 0) return;
@@ -1847,47 +2128,7 @@ async function toggleNoteBallotPip(noteId, pipIndex, linkedPlayerTarget = null) 
   await persistModifiedNoteSource(noteId, updated);
 
   // If this note is a Points table and row points to a player note, sync the player's inline tally!
-  const updatedSections = extractNoteTallies(updated, noteId, node.title);
-  if (updatedSections.length > 0) {
-    const targetsToSync = new Set();
-    if (linkedPlayerTarget) targetsToSync.add(linkedPlayerTarget);
-    else {
-      for (const sec of updatedSections) {
-        for (const r of sec.rows) {
-          if (r.targetNote) targetsToSync.add(r.targetNote);
-        }
-      }
-    }
-    for (const target of targetsToSync) {
-      const playerId = resolveTarget(target);
-      if (!playerId || playerId === noteId) continue;
-      let coolCount = null;
-      let crybabyCount = null;
-      for (const sec of updatedSections) {
-        const row = sec.rows.find(
-          (r) => r.targetNote && resolveTarget(r.targetNote) === playerId,
-        );
-        if (!row) continue;
-        const mainPips = row.pips.filter((p) => !p.isBonus).slice(0, 3);
-        const count = mainPips.filter((p) => p.checked).length;
-        if (/cool/i.test(sec.title)) coolCount = count;
-        else if (/crybaby/i.test(sec.title)) crybabyCount = count;
-      }
-      if (coolCount !== null || crybabyCount !== null) {
-        const pIdx = nodeIndex(playerId);
-        const pNode = pIdx >= 0 ? state.graph.nodes[pIdx] : null;
-        if (pNode) {
-          const pSource = getNoteSourceForTally(pNode);
-          if (pSource && /cool\s+[\u2610\u2611\u2612]/i.test(pSource)) {
-            const syncedPlayer = syncInlinePlayerTally(pSource, coolCount, crybabyCount);
-            if (syncedPlayer !== pSource) {
-              await persistModifiedNoteSource(playerId, syncedPlayer);
-            }
-          }
-        }
-      }
-    }
-  }
+  await syncLinkedPlayerTalliesFromSource(noteId, node.title, updated, linkedPlayerTarget);
 
   if (state.detail && state.detail.id === noteId) {
     state.draft = updated;
@@ -2748,6 +2989,7 @@ function onWheel(event) {
 }
 
 function onResize() {
+  handleViewportBreakpointChange();
   resizeCamera();
   if (state.atlas) state.atlas.resize();
 }
@@ -2812,6 +3054,7 @@ function onKeyDown(event) {
     else if (!els.settings.hidden) closeSettings();
     else if (!els.compose.hidden) closeCompose();
     else if (state.palette.open) closePalette();
+    else if (hasOpenMobileDrawer()) closeMobileDrawers();
     else if (state.launching && state.vaultId) hideLaunch();
     else if (state.mode === 'notes' && state.studio.zenMode) toggleStudioZen(false);
     else if (!els.panel.hidden && state.panelExpanded) setPanelExpanded(false);
@@ -2924,9 +3167,12 @@ async function openHistoryEntry() {
 // response of the page that lost the race.
 let openToken = 0;
 
-async function openNote(index, { record = true } = {}) {
+async function openNote(index, { record = true, reveal = true } = {}) {
   const node = state.graph.nodes[index];
   if (!node) return;
+  if (state.mode === 'notes' && state.studio.dirty && state.detail && state.detail.id !== node.id) {
+    await saveStudioDraft({ quiet: true });
+  }
   const token = ++openToken;
   const wasLocal = Boolean(state.local);
   state.selected = index;
@@ -2948,6 +3194,9 @@ async function openNote(index, { record = true } = {}) {
   });
   if (state.mode === 'notes') {
     els.panel.hidden = true;
+    if (reveal && isMobileViewport()) {
+      state.studio.mobileReading = true;
+    }
     renderNotesStudio();
   } else {
     renderPanel(detail);
@@ -3116,8 +3365,9 @@ function renderPanel(detail, { preserveScroll = null } = {}) {
   studioBtn.textContent = 'Notes Studio';
   studioBtn.title = 'Open this note in the full 3-pane Notes Studio (0)';
   studioBtn.addEventListener('click', () => {
+    if (isMobileViewport()) state.studio.mobileReading = true;
     setMode('notes');
-    openNoteInStudio(detail.id);
+    openNoteInStudio(detail.id, { reveal: true });
   });
   els.panelActions.appendChild(studioBtn);
 
@@ -3182,42 +3432,59 @@ function renderPanel(detail, { preserveScroll = null } = {}) {
   renderSidebarTallies();
 }
 
+async function openWikilinkTarget(rawTarget, linkEl = null) {
+  const targetStr = String(rawTarget || '');
+  if (linkEl?.dataset?.file === 'true') {
+    const [fileName, anchor] = targetStr.split('#');
+    const page = anchor && /^page=(\d+)/i.exec(anchor);
+    const label = page ? `${fileName} (page ${page[1]})` : targetStr;
+    if (state.live && state.detail) {
+      try {
+        await api.revealInFolder(state.detail.id, state.vaultId);
+        ui.toast(`Attachment: ${label} — revealed folder in Explorer`);
+      } catch {
+        ui.toast(`Attachment reference: ${label}`);
+      }
+    } else {
+      ui.toast(`Attachment reference: ${label}`);
+    }
+    return;
+  }
+
+  const hashIdx = targetStr.indexOf('#');
+  const anchorText = hashIdx >= 0 ? targetStr.slice(hashIdx + 1).trim() : '';
+  const id = resolveTarget(targetStr);
+  if (!id) {
+    const cleanTitle = (hashIdx >= 0 ? targetStr.slice(0, hashIdx) : targetStr).trim() || targetStr;
+    if (isVaultWritable()) {
+      const currentFolder = state.detail?.folder && state.detail.folder !== '(root)'
+        ? state.detail.folder
+        : null;
+      openQuickNoteModal({ title: cleanTitle, folder: currentFolder });
+    } else {
+      ui.toast(`No note called “${cleanTitle}” yet`);
+    }
+    return;
+  }
+
+  if (state.mode === 'notes') {
+    await openNoteInStudio(id, { reveal: true });
+    if (anchorText) {
+      jumpToStudioHeading(0, { text: anchorText });
+    }
+    return;
+  }
+
+  const index = nodeIndex(id);
+  if (index >= 0) await openNote(index);
+}
+
 function wireProseInteractions(container, noteId) {
   if (!container) return;
   container.querySelectorAll('.wikilink').forEach((link) => {
-    link.addEventListener('click', async (event) => {
+    link.addEventListener('click', (event) => {
       event.preventDefault();
-      const rawTarget = link.dataset.target || '';
-      if (link.dataset.file === 'true') {
-        const [fileName, anchor] = rawTarget.split('#');
-        const page = anchor && /^page=(\d+)/i.exec(anchor);
-        const label = page ? `${fileName} (page ${page[1]})` : rawTarget;
-        if (state.live && state.detail) {
-          try {
-            await api.revealInFolder(state.detail.id, state.vaultId);
-            ui.toast(`Attachment: ${label} — revealed folder in Explorer`);
-          } catch {
-            ui.toast(`Attachment reference: ${label}`);
-          }
-        } else {
-          ui.toast(`Attachment reference: ${label}`);
-        }
-        return;
-      }
-      const id = resolveTarget(rawTarget);
-      if (!id) {
-        if (isVaultWritable()) {
-          const currentFolder = state.detail?.folder && state.detail.folder !== '(root)'
-            ? state.detail.folder
-            : null;
-          openQuickNoteModal({ title: rawTarget, folder: currentFolder });
-        } else {
-          ui.toast(`No note called “${rawTarget}” yet`);
-        }
-        return;
-      }
-      const index = nodeIndex(id);
-      if (index >= 0) openNote(index);
+      openWikilinkTarget(link.dataset.target || '', link);
     });
   });
 
@@ -3345,14 +3612,19 @@ function requestEdit() {
       onSave: saveEdits,
       onCancel: cancelEdit,
       getNotes: () => state.graph?.nodes || [],
+      getTags: getAllVaultTags,
     });
+    const toolbarEl = els.panelBody.querySelector('.editor-bar');
+    if (toolbarEl) initRovingToolbar(toolbarEl);
     els.panelBody.querySelectorAll('[data-edit-cmd]').forEach((button) => {
       button.addEventListener('mousedown', (event) => {
         // Keep focus & text selection inside the textarea when clicking a toolbar button.
         event.preventDefault();
       });
       button.addEventListener('click', () => {
-        runEditorCommand(textarea, button.dataset.editCmd);
+        const cmd = button.dataset.editCmd;
+        if (cmd === 'slash') openSlashMenu(textarea);
+        else runEditorCommand(textarea, cmd);
       });
     });
   }
@@ -3400,7 +3672,7 @@ async function openDaily() {
     await openNote(index);
     ui.toast(result.created ? 'Today’s note ready' : 'Today’s note');
     if (result.created) {
-      if (state.mode === 'notes') setStudioEditorMode('split');
+      if (state.mode === 'notes') setStudioEditorMode('live');
       else requestEdit();
     }
   } catch (error) {
@@ -3477,6 +3749,7 @@ function renderSidebarPinned() {
     {
       showEmptyHint: state.mode === 'notes',
       onOpen: (id) => {
+        if (isMobileViewport()) closeMobileDrawers();
         const idx = nodeIndex(id);
         if (idx >= 0) openNote(idx);
       },
@@ -3485,16 +3758,100 @@ function renderSidebarPinned() {
   );
 }
 
+function getAllVaultTags() {
+  const nodes = state.graph?.nodes || [];
+  const seen = new Map();
+  for (const node of nodes) {
+    for (const raw of node.tags || []) {
+      const cleaned = String(raw ?? '').trim().replace(/^#+/, '').trim();
+      if (!cleaned) continue;
+      const key = cleaned.toLowerCase();
+      if (!seen.has(key)) seen.set(key, cleaned);
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
+function effectiveStudioViewMode(mode = state.studio.viewMode) {
+  if (!isVaultWritable()) return 'read';
+  const normalized = mode === 'live' || mode === 'edit' || mode === 'split' || mode === 'read'
+    ? mode
+    : 'live';
+  if (normalized === 'split' && isMobileViewport()) return 'live';
+  return normalized;
+}
+
+function syncStudioMobileReading() {
+  if (!els.notesStudio) return;
+  const active = Boolean(state.studio.mobileReading && isMobileViewport());
+  els.notesStudio.classList.toggle('is-mobile-reading', active);
+}
+
+function setStudioMobileReading(reading) {
+  state.studio.mobileReading = Boolean(reading);
+  syncStudioMobileReading();
+}
+
+function cleanupStudioCanvas() {
+  if (state.studio.liveController) {
+    try {
+      state.studio.liveController.destroy();
+    } catch {
+      /* ignore teardown error */
+    }
+    state.studio.liveController = null;
+  }
+  state.studio.activeTextarea = null;
+  if (state.studio.editorHandle) {
+    try {
+      state.studio.editorHandle.destroy();
+    } catch {
+      /* ignore teardown error */
+    }
+    state.studio.editorHandle = null;
+  }
+  if (state.studio.toolbarCleanup) {
+    try {
+      state.studio.toolbarCleanup();
+    } catch {
+      /* ignore teardown error */
+    }
+    state.studio.toolbarCleanup = null;
+  }
+  if (state.studio.bubbleCleanup) {
+    try {
+      state.studio.bubbleCleanup();
+    } catch {
+      /* ignore teardown error */
+    }
+    state.studio.bubbleCleanup = null;
+  }
+}
+
+function filterStudioByTag(tag) {
+  const cleanTag = String(tag || '').trim().replace(/^#+/, '');
+  state.studio.filterQuery = cleanTag;
+  if (els.notesFilter) els.notesFilter.value = state.studio.filterQuery;
+  renderNotesStudioFeed();
+  if (isMobileViewport()) {
+    setStudioMobileReading(false);
+    if (cleanTag) ui.toast(`Filtered by #${cleanTag}`);
+  }
+}
+
 function initStudioForVault() {
   if (!state.graph) return;
   const nodesById = new Map(state.graph.nodes.map((n) => [n.id, n]));
   const savedTabs = prefs.get(studioTabsKey(), []).filter((id) => nodesById.has(id));
   state.studio.tabs = savedTabs;
-  state.studio.viewMode = prefs.get('cortex.studio.viewMode', 'read');
+  const savedMode = prefs.get('cortex.studio.viewMode', null);
+  state.studio.viewMode = savedMode === 'live' || savedMode === 'edit' || savedMode === 'split' || savedMode === 'read'
+    ? savedMode
+    : 'live';
   if (!state.studio.activeId || !nodesById.has(state.studio.activeId)) {
     state.studio.activeId = savedTabs[0] || null;
   }
-  if (state.mode === 'notes') {
+  if (state.mode === 'notes' && !state.studio.dirty && !state.studio.activeTextarea) {
     ensureStudioActiveNote();
     renderNotesStudio();
   }
@@ -3524,6 +3881,7 @@ function closeStudioTab(noteId) {
     }
     state.detail = null;
     state.selected = null;
+    setStudioMobileReading(false);
   }
   renderNotesStudio();
 }
@@ -3539,14 +3897,17 @@ function ensureStudioActiveNote() {
     || getRecentIds()[0]
     || [...state.graph.nodes].sort((a, b) => (b.pagerank || 0) - (a.pagerank || 0))[0]?.id;
   if (candidateId) {
-    openNoteInStudio(candidateId);
+    openNoteInStudio(candidateId, { reveal: false });
   }
 }
 
-async function openNoteInStudio(noteId) {
+async function openNoteInStudio(noteId, { reveal = true } = {}) {
   const idx = nodeIndex(noteId);
   if (idx < 0) return;
-  await openNote(idx);
+  if (reveal && isMobileViewport()) {
+    setStudioMobileReading(true);
+  }
+  await openNote(idx, { reveal });
 }
 
 function filteredStudioNotes() {
@@ -3725,10 +4086,12 @@ function renderNotesStudioHeaderControls() {
   }
   if (els.notesViewModes) {
     const writable = isVaultWritable();
+    const activeMode = effectiveStudioViewMode();
     els.notesViewModes.querySelectorAll('[data-editor-mode]').forEach((btn) => {
       const mode = btn.dataset.editorMode;
-      const active = (writable ? state.studio.viewMode : 'read') === mode;
+      const active = activeMode === mode;
       btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', String(active));
       btn.disabled = !writable && mode !== 'read';
     });
   }
@@ -3760,15 +4123,18 @@ function prepareStudioProseHtml(rawMarkdown, title) {
 
 function renderNotesStudioDocument({ preserveScroll = null } = {}) {
   if (!els.notesCanvas) return;
+  cleanupStudioCanvas();
+
   const detail = state.detail;
   const draft = state.draft ?? detail?.raw ?? detail?.markdown ?? '';
-  const html = detail ? prepareStudioProseHtml(draft, detail.title) : '';
+  const effectiveMode = effectiveStudioViewMode();
+  const html = detail && effectiveMode !== 'live' ? prepareStudioProseHtml(draft, detail.title) : '';
   const fMap = folderColorMap();
   const cIdx = detail ? (fMap.get(detail.folder) ?? 0) : 0;
   const folderRgb = PALETTE[cIdx % PALETTE.length];
 
   ui.renderNotesStudioCanvas(els.notesCanvas, detail, {
-    viewMode: state.studio.viewMode,
+    viewMode: effectiveMode,
     draft,
     markdownHtml: html,
     writable: isVaultWritable(),
@@ -3785,30 +4151,14 @@ function renderNotesStudioDocument({ preserveScroll = null } = {}) {
     return;
   }
 
-  const proseEl = els.notesCanvas.querySelector('#studio-prose');
-  if (proseEl) {
-    wireProseInteractions(proseEl, detail.id);
-    // Tag rendered headings for smooth outline scrolling
-    proseEl.querySelectorAll('h1, h2, h3, h4').forEach((hEl, idx) => {
-      hEl.dataset.outlineIdx = String(idx);
-    });
-    if (state.studio.viewMode === 'read' && isVaultWritable()) {
-      proseEl.addEventListener('dblclick', (event) => {
-        if (event.target.closest('button, a, .wikilink, .tally-pip, .task-box')) return;
-        setStudioEditorMode('split');
-      });
-    }
-  }
-
   els.notesCanvas.querySelectorAll('[data-filter-folder]').forEach((btn) => {
-    btn.addEventListener('click', () => setStudioFolderFilter(btn.dataset.filterFolder));
+    btn.addEventListener('click', () => {
+      setStudioFolderFilter(btn.dataset.filterFolder);
+      if (isMobileViewport()) setStudioMobileReading(false);
+    });
   });
   els.notesCanvas.querySelectorAll('[data-filter-tag]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.studio.filterQuery = btn.dataset.filterTag;
-      if (els.notesFilter) els.notesFilter.value = state.studio.filterQuery;
-      renderNotesStudioFeed();
-    });
+    btn.addEventListener('click', () => filterStudioByTag(btn.dataset.filterTag));
   });
   els.notesCanvas.querySelectorAll('[data-switch-editor-mode]').forEach((btn) => {
     btn.addEventListener('click', () => setStudioEditorMode(btn.dataset.switchEditorMode));
@@ -3820,22 +4170,105 @@ function renderNotesStudioDocument({ preserveScroll = null } = {}) {
     bar.style.setProperty('--confidence', `${bar.dataset.confidence}%`);
   });
 
-  const textarea = els.notesCanvas.querySelector('#studio-editor');
-  if (textarea) {
-    attachEditor(textarea, {
-      onChange: () => onStudioEditorInput(textarea),
-      onSave: () => saveStudioDraft({ quiet: false }),
-      onCancel: () => setStudioEditorMode('read'),
-      getNotes: () => state.graph?.nodes || [],
-    });
-    els.notesCanvas.querySelectorAll('[data-edit-cmd]').forEach((button) => {
-      button.addEventListener('mousedown', (event) => {
-        event.preventDefault();
+  if (effectiveMode === 'live') {
+    const liveHost = els.notesCanvas.querySelector('#studio-live-host');
+    if (liveHost) {
+      state.studio.liveController = mountLiveEditor(liveHost, {
+        raw: draft,
+        title: detail.title,
+        detail,
+        renderBlockHtml: (md) => renderMarkdown(md, (target) => Boolean(resolveTarget(target))),
+        onInput: (nextRaw) => handleLiveEditorInput(nextRaw),
+        onSave: () => saveStudioDraft({ quiet: false }),
+        onOpenLink: (target, linkEl) => openWikilinkTarget(target, linkEl),
+        onToggleCheckbox: async (kind, globalIndex) => {
+          const liveRaw = state.studio.liveController?.getValue();
+          const nextRaw = typeof liveRaw === 'string'
+            ? liveRaw
+            : (kind === 'task'
+              ? toggleNthTaskBox(state.draft ?? '', globalIndex)
+              : toggleNthBallotBox(state.draft ?? '', globalIndex));
+          handleLiveEditorInput(nextRaw);
+          if (kind === 'pip' && state.detail) {
+            await syncLinkedPlayerTalliesFromSource(state.detail.id, state.detail.title, nextRaw);
+          }
+          await saveStudioDraft({ quiet: true });
+        },
+        onFilterTag: (tag) => filterStudioByTag(tag),
+        getNotes: () => state.graph?.nodes || [],
+        getTags: () => getAllVaultTags(),
+        onActiveTextarea: (ta) => {
+          state.studio.activeTextarea = ta;
+        },
       });
-      button.addEventListener('click', () => {
-        runEditorCommand(textarea, button.dataset.editCmd);
+    }
+
+    const toolbarEl = els.notesCanvas.querySelector('#studio-editor-bar');
+    if (toolbarEl) {
+      state.studio.toolbarCleanup = initRovingToolbar(toolbarEl);
+      toolbarEl.querySelectorAll('[data-edit-cmd]').forEach((button) => {
+        button.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+        });
+        button.addEventListener('click', () => {
+          let ta = state.studio.activeTextarea || state.studio.liveController?.getActiveTextarea();
+          if (!ta && state.studio.liveController) {
+            state.studio.liveController.focusBlock(0);
+            ta = state.studio.activeTextarea || state.studio.liveController.getActiveTextarea();
+          }
+          if (!ta) return;
+          const cmd = button.dataset.editCmd;
+          if (cmd === 'slash') openSlashMenu(ta);
+          else runEditorCommand(ta, cmd);
+        });
       });
-    });
+    }
+  } else {
+    const proseEl = els.notesCanvas.querySelector('#studio-prose');
+    if (proseEl) {
+      wireProseInteractions(proseEl, detail.id);
+      // Tag rendered headings for smooth outline scrolling
+      proseEl.querySelectorAll('h1, h2, h3, h4').forEach((hEl, idx) => {
+        hEl.dataset.outlineIdx = String(idx);
+      });
+      if (effectiveMode === 'read' && isVaultWritable()) {
+        proseEl.addEventListener('dblclick', (event) => {
+          if (event.target.closest('button, a, .wikilink, .tally-pip, .task-box')) return;
+          setStudioEditorMode('live');
+        });
+      }
+    }
+
+    const textarea = els.notesCanvas.querySelector('#studio-editor');
+    if (textarea) {
+      state.studio.activeTextarea = textarea;
+      state.studio.editorHandle = attachEditor(textarea, {
+        onChange: () => onStudioEditorInput(textarea),
+        onSave: () => saveStudioDraft({ quiet: false }),
+        onCancel: () => setStudioEditorMode('read'),
+        getNotes: () => state.graph?.nodes || [],
+        getTags: () => getAllVaultTags(),
+      });
+      const toolbarEl = els.notesCanvas.querySelector('.editor-bar');
+      if (toolbarEl) {
+        state.studio.toolbarCleanup = initRovingToolbar(toolbarEl);
+      }
+      els.notesCanvas.querySelectorAll('[data-edit-cmd]').forEach((button) => {
+        button.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+        });
+        button.addEventListener('click', () => {
+          const cmd = button.dataset.editCmd;
+          if (cmd === 'slash') openSlashMenu(textarea);
+          else runEditorCommand(textarea, cmd);
+        });
+      });
+      state.studio.bubbleCleanup = attachSelectionBubble(
+        els.notesCanvas,
+        () => textarea,
+        (cmd) => (cmd === 'slash' ? openSlashMenu(textarea) : runEditorCommand(textarea, cmd)),
+      );
+    }
   }
 
   const headings = ui.extractOutlineHeadings(draft);
@@ -3845,17 +4278,45 @@ function renderNotesStudioDocument({ preserveScroll = null } = {}) {
 
 function jumpToStudioHeading(headingIdx, heading) {
   if (!els.notesCanvas) return;
+  if (isTabletViewport()) closeMobileDrawers();
+  const needle = String(heading?.text || '').trim().toLowerCase();
   const proseEl = els.notesCanvas.querySelector('#studio-prose');
   if (proseEl) {
     const targets = proseEl.querySelectorAll('h1, h2, h3, h4');
-    const match = [...targets].find(
-      (el) => el.textContent.trim().toLowerCase() === heading.text.toLowerCase(),
-    ) || targets[headingIdx];
+    const match = (needle
+      ? [...targets].find((el) => el.textContent.trim().toLowerCase() === needle)
+      : null) || targets[headingIdx];
     if (match) {
       match.scrollIntoView({ behavior: 'smooth', block: 'start' });
       match.classList.remove('is-flash');
       void match.offsetWidth;
       match.classList.add('is-flash');
+      return;
+    }
+  }
+  const liveHost = els.notesCanvas.querySelector('#studio-live-host');
+  if (liveHost) {
+    const targets = liveHost.querySelectorAll(
+      '.live-block-view h1, .live-block-view h2, .live-block-view h3, .live-block-view h4',
+    );
+    const match = (needle
+      ? [...targets].find((el) => el.textContent.trim().toLowerCase() === needle)
+      : null) || targets[headingIdx];
+    if (match) {
+      match.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      match.classList.remove('is-flash');
+      void match.offsetWidth;
+      match.classList.add('is-flash');
+      return;
+    }
+    const headingBlocks = [...liveHost.querySelectorAll('.live-block.is-heading[data-block-index]')];
+    const targetBlock = headingBlocks[headingIdx];
+    if (targetBlock && state.studio.liveController) {
+      const idx = Number(targetBlock.dataset.blockIndex);
+      if (Number.isFinite(idx)) {
+        state.studio.liveController.focusBlock(idx, { caret: 0 });
+        targetBlock.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
       return;
     }
   }
@@ -3887,7 +4348,10 @@ function renderNotesStudioInspectorPane(headings = null) {
     activeTab: state.studio.inspectorTab,
     headings: list,
     writable: isVaultWritable(),
-    onOpenNote: (id) => openNoteInStudio(id),
+    onOpenNote: (id) => {
+      if (isTabletViewport()) closeMobileDrawers();
+      openNoteInStudio(id);
+    },
     onLinkMention: (sourceId) => {
       if (detail) linkUnlinkedMention(sourceId, detail.title);
     },
@@ -3900,20 +4364,21 @@ function renderNotesStudio() {
   els.notesStudio.classList.toggle('is-list-collapsed', state.studio.listCollapsed);
   els.notesStudio.classList.toggle('is-inspector-collapsed', state.studio.inspectorCollapsed);
   els.notesStudio.classList.toggle('is-zen', state.studio.zenMode);
+  syncStudioMobileReading();
+  if (els.notesToggleInspector) {
+    const pressed = isTabletViewport()
+      ? Boolean(els.notesInspectorPane?.classList.contains('is-mobile-open'))
+      : !state.studio.inspectorCollapsed;
+    els.notesToggleInspector.setAttribute('aria-pressed', String(pressed));
+  }
   renderNotesStudioFeed();
   renderNotesStudioTabsBar();
   renderNotesStudioHeaderControls();
   renderNotesStudioDocument();
 }
 
-function onStudioEditorInput(textarea) {
-  state.draft = textarea.value;
-  state.studio.dirty = true;
-  renderNotesStudioHeaderControls();
-  renderNotesStudioTabsBar();
-
-  // Live word count & reading time update
-  const words = state.draft.trim() ? state.draft.trim().split(/\s+/).length : 0;
+function syncStudioLiveMetricsAndOutline(nextRaw) {
+  const words = nextRaw.trim() ? nextRaw.trim().split(/\s+/).length : 0;
   const readMin = Math.max(1, Math.round(words / 200));
   els.notesCanvas?.querySelectorAll('[data-studio-words]').forEach((el) => {
     el.textContent = `${words} words`;
@@ -3922,16 +4387,38 @@ function onStudioEditorInput(textarea) {
     el.textContent = `~${readMin} min read`;
   });
 
-  // Live split preview: update right-hand prose & outline immediately without touching the textarea!
+  const headings = ui.extractOutlineHeadings(nextRaw);
+  ui.renderNotesMiniOutline(els.notesMiniOutline, headings, jumpToStudioHeading);
+  if (state.studio.inspectorTab === 'outline') {
+    renderNotesStudioInspectorPane(headings);
+  }
+}
+
+function handleLiveEditorInput(nextRaw) {
+  state.draft = nextRaw;
+  state.studio.dirty = true;
+  renderNotesStudioHeaderControls();
+  renderNotesStudioTabsBar();
+  syncStudioLiveMetricsAndOutline(nextRaw);
+
+  clearTimeout(state.studio.autoSaveTimer);
+  state.studio.autoSaveTimer = setTimeout(() => {
+    saveStudioDraft({ quiet: true });
+  }, 850);
+}
+
+function onStudioEditorInput(textarea) {
+  state.draft = textarea.value;
+  state.studio.dirty = true;
+  renderNotesStudioHeaderControls();
+  renderNotesStudioTabsBar();
+  syncStudioLiveMetricsAndOutline(state.draft);
+
+  // Live split preview: update right-hand prose immediately without touching the textarea!
   const proseEl = els.notesCanvas?.querySelector('#studio-prose');
   if (proseEl && state.detail) {
     proseEl.innerHTML = prepareStudioProseHtml(state.draft, state.detail.title);
     wireProseInteractions(proseEl, state.detail.id);
-  }
-  const headings = ui.extractOutlineHeadings(state.draft);
-  ui.renderNotesMiniOutline(els.notesMiniOutline, headings, jumpToStudioHeading);
-  if (state.studio.inspectorTab === 'outline') {
-    renderNotesStudioInspectorPane(headings);
   }
 
   clearTimeout(state.studio.autoSaveTimer);
@@ -3971,7 +4458,9 @@ async function saveStudioDraft({ quiet = true } = {}) {
         state.detail = localDetail(state.graph.nodes[idx]);
       }
     }
-    state.studio.dirty = false;
+    if (state.draft === content) {
+      state.studio.dirty = false;
+    }
     state.studio.saving = false;
     renderNotesStudioHeaderControls();
     renderNotesStudioTabsBar();
@@ -3987,10 +4476,13 @@ async function saveStudioDraft({ quiet = true } = {}) {
 }
 
 function setStudioEditorMode(mode) {
-  const valid = mode === 'split' || mode === 'edit' ? mode : 'read';
+  let valid = mode === 'live' || mode === 'edit' || mode === 'split' || mode === 'read' ? mode : 'live';
   if (!isVaultWritable() && valid !== 'read') {
     ui.toast('This vault is open read-only');
     return;
+  }
+  if (valid === 'split' && isMobileViewport()) {
+    valid = 'live';
   }
   if (state.studio.dirty) {
     saveStudioDraft({ quiet: true });
@@ -3999,15 +4491,17 @@ function setStudioEditorMode(mode) {
   prefs.set('cortex.studio.viewMode', valid);
   renderNotesStudioHeaderControls();
   renderNotesStudioDocument();
-  if (valid !== 'read') {
+  if (valid === 'edit' || valid === 'split') {
     const ta = els.notesCanvas?.querySelector('#studio-editor');
     if (ta) ta.focus();
   }
 }
 
 function cycleStudioEditorMode() {
-  const order = ['read', 'split', 'edit'];
-  const next = order[(order.indexOf(state.studio.viewMode) + 1) % order.length];
+  const order = isMobileViewport() ? ['live', 'edit', 'read'] : ['live', 'edit', 'read', 'split'];
+  const current = effectiveStudioViewMode();
+  const idx = order.indexOf(current);
+  const next = order[(idx + 1) % order.length];
   setStudioEditorMode(next);
 }
 
@@ -4033,6 +4527,13 @@ function toggleStudioZen(force) {
 }
 
 function wireNotesStudioEvents() {
+  if (els.notesMobileBack) {
+    els.notesMobileBack.addEventListener('click', () => {
+      if (state.studio.dirty) saveStudioDraft({ quiet: true });
+      closeMobileDrawers();
+      setStudioMobileReading(false);
+    });
+  }
   if (els.notesFilter) {
     els.notesFilter.addEventListener('input', () => {
       state.studio.filterQuery = els.notesFilter.value;
@@ -4094,10 +4595,24 @@ function wireNotesStudioEvents() {
   }
   if (els.notesToggleInspector) {
     els.notesToggleInspector.addEventListener('click', () => {
+      if (isTabletViewport()) {
+        const opening = !els.notesInspectorPane?.classList.contains('is-mobile-open');
+        closeMobileDrawers();
+        if (opening && els.notesInspectorPane) {
+          els.notesInspectorPane.classList.add('is-mobile-open');
+          els.notesToggleInspector.setAttribute('aria-pressed', 'true');
+          renderNotesStudioInspectorPane();
+          syncMobileBackdrop();
+        }
+        return;
+      }
       state.studio.inspectorCollapsed = !state.studio.inspectorCollapsed;
       els.notesToggleInspector.setAttribute('aria-pressed', String(!state.studio.inspectorCollapsed));
       if (els.notesStudio) els.notesStudio.classList.toggle('is-inspector-collapsed', state.studio.inspectorCollapsed);
     });
+  }
+  if (els.notesInspectorClose) {
+    els.notesInspectorClose.addEventListener('click', () => closeMobileDrawers());
   }
   if (els.notesViewModes) {
     els.notesViewModes.querySelectorAll('[data-editor-mode]').forEach((btn) => {
@@ -4378,7 +4893,7 @@ async function createNoteWithTemplate({ title, folder = '', template = 'blank', 
       if (index >= 0) {
         setMode('notes');
         await openNote(index);
-        setStudioEditorMode('split');
+        setStudioEditorMode('live');
         ui.toast(`Created “${title}”`);
       }
     } catch (error) {
@@ -4417,7 +4932,7 @@ async function createNoteWithTemplate({ title, folder = '', template = 'blank', 
     buildLookup();
     setMode('notes');
     await openNote(0);
-    setStudioEditorMode('split');
+    setStudioEditorMode('live');
     ui.toast(`Created “${title}” (saved in browser)`);
   }
 }
@@ -4606,9 +5121,9 @@ function buildPaletteCommands() {
     {
       kind: 'command',
       id: 'cmd:studio:mode',
-      title: 'Cycle editor mode (Read · Live Split · Source Edit)',
-      subtitle: 'Switch between reading view, side-by-side live preview, and source editor',
-      keywords: 'editor split preview read source mode',
+      title: 'Cycle editor mode (Live · Source · Read · Split)',
+      subtitle: 'Switch between Obsidian Live Preview, source editor, reading view, and side-by-side split',
+      keywords: 'editor live split preview read source mode',
       shortcut: key('E'),
       run: () => {
         if (state.mode !== 'notes') setMode('notes');
