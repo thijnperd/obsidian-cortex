@@ -19,6 +19,7 @@ import {
 import { clamp, easeInOut, lookAt, multiply, perspective, project, smoothstep } from '../web/js/math.js';
 import { buildAppearValues, buildBrainPositions } from '../web/js/morph.js';
 import { diaryFolders, isOverview, OVERVIEW_NOTES } from '../web/js/scale.js';
+import { cleanDisplayPath } from '../web/js/ui.js';
 
 test('math helpers clamp, interpolate, and project deterministically', () => {
   assert.equal(clamp(-5, 0, 10), 0);
@@ -345,4 +346,12 @@ test('splitMarkdownBlocks and joinMarkdownBlocks round-trip all block kinds loss
   assert.deepEqual(splitMarkdownBlocks(''), []);
   assert.equal(joinMarkdownBlocks([]), '');
   assert.equal(joinMarkdownBlocks(null), '');
+});
+
+test('cleanDisplayPath strips Windows verbatim prefixes cleanly', () => {
+  assert.equal(cleanDisplayPath('\\\\?\\C:\\Users\\Thijn\\vault'), 'C:\\Users\\Thijn\\vault');
+  assert.equal(cleanDisplayPath('\\\\?\\UNC\\server\\share\\vault'), '\\\\server\\share\\vault');
+  assert.equal(cleanDisplayPath('/home/user/vault'), '/home/user/vault');
+  assert.equal(cleanDisplayPath(''), '');
+  assert.equal(cleanDisplayPath(null), '');
 });

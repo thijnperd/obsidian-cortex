@@ -22,6 +22,14 @@ export function setStats(meta, overview = false) {
   element.hidden = false;
 }
 
+export function cleanDisplayPath(rawPath) {
+  const raw = String(rawPath || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('\\\\?\\UNC\\')) return `\\\\${raw.slice(8)}`;
+  if (raw.startsWith('\\\\?\\')) return raw.slice(4);
+  return raw;
+}
+
 export function cleanSnippet(raw) {
   return String(raw || '')
     .replace(/^\s*(?:>\s*)?\[?!?[a-zA-Z0-9_-]+\][+-]?\s*/i, '')
@@ -427,7 +435,7 @@ export function renderVaultList(container, vaults, activeId, onOpen, onReveal) {
     button.className = 'vault-item';
     if (vault.id === activeId) button.classList.add('is-active');
     if (vault.missing) button.classList.add('is-missing');
-    button.title = vault.path;
+    button.title = cleanDisplayPath(vault.path);
     button.setAttribute('aria-current', String(vault.id === activeId));
 
     const name = document.createElement('span');
@@ -471,7 +479,8 @@ export function renderLaunch(container, vaults, { onOpen, onForget }) {
     const open = document.createElement('button');
     open.type = 'button';
     open.className = 'launch-open';
-    open.title = vault.path;
+    const cleanPath = cleanDisplayPath(vault.path);
+    open.title = cleanPath;
 
     const tile = document.createElement('span');
     tile.className = 'launch-item-tile';
@@ -485,7 +494,7 @@ export function renderLaunch(container, vaults, { onOpen, onForget }) {
     name.textContent = vault.name;
     const path = document.createElement('span');
     path.className = 'launch-item-path';
-    path.textContent = vault.path;
+    path.textContent = cleanPath;
     text.append(name, path);
 
     const meta = document.createElement('span');
@@ -1199,8 +1208,16 @@ export function renderNotesStudioInspector(
 
   const backlinksCountEl = document.getElementById('notes-backlinks-count');
   const mentionsCountEl = document.getElementById('notes-mentions-count');
-  if (backlinksCountEl) backlinksCountEl.textContent = String((detail?.backlinks || []).length);
-  if (mentionsCountEl) mentionsCountEl.textContent = String((detail?.mentions || []).length);
+  const inspectorBadgeEl = document.getElementById('notes-inspector-badge');
+  const backlinksLen = (detail?.backlinks || []).length;
+  const mentionsLen = (detail?.mentions || []).length;
+  const totalConnections = backlinksLen + mentionsLen;
+  if (backlinksCountEl) backlinksCountEl.textContent = String(backlinksLen);
+  if (mentionsCountEl) mentionsCountEl.textContent = String(mentionsLen);
+  if (inspectorBadgeEl) {
+    inspectorBadgeEl.textContent = String(totalConnections);
+    inspectorBadgeEl.hidden = totalConnections === 0;
+  }
 
   if (!detail) {
     container.innerHTML = '<p class="empty">Open a note to see its linked mentions, unlinked mentions, and outline.</p>';

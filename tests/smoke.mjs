@@ -615,9 +615,69 @@ async function main() {
       assert.ok(summaryStats >= 4, `Expected decisions summary strip, found ${summaryStats} stats`);
     }
 
-    // 3. Edit and persist a note in Notes Studio across a full reload.
+    // 2b. Verify UI overhaul guarantees: no #stats overlap in Bento/Decisions, Utilities popover, single sidebar & collapsed inspector in Notes.
+    for (const non3d of ['bento', 'decisions', 'atlas']) {
+      await page.locator(`.view[data-mode="${non3d}"]`).click();
+      await page.waitForFunction(
+        (m) => document.body.classList.contains(`mode-${m}`),
+        non3d,
+      );
+      const statsDisplay = await page.evaluate(() => getComputedStyle(document.getElementById('stats')).display);
+      assert.equal(statsDisplay, 'none', `Expected #stats hidden in ${non3d} mode`);
+    }
+
+    await page.locator('#toolbar-more-btn').click();
+    await page.waitForFunction(() => document.getElementById('toolbar-more-menu')?.hidden === false);
+    const menuHasActions = await page.evaluate(() => Boolean(
+      document.querySelector('#toolbar-more-menu #theme-toggle')
+      && document.querySelector('#toolbar-more-menu #shortcuts-button'),
+    ));
+    assert.equal(menuHasActions, true, 'Expected secondary utilities inside #toolbar-more-menu');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.getElementById('toolbar-more-menu')?.hidden === true);
+
+    // 3. Verify Notes Studio single sidebar, collapsed inspector, unobstructed bottom note & save flow.
     await page.locator('.view[data-mode="notes"]').click();
+    await page.waitForFunction(() => !document.getElementById('notes-studio')?.hidden);
+    const notesUiChecks = await page.evaluate(() => {
+      const sidebar = document.getElementById('sidebar');
+      const studio = document.getElementById('notes-studio');
+      const stats = document.getElementById('stats');
+      return {
+        sidebarHidden: Boolean(sidebar?.hidden),
+        hasSidebarClass: document.body.classList.contains('has-sidebar'),
+        inspectorCollapsed: Boolean(studio?.classList.contains('is-inspector-collapsed')),
+        statsDisplay: stats ? getComputedStyle(stats).display : 'none',
+      };
+    });
+    assert.equal(notesUiChecks.sidebarHidden, true, 'Expected global #sidebar hidden in Notes mode (no double sidebar)');
+    assert.equal(notesUiChecks.hasSidebarClass, false, 'Expected body.has-sidebar cleared in Notes mode');
+    assert.equal(notesUiChecks.inspectorCollapsed, true, 'Expected right inspector collapsed by default');
+    assert.equal(notesUiChecks.statsDisplay, 'none', 'Expected #stats hidden in Notes mode');
+
+    // Top-left #sidebar-toggle controls Notes list pane on desktop.
+    await page.locator('#sidebar-toggle').click();
+    await page.waitForFunction(() => document.getElementById('notes-studio')?.classList.contains('is-list-collapsed') === true);
+    await page.locator('#sidebar-toggle').click();
+    await page.waitForFunction(() => document.getElementById('notes-studio')?.classList.contains('is-list-collapsed') === false);
+
     await page.locator('[data-list-view="list"]').click();
+    const lastCard = page.locator('#notes-feed .notes-card').last();
+    await lastCard.scrollIntoViewIfNeeded();
+    const hitOk = await page.evaluate(() => {
+      const feed = document.getElementById('notes-feed');
+      if (feed) feed.scrollTop = feed.scrollHeight;
+      const cards = document.querySelectorAll('#notes-feed .notes-card');
+      const last = cards[cards.length - 1];
+      const mainBtn = last?.querySelector('.notes-card-main');
+      if (!last || !mainBtn) return false;
+      const rect = mainBtn.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return Boolean(hit && last.contains(hit));
+    });
+    assert.equal(hitOk, true, 'Expected bottom-most note card to be unobstructed and hit-testable');
+    await lastCard.locator('.notes-card-main').click();
+
     const firstCard = page.locator('#notes-feed .notes-card').first();
     const targetNoteId = await firstCard.getAttribute('data-note-id');
     assert.ok(targetNoteId, 'Expected a note card in Notes Studio list');

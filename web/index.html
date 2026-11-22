@@ -93,7 +93,9 @@
             <button class="notes-view-opt" data-list-view="list" type="button" title="Flat list">List</button>
           </div>
           <button class="text-button" id="notes-sort" type="button" title="Cycle sort order" hidden>Recent</button>
-          <button class="btn btn-primary btn-compact" id="notes-new-btn" type="button" title="New note (n)">+ New</button>
+          <button class="icon-button notes-new-icon" id="notes-new-btn" type="button" title="New note (n)" aria-label="New note">
+            <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+          </button>
         </div>
       </header>
 
@@ -127,7 +129,7 @@
         </button>
 
         <div class="notes-tabs" id="notes-tabs" role="tablist" aria-label="Open note tabs"></div>
-        <button class="icon-button notes-tab-add" id="notes-tab-new" type="button" title="New note (n)" aria-label="New note">
+        <button class="icon-button notes-tab-add" id="notes-tab-new" type="button" title="New note (n)" aria-label="New note" hidden>
           <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
         </button>
 
@@ -154,8 +156,9 @@
               <button class="notes-more-item" id="notes-zen-btn" type="button" role="menuitem" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg><span>Zen mode</span></button>
             </div>
           </div>
-          <button class="icon-button" id="notes-toggle-inspector" type="button" title="Toggle connections &amp; outline inspector" aria-label="Toggle connections inspector" aria-pressed="true">
+          <button class="icon-button" id="notes-toggle-inspector" type="button" title="Toggle connections &amp; outline inspector" aria-label="Toggle connections inspector" aria-pressed="false">
             <svg class="icon" aria-hidden="true"><use href="#i-columns"></use></svg>
+            <span class="inspector-badge" id="notes-inspector-badge" hidden>0</span>
           </button>
         </div>
       </header>
@@ -232,19 +235,40 @@
         <span>Search</span><kbd data-mod="K"></kbd>
       </button>
       <button class="open-vault-button" id="open-vault" type="button" title="Open a folder or Markdown files from this device" aria-label="Open a folder or Markdown files from this device"><svg class="icon" aria-hidden="true"><use href="#i-folder-open"></use></svg><span>Open</span></button>
-      <button class="tour-button" id="tour-button" type="button" title="Take the guided tour" aria-haspopup="dialog" hidden>
-        <svg class="icon tour-icon-start" aria-hidden="true"><use href="#i-compass"></use></svg>
-        <svg class="icon tour-icon-replay" aria-hidden="true" hidden><use href="#i-refresh"></use></svg>
-        <span id="tour-label">Tour</span>
-      </button>
-      <button class="icon-button" id="surprise-note" type="button" title="Surprise me — open a random note (s)" aria-label="Surprise me"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg></button>
-      <button class="icon-button" id="today-note" type="button" title="Today's note (t)" aria-label="Today's note" hidden><svg class="icon" aria-hidden="true"><use href="#i-calendar-day"></use></svg></button>
       <button class="icon-button" id="new-note" type="button" title="New note (n)" aria-label="New note" hidden><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg></button>
-      <button class="icon-button" id="shortcuts-button" type="button" title="Keyboard shortcuts &amp; slash commands (?)" aria-label="Keyboard shortcuts"><svg class="icon" aria-hidden="true"><use href="#i-keyboard"></use></svg></button>
-      <button class="icon-button theme-toggle" id="theme-toggle" type="button" title="Switch theme" aria-label="Switch theme">
-        <svg class="icon theme-icon-sun" aria-hidden="true"><use href="#i-sun"></use></svg>
-        <svg class="icon theme-icon-moon" aria-hidden="true"><use href="#i-moon"></use></svg>
-      </button>
+      <div class="toolbar-more">
+        <button class="icon-button toolbar-more-btn" id="toolbar-more-btn" type="button" title="More tools &amp; actions" aria-label="More tools" aria-haspopup="menu" aria-expanded="false" aria-controls="toolbar-more-menu">
+          <svg class="icon" aria-hidden="true"><use href="#i-dots"></use></svg>
+        </button>
+        <div class="toolbar-more-menu" id="toolbar-more-menu" role="menu" hidden>
+          <button class="toolbar-more-item" id="today-note" type="button" role="menuitem" title="Today's note (t)" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-calendar-day"></use></svg>
+            <span>Today's note</span>
+            <kbd>t</kbd>
+          </button>
+          <button class="toolbar-more-item" id="surprise-note" type="button" role="menuitem" title="Surprise me — open a random note (s)">
+            <svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>
+            <span>Random note</span>
+            <kbd>s</kbd>
+          </button>
+          <button class="toolbar-more-item" id="tour-button" type="button" role="menuitem" title="Take the guided tour" aria-haspopup="dialog" hidden>
+            <svg class="icon tour-icon-start" aria-hidden="true"><use href="#i-compass"></use></svg>
+            <svg class="icon tour-icon-replay" aria-hidden="true" hidden><use href="#i-refresh"></use></svg>
+            <span id="tour-label">Take guided tour</span>
+          </button>
+          <div class="toolbar-more-sep" role="separator"></div>
+          <button class="toolbar-more-item theme-toggle" id="theme-toggle" type="button" role="menuitem" title="Switch theme">
+            <svg class="icon theme-icon-sun" aria-hidden="true"><use href="#i-sun"></use></svg>
+            <svg class="icon theme-icon-moon" aria-hidden="true"><use href="#i-moon"></use></svg>
+            <span id="theme-toggle-label">Warm Light theme</span>
+          </button>
+          <button class="toolbar-more-item" id="shortcuts-button" type="button" role="menuitem" title="Keyboard shortcuts &amp; slash commands (?)">
+            <svg class="icon" aria-hidden="true"><use href="#i-keyboard"></use></svg>
+            <span>Keyboard shortcuts</span>
+            <kbd>?</kbd>
+          </button>
+        </div>
+      </div>
       <button class="icon-button" id="settings-button" type="button" title="Vault settings" aria-label="Vault settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg></button>
     </div>
   </header>
@@ -264,9 +288,16 @@
 
   <aside class="sidebar" id="sidebar" hidden>
     <section class="block block-vaults">
-      <h2 class="block-title">Vaults</h2>
-      <ul class="vault-list" id="vault-list"></ul>
-      <button class="text-button" id="add-vault" type="button">Open another folder…</button>
+      <details class="sidebar-disclosure" id="vaults-disclosure">
+        <summary class="sidebar-summary">
+          <span class="sidebar-summary-title">Vaults</span>
+          <span class="sidebar-summary-meta" id="vaults-count"></span>
+        </summary>
+        <div class="sidebar-disclosure-body">
+          <ul class="vault-list" id="vault-list"></ul>
+          <button class="text-button" id="add-vault" type="button">Open another folder…</button>
+        </div>
+      </details>
     </section>
 
     <section class="block block-pinned" id="pinned-block" hidden aria-label="Pinned notes">
@@ -283,11 +314,18 @@
     </section>
 
     <section class="block block-tallies" id="tallies-block" aria-label="Tallies and point trackers">
-      <h2 class="block-title">
-        Tallies
-        <button class="text-button" id="tally-add" type="button" title="Add a custom counter or point tracker">+ Counter</button>
-      </h2>
-      <div class="tallies" id="tallies"></div>
+      <details class="sidebar-disclosure" id="tallies-disclosure">
+        <summary class="sidebar-summary">
+          <span class="sidebar-summary-title">Tallies</span>
+          <span class="sidebar-summary-meta" id="tallies-count"></span>
+        </summary>
+        <div class="sidebar-disclosure-body">
+          <div class="tallies-actions-row">
+            <button class="text-button" id="tally-add" type="button" title="Add a custom counter or point tracker">+ Counter</button>
+          </div>
+          <div class="tallies" id="tallies"></div>
+        </div>
+      </details>
     </section>
 
     <section class="block block-selection" id="selection" hidden aria-label="Collected notes">
@@ -299,7 +337,7 @@
       </div>
     </section>
 
-    <p class="sidebar-hint" id="hint">Drag to orbit · <kbd>0</kbd> Notes view · <kbd>n</kbd> new · <kbd>?</kbd> shortcuts · <kbd data-mod="K"></kbd> palette</p>
+    <p class="sidebar-hint" id="hint" hidden>Drag to orbit · <kbd>0</kbd> Notes view · <kbd>n</kbd> new · <kbd>?</kbd> shortcuts · <kbd data-mod="K"></kbd> palette</p>
     <div class="resize-handle resize-handle-sidebar" id="sidebar-resize" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0" title="Drag to resize · double-click to reset"></div>
   </aside>
 
@@ -554,7 +592,7 @@
       <header class="launch-brand">
         <img class="launch-logo" src="./logo.svg" width="40" height="40" alt="" />
         <span class="launch-wordmark">Cortex</span>
-        <span class="launch-tag">v2.4.1 · local-first</span>
+        <span class="launch-tag">v2.5.0 · local-first</span>
       </header>
       <h1 class="launch-title">Pick up where you left off.</h1>
       <p class="launch-sub">A native Markdown note studio and six visual views of the folder you already have. Nothing is copied, moved or synced.</p>

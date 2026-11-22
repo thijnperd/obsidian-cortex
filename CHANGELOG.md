@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.0 — Quiet Editorial Studio UI overhaul & browser vault engine
+
+- **Uncluttered desktop chrome (`docs/ui-overhaul-todo.md`):** consolidated low-frequency top-bar tools (`Today's note`, `Random note`, `Guided tour / Replay`, `Switch theme`, `Keyboard shortcuts`) into a light-dismiss `⋯` Utilities popover, removed the permanent amber `Replay` pill, turned the vault switcher into a clean single-line pill, and stripped Windows `\\?\` / `\\?\UNC\` verbatim prefixes via `cleanDisplayPath()`.
+- **Single unified left sidebar & collapsed Inspector default:** hid the redundant global `.sidebar` in desktop Notes mode, routed `#sidebar-toggle` (`[`) directly to the Notes list pane, collapsed the Notes right Inspector by default with a connection count badge on `#notes-toggle-inspector`, removed duplicate `+ New` buttons, wrapped global `Vaults` and `Tallies` into native `<details>` disclosures, hid empty `Pinned` placeholders, and removed the bottom shortcut footer.
+- **Unobstructed lists & bottom notes:** restricted `.canvas-status` (`#stats`) strictly to 3D WebGL views (`universe`, `brain`, `replay`) so it never covers clickable items in `notes`, `bento`, `decisions`, or `atlas`, and added generous `64px` bottom clearance to `.notes-feed` and `.folders`.
+- **Browser / GitHub Pages vault engine:** routed `#vault-button` and `#launch` fallbacks to the local file/folder picker (`#local-vault`) with drag-and-drop, stripped redundant picked root/wrapper folders (`stripCommonRoot`) and clustered flat `#tag` vaults (`assignRegions`), fixed 3D node scaling to unit-sphere coordinates (`TARGET_RADIUS = 1.0`), enabled full Decisions cards / YAML frontmatter / outgoing links / IndexedDB persistence (`updateLocalNote`) in browser vaults, and added **Download `.md`** export.
+
 ## 2.4.1 — Mobile iOS shell & Obsidian-style Live Preview
 
 - **Simplified iOS & mobile web UI (`<= 760px`):** fixed the safe-area toolbar height bug, trimmed top-bar clutter, moved primary views into a 5-slot bottom dock (`Notes`, `Graph`, `Brain`, `Decisions`, `More` sheet for `Atlas`, `Timeline`, `Bento`, vault picker, theme, random note), converted sidebars/inspector into `100svh` slide-over drawers, and added two-step Notes list ↔ editor navigation with `44px` touch targets and `16px` mobile inputs.

@@ -86,7 +86,7 @@ const state = {
     openFolders: new Set(),
     revealedFor: null,
     listCollapsed: false,
-    inspectorCollapsed: false,
+    inspectorCollapsed: true,
     zenMode: false,
     inspectorTab: 'backlinks',
     dirty: false,
@@ -153,6 +153,12 @@ const els = {
   sidebar: document.getElementById('sidebar'),
   sidebarToggle: document.getElementById('sidebar-toggle'),
   sidebarResize: document.getElementById('sidebar-resize'),
+  vaultsDisclosure: document.getElementById('vaults-disclosure'),
+  vaultsCount: document.getElementById('vaults-count'),
+  talliesDisclosure: document.getElementById('tallies-disclosure'),
+  talliesCount: document.getElementById('tallies-count'),
+  toolbarMoreBtn: document.getElementById('toolbar-more-btn'),
+  toolbarMoreMenu: document.getElementById('toolbar-more-menu'),
   themeToggle: document.getElementById('theme-toggle'),
   vaultButton: document.getElementById('vault-button'),
   vaultTitle: document.getElementById('vault-title'),
@@ -312,9 +318,11 @@ function syncThemeUI() {
     });
   }
   if (els.themeToggle) {
-    const nextLabel = rendered === 'dark' ? 'Switch to Warm Light theme' : 'Switch to Dark theme';
-    els.themeToggle.title = nextLabel;
-    els.themeToggle.setAttribute('aria-label', nextLabel);
+    const nextLabel = rendered === 'dark' ? 'Warm Light theme' : 'Dark theme';
+    els.themeToggle.title = `Switch to ${nextLabel}`;
+    els.themeToggle.setAttribute('aria-label', `Switch to ${nextLabel}`);
+    const labelEl = els.themeToggle.querySelector('#theme-toggle-label');
+    if (labelEl) labelEl.textContent = nextLabel;
   }
 }
 
@@ -478,6 +486,21 @@ function syncSidebar() {
     return;
   }
   els.sidebar.classList.remove('is-mobile-open');
+  if (state.mode === 'notes') {
+    els.sidebar.hidden = true;
+    document.body.classList.remove('has-sidebar');
+    if (els.sidebarToggle) {
+      els.sidebarToggle.hidden = false;
+      els.sidebarToggle.setAttribute('aria-expanded', String(!state.studio.listCollapsed));
+      els.sidebarToggle.classList.toggle('is-active', !state.studio.listCollapsed);
+    }
+    if (els.notesToggleList) {
+      els.notesToggleList.setAttribute('aria-pressed', String(!state.studio.listCollapsed));
+    }
+    syncMobileBackdrop();
+    onResize();
+    return;
+  }
   if (els.sidebarToggle) {
     els.sidebarToggle.hidden = false;
     els.sidebarToggle.setAttribute('aria-expanded', String(!state.sidebarCollapsed));
@@ -506,9 +529,25 @@ function toggleSidebar(force) {
     }
     return;
   }
+  if (state.mode === 'notes') {
+    state.studio.listCollapsed = typeof force === 'boolean' ? force : !state.studio.listCollapsed;
+    prefs.set('cortex.studio.listCollapsed', state.studio.listCollapsed);
+    if (els.notesStudio) els.notesStudio.classList.toggle('is-list-collapsed', state.studio.listCollapsed);
+    syncSidebar();
+    return;
+  }
   state.sidebarCollapsed = typeof force === 'boolean' ? force : !state.sidebarCollapsed;
   prefs.set(SIDEBAR_COLLAPSED_KEY, state.sidebarCollapsed);
   syncSidebar();
+}
+
+function closeToolbarMoreMenu({ restoreFocus = false } = {}) {
+  if (!els.toolbarMoreMenu || els.toolbarMoreMenu.hidden) return;
+  els.toolbarMoreMenu.hidden = true;
+  if (els.toolbarMoreBtn) {
+    els.toolbarMoreBtn.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) els.toolbarMoreBtn.focus();
+  }
 }
 
 function setPanelExpanded(expanded) {
@@ -598,15 +637,18 @@ function wireResizeHandles() {
 
 function syncTourButton() {
   const complete = prefs.get(TOUR_COMPLETE_KEY, false);
-  const label = complete ? 'Replay the guided tour' : 'Take the guided tour';
+  const label = complete ? 'Replay guided tour' : 'Take guided tour';
   const tourLabel = document.getElementById('tour-label');
   const startIcon = els.tourButton.querySelector('.tour-icon-start');
   const replayIcon = els.tourButton.querySelector('.tour-icon-replay');
-  if (tourLabel) tourLabel.textContent = complete ? 'Replay' : 'Tour';
+  if (tourLabel) tourLabel.textContent = label;
   if (startIcon) startIcon.hidden = complete;
   if (replayIcon) replayIcon.hidden = !complete;
   els.tourButton.title = label;
   els.tourButton.setAttribute('aria-label', label);
+  if (els.toolbarMoreBtn) {
+    els.toolbarMoreBtn.classList.toggle('has-tour-dot', Boolean(state.live && !complete));
+  }
 }
 
 function viewForVault(id) {
@@ -801,6 +843,8 @@ function registerShell() {
 function boot() {
   state.studio.listView = prefs.get('cortex.notes.listView', 'folders') === 'list' ? 'list' : 'folders';
   state.studio.openFolders = new Set(prefs.get('cortex.notes.openFolders', []));
+  state.studio.listCollapsed = Boolean(prefs.get('cortex.studio.listCollapsed', false));
+  state.studio.inspectorCollapsed = Boolean(prefs.get('cortex.studio.inspectorCollapsed', true));
   wire();
   wireLocalVault();
   registerShell();
@@ -815,6 +859,7 @@ async function start() {
       state.readOnly = Boolean(listing.read_only);
       state.vaults = listing.vaults || [];
       ui.renderVaultList(els.vaultList, state.vaults, state.vaultId, openListedVault, revealVault);
+      if (els.vaultsCount) els.vaultsCount.textContent = state.vaults.length ? String(state.vaults.length) : '';
       ui.renderLaunch(els.launchList, state.vaults, {
         onOpen: openListedVault,
         onForget: forgetVault,
@@ -1131,7 +1176,25 @@ function wire() {
   if (els.tallyAdd) {
     els.tallyAdd.addEventListener('click', () => {
       state.addingCustomTally = !state.addingCustomTally;
+      if (state.addingCustomTally && els.talliesDisclosure) els.talliesDisclosure.open = true;
       renderSidebarTallies();
+    });
+  }
+  if (els.toolbarMoreBtn && els.toolbarMoreMenu) {
+    els.toolbarMoreBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const opening = els.toolbarMoreMenu.hidden;
+      closeToolbarMoreMenu();
+      if (opening) {
+        els.toolbarMoreMenu.hidden = false;
+        els.toolbarMoreBtn.setAttribute('aria-expanded', 'true');
+      }
+    });
+    els.toolbarMoreMenu.addEventListener('click', () => closeToolbarMoreMenu());
+    document.addEventListener('click', (event) => {
+      if (!els.toolbarMoreMenu.hidden && !event.target.closest('.toolbar-more')) {
+        closeToolbarMoreMenu();
+      }
     });
   }
   els.settingsAgents.addEventListener('change', () => {
@@ -1207,6 +1270,7 @@ async function refreshVaults() {
   if (!listing) return;
   state.vaults = listing.vaults || [];
   ui.renderVaultList(els.vaultList, state.vaults, state.vaultId, openListedVault, revealVault);
+  if (els.vaultsCount) els.vaultsCount.textContent = state.vaults.length ? String(state.vaults.length) : '';
   ui.renderLaunch(els.launchList, state.vaults, {
     onOpen: openListedVault,
     onForget: forgetVault,
@@ -1408,14 +1472,24 @@ function applyGraph(graph) {
   }
   document.title = `${graph.meta.title} — Cortex`;
   els.vaultTitle.textContent = graph.meta.title;
+  const cleanPath = state.live ? ui.cleanDisplayPath(currentVault()?.path || '') : '';
   els.vaultSub.textContent = state.live
-    ? (currentVault()?.path || '')
+    ? cleanPath
     : localvault.isDeviceGraph(graph)
       ? 'on this device'
       : 'static demo';
+  if (els.vaultButton) {
+    els.vaultButton.title = cleanPath
+      ? `${graph.meta.title} — ${cleanPath}`
+      : state.live
+        ? 'Switch vault'
+        : 'Open a folder or Markdown files';
+  }
   els.newNote.hidden = !state.live;
   els.todayNote.hidden = !state.live;
   els.tourButton.hidden = !state.live;
+  if (els.notesNewBtn) els.notesNewBtn.hidden = !state.live;
+  syncTourButton();
   const openVaultBtn = document.getElementById('open-vault');
   if (openVaultBtn) openVaultBtn.hidden = state.live;
   const overview = isOverview(graph.nodes.length);
@@ -1865,6 +1939,7 @@ function setMode(mode, { persist = true, animate = true } = {}) {
     if (state.studio.dirty) saveStudioDraft({ quiet: true });
     cleanupStudioCanvas();
   }
+  closeToolbarMoreMenu();
   closeMobileDrawers();
   state.mode = mode;
   if (state.folderFocus) clearFolderFocus({ resetCamera: false });
@@ -1890,6 +1965,7 @@ function setMode(mode, { persist = true, animate = true } = {}) {
   document.body.classList.toggle('mode-decisions', boardMode);
   document.body.classList.toggle('mode-bento', bentoMode);
   document.body.classList.toggle('mode-replay', mode === 'replay');
+  syncSidebar();
 
   if (notesMode) {
     if (!els.panel.hidden) els.panel.hidden = true;
@@ -2093,6 +2169,11 @@ function renderSidebarTallies() {
     state.activeTallySection = sections[0].id;
   }
   const customCounters = prefs.get(customTalliesKey(), []);
+  const totalTallies = sections.length + customCounters.length;
+  if (els.talliesCount) els.talliesCount.textContent = totalTallies ? String(totalTallies) : '';
+  if (els.talliesDisclosure && (totalTallies > 0 || state.addingCustomTally)) {
+    els.talliesDisclosure.open = true;
+  }
   ui.renderTallies(els.tallies, {
     sections,
     activeSectionId: state.activeTallySection,
@@ -2512,7 +2593,7 @@ function openSettings() {
     return;
   }
   els.settingsName.textContent = vault?.name || state.meta?.title || 'Vault';
-  els.settingsPath.textContent = vault?.path || (state.live ? '' : 'Static demo');
+  els.settingsPath.textContent = ui.cleanDisplayPath(vault?.path) || (state.live ? '' : 'Static demo');
   els.settingsObsidian.hidden = !vault?.obsidian;
   els.settingsWrites.textContent = !state.live
     ? 'Static export mode: visual settings and tallies are saved locally in your browser.'
@@ -2844,14 +2925,14 @@ function buildTourSteps({ usedDemo, demoReason }) {
     {
       title: 'The daily loop, and the keys that keep it fast',
       body: [
-        'The sun button, or `t`, opens today’s note at `Journal/YYYY-MM-DD.md`; an existing note is opened, never overwritten.',
+        'Open the utilities menu (⋯) or press `t` to open today’s note at `Journal/YYYY-MM-DD.md`; an existing note is opened, never overwritten.',
       ],
       points: [
         `\`n\` creates a note. Edit opens plain Markdown; \`${key('S')}\` saves and \`Esc\` cancels.`,
         '`1`–`6` switch views, `f` resets the camera, and `y` jumps to a decision trail.',
         'Vault settings holds the opening view, map roads and optional AI client access. Every native workflow here works without MCP.',
       ],
-      target: '#today-note',
+      target: '#toolbar-more-btn',
       placement: 'bottom',
       enter: () => {
         closeCompose();
@@ -3142,7 +3223,8 @@ function onKeyDown(event) {
     }
   }
   if (event.key === 'Escape') {
-    if (els.shortcutsModal && !els.shortcutsModal.hidden) closeShortcutsModal();
+    if (els.toolbarMoreMenu && !els.toolbarMoreMenu.hidden) closeToolbarMoreMenu({ restoreFocus: true });
+    else if (els.shortcutsModal && !els.shortcutsModal.hidden) closeShortcutsModal();
     else if (els.quickNoteModal && !els.quickNoteModal.hidden) closeQuickNoteModal();
     else if (!els.settings.hidden) closeSettings();
     else if (!els.compose.hidden) closeCompose();
@@ -3840,7 +3922,7 @@ function renderSidebarPinned() {
     nodesById,
     selectedId,
     {
-      showEmptyHint: state.mode === 'notes',
+      showEmptyHint: false,
       onOpen: (id) => {
         if (isMobileViewport()) closeMobileDrawers();
         const idx = nodeIndex(id);
@@ -4682,8 +4764,9 @@ function wireNotesStudioEvents() {
   if (els.notesToggleList) {
     els.notesToggleList.addEventListener('click', () => {
       state.studio.listCollapsed = !state.studio.listCollapsed;
-      els.notesToggleList.setAttribute('aria-pressed', String(!state.studio.listCollapsed));
+      prefs.set('cortex.studio.listCollapsed', state.studio.listCollapsed);
       if (els.notesStudio) els.notesStudio.classList.toggle('is-list-collapsed', state.studio.listCollapsed);
+      syncSidebar();
     });
   }
   if (els.notesToggleInspector) {
@@ -4700,12 +4783,21 @@ function wireNotesStudioEvents() {
         return;
       }
       state.studio.inspectorCollapsed = !state.studio.inspectorCollapsed;
+      prefs.set('cortex.studio.inspectorCollapsed', state.studio.inspectorCollapsed);
       els.notesToggleInspector.setAttribute('aria-pressed', String(!state.studio.inspectorCollapsed));
       if (els.notesStudio) els.notesStudio.classList.toggle('is-inspector-collapsed', state.studio.inspectorCollapsed);
     });
   }
   if (els.notesInspectorClose) {
-    els.notesInspectorClose.addEventListener('click', () => closeMobileDrawers());
+    els.notesInspectorClose.addEventListener('click', () => {
+      if (isTabletViewport()) {
+        closeMobileDrawers();
+        return;
+      }
+      state.studio.inspectorCollapsed = true;
+      prefs.set('cortex.studio.inspectorCollapsed', true);
+      renderNotesStudio();
+    });
   }
   if (els.notesViewModes) {
     els.notesViewModes.querySelectorAll('[data-editor-mode]').forEach((btn) => {
@@ -5399,7 +5491,9 @@ function buildPaletteCommands() {
       subtitle: 'Track cool points, crybaby points, or custom tallies in the sidebar',
       keywords: 'tally counter points cool crybaby tracker score',
       run: () => {
+        if (state.mode === 'notes') setMode('universe');
         if (state.sidebarCollapsed) toggleSidebar(false);
+        if (els.talliesDisclosure) els.talliesDisclosure.open = true;
         state.addingCustomTally = true;
         renderSidebarTallies();
       },
