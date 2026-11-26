@@ -414,3 +414,5 @@ The workflow design is grounded in primary documentation from Obsidian, Logseq,
 Heptabase, Roam, Zettelkasten and Forte Labs; the notes and sources are in
 [`docs/research-workflows.md`](docs/research-workflows.md). The README rewrite
 follows [README and copy research](docs/research/readme-and-copy.md).
+
+More tools at [thijnperd.github.io](https://thijnperd.github.io/).
